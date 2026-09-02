@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Screen } from '../../components/Screen';
@@ -26,6 +26,7 @@ export function FestivalHubScreen({ navigation }: Props) {
   const userId = useSessionStore((s) => s.userId);
   const festivals = useFestivalStore((s) => s.festivals);
   const status = useFestivalStore((s) => s.status);
+  const error = useFestivalStore((s) => s.error);
   const fetchFestivals = useFestivalStore((s) => s.fetch);
   const setFestivalStatus = useFestivalStore((s) => s.setStatus);
 
@@ -51,6 +52,11 @@ export function FestivalHubScreen({ navigation }: Props) {
         {status === 'ready' && festivals.length === 0 && (
           <Text style={styles.hint}>Todavía no hay festivales cargados.</Text>
         )}
+        {status === 'error' && (
+          <Text style={styles.errorHint}>
+            No se pudieron cargar los festivales{error ? `: ${error}` : '.'}
+          </Text>
+        )}
 
         {festivals.map((entry) => (
           <FestivalCard
@@ -71,7 +77,8 @@ function FestivalCard({
   entry: FestivalWithIntent;
   onSetStatus: (status: FestivalStatus) => void;
 }) {
-  const { festival, myStatus, squadGoingCount } = entry;
+  const { festival, myStatus, squadGoingCount, lineup } = entry;
+  const [showLineup, setShowLineup] = useState(false);
 
   return (
     <View style={styles.card}>
@@ -85,6 +92,29 @@ function FestivalCard({
           👥 {squadGoingCount} {squadGoingCount === 1 ? 'de tu squad va' : 'de tu squad van'}
         </Text>
       )}
+
+      {lineup.length > 0 && (
+        <Pressable onPress={() => setShowLineup((v) => !v)}>
+          <Text style={styles.lineupToggle}>
+            {showLineup ? '▾' : '▸'} Line-up ({lineup.length})
+          </Text>
+        </Pressable>
+      )}
+      {showLineup &&
+        lineup.map((artist) => (
+          <Text key={artist.id} style={styles.lineupRow}>
+            {artist.artista}
+            {artist.escenario ? ` · ${artist.escenario}` : ''}
+            {artist.horario
+              ? ` · ${new Date(artist.horario).toLocaleString('es-MX', {
+                  day: 'numeric',
+                  month: 'short',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                })}`
+              : ''}
+          </Text>
+        ))}
 
       <View style={styles.statusRow}>
         {STATUS_OPTIONS.map((option) => {
@@ -141,6 +171,19 @@ const styles = StyleSheet.create({
   hint: {
     ...type.body,
     color: colors.textSecondary,
+  },
+  errorHint: {
+    ...type.body,
+    color: colors.danger,
+  },
+  lineupToggle: {
+    ...type.label,
+    color: colors.textSecondary,
+  },
+  lineupRow: {
+    ...type.label,
+    color: colors.textSecondary,
+    paddingLeft: spacing.sm,
   },
   card: {
     backgroundColor: colors.bgElevated,

@@ -1,6 +1,6 @@
 # Estado del proyecto — Musicaleando
 
-Última actualización: 2026-09-02 (sesión 2). Este archivo es el punto de partida para
+Última actualización: 2026-09-02 (sesión 3). Este archivo es el punto de partida para
 retomar el trabajo en una sesión nueva sin perder contexto.
 
 Proyecto Supabase: `ijwyykfuyeaahvxmaild` ("Sound Project", org `ljcnanwlkijozacnyhck`).
@@ -38,11 +38,10 @@ Repo: rama `master`, sin remoto configurado todavía.
   texto en los campos. El código usa el mismo patrón RPC+RLS que sí se probó con trends,
   así que hay alta confianza, pero no hay confirmación visual del flujo completo.
 - **Festival Hub**: pantalla `FestivalHubScreen`, 3 festivales de ejemplo sembrados
-  (ficticios, `link_boletos` apunta a `example.com` — placeholders). Verificado en
-  dispositivo: lista de festivales, botones Voy/Tal vez/No voy, botón Comprar boletos.
-  **Detalle sin confirmar**: al tocar "Voy" no se vio el cambio visual de selección en la
-  única prueba que hice — puede ser timing de la captura de pantalla o un bug real de estado
-  optimista en `useFestivalStore.setStatus`. Revisar al retomar.
+  (ficticios, `link_boletos` apunta a `example.com` — placeholders). **Verificado
+  end-to-end en emulador en la sesión 3** (ver detalle abajo): lista de festivales,
+  line-up expandible, botones Voy/Tal vez/No voy con cambio visual confirmado y persistido
+  en DB, botón Comprar boletos abriendo el navegador del dispositivo.
 
 ## Bug de RLS recursiva encontrado y arreglado (documentado para que no se repita)
 
@@ -114,6 +113,62 @@ Proyecto Next.js 16 (App Router, Turbopack, React 19) en `admin/`, dependencias 
   `/festivals/[id]` — sigue pendiente cargar festivales/links reales (los 3 sembrados
   siguen con `link_boletos` de ejemplo, `example.com`).
 
+## Festival Hub: line-up + RLS de no-admin — completado y verificado (sesión 3, 2026-09-02)
+
+Trend del día y playlist del día ya estaban completos desde la sesión 1 (confirmado
+releyendo `useTrendStore.ts`/`usePlaylistStore.ts` y el `pg_cron` activo — no se tocaron).
+El trabajo de esta sesión fue: mostrar el line-up importado por CSV dentro de la app móvil
+(no existía antes) y verificar de punta a punta el Festival Hub como usuario normal.
+
+- **Line-up en `FestivalHubScreen`** ([FestivalHubScreen.tsx](src/screens/main/FestivalHubScreen.tsx)):
+  cada tarjeta de festival ahora tiene un toggle "▸ Line-up (N)" que expande la lista de
+  artistas (nombre, escenario, horario formateado) traída de `festival_lineup`. Antes esta
+  tabla no se consultaba desde la app — solo existía en el admin panel.
+  `useFestivalStore.fetch` ([useFestivalStore.ts](src/store/useFestivalStore.ts)) ahora
+  también trae `festival_lineup` filtrado por los festivales visibles y lo adjunta a cada
+  `FestivalWithIntent.lineup`.
+- **Rama de UI para `status === 'error'`** agregada en `FestivalHubScreen` (antes, un error
+  de RLS/red dejaba la pantalla en blanco sin ningún mensaje — el mismo patrón que causó
+  que el bug de RLS recursiva pasara desapercibido en la sesión 1; ahora se ve un mensaje).
+- **Verificado en emulador de punta a punta como usuario normal** (sesión anónima real, no
+  admin): navegar Home → Festival Hub, expandir line-up de "Festival Nocturno" (3 artistas,
+  coincide con lo sembrado), tocar "Voy" → cambia visualmente a seleccionado **y** persiste
+  en `festival_intent` (confirmado por SQL: fila con `status='voy'`, `updated_at` reciente,
+  para un `user_id` con `is_admin=false`), tocar "Comprar boletos" → abre Chrome en el
+  emulador (confirma que `Linking.openURL` se dispara; Chrome consumió la URL en su propio
+  flujo de primer uso por ser la primera vez que se abre en este emulador — no es un bug de
+  la app, solo impidió ver la URL final en la barra de direcciones).
+- **RLS de escritura para no-admin confirmada** dos formas: (1) a nivel de política — las
+  únicas policies de INSERT/UPDATE/DELETE en `festivals` y `festival_lineup` exigen
+  `users.is_admin = true` (`festivals_insert_admin`, `festival_lineup_insert_admin`, etc.),
+  no existe ninguna policy que permita escritura a un usuario normal; (2) el usuario de
+  prueba que sí pudo escribir su propio `festival_intent` tiene `is_admin = false` en la
+  fila de `public.users` — confirma que `festival_intent` (Voy/Tal vez/No voy) es la única
+  tabla de festival donde un usuario normal puede escribir, y solo su propia fila.
+- **Squads**: sigue sin confirmarse el flujo de crear/unirse (ver "Pendiente" abajo) — no
+  se tocó esta sesión, el bloqueo documentado en la sesión 1 (teclado) no se volvió a
+  investigar porque el foco de esta sesión era Festival Hub.
+
+### Nota sobre el emulador en esta sesión
+
+El emulador tuvo **ANRs reales y reproducibles** ("Expo Go isn't responding",
+"Application Not Responding: com.android.chrome") en varios puntos, no solo con Expo Go
+sino también con Chrome — confirma que es un problema del entorno (recursos del emulador),
+no del código de la app, consistente con lo ya documentado en "Problemas de entorno". Lo
+que funcionó de forma confiable para diagnosticar y avanzar pese a esto:
+- `adb shell uiautomator dump` para obtener las coordenadas **reales** de los elementos en
+  pantalla en vez de estimarlas a ojo desde una captura (las capturas se ven a una escala
+  distinta a la resolución real del framebuffer, y estimar a ojo lleva a tocar el elemento
+  equivocado).
+- Correr Metro **sin** `CI=1`: con `CI=1` el banner "Bundling 100.0%..." se queda pegado en
+  pantalla indefinidamente y parece bloquear los toques — quitar `CI=1` resolvió eso (Metro
+  normal sí requiere responder al prompt de puerto en uso si el puerto ya está tomado, así
+  que primero hay que liberar el puerto o correr `npx expo start --port <otro>`).
+- Cuando la app deja de responder a los toques: `adb shell am force-stop host.exp.exponent`
+  seguido de `adb shell am start -a android.intent.action.VIEW -d "exp://<ip>:<puerto>"
+  host.exp.exponent` para relanzarla limpia contra el Metro que sigue vivo (no hace falta
+  reiniciar Metro, solo la app).
+
 ## Pendiente del Sprint 2
 
 - Cargar festivales y line-ups **reales** desde el panel admin (los 3 sembrados siguen
@@ -126,9 +181,7 @@ Proyecto Next.js 16 (App Router, Turbopack, React 19) en `admin/`, dependencias 
   SQL directo, `update public.users set is_admin = true where id = ...`) — si se necesita
   dar acceso a más de una persona, considerar una pantalla simple de gestión de admins.
 - Confirmar visualmente el flujo completo de crear/unirse a un squad (bloqueado por el bug
-  de teclado del emulador, no por el código — ver abajo).
-- Confirmar que el botón "Voy"/"Tal vez"/"No voy" en Festival Hub cambia visualmente al
-  estado seleccionado.
+  de teclado del emulador documentado en la sesión 1 — no se reintentó en la sesión 3).
 - El invite code de squad se puede compartir hoy solo como texto plano vía `Alert` (no abre
   share sheet nativo) — ver "Decisiones técnicas" para el porqué; podría mejorarse a un
   share sheet real de solo-texto en vez de un Alert.
@@ -202,6 +255,8 @@ Proyecto Next.js 16 (App Router, Turbopack, React 19) en `admin/`, dependencias 
 2. Panel admin: `cd admin && npm run dev` (o usar el Browser tool con la config `"admin"`
    de `.claude/launch.json`), entrar en `/login` con `clauliz.acosta@gmail.com` — cambiar
    la contraseña temporal desde Supabase Auth antes de compartir acceso.
-3. Pendiente de esta sesión: revisar si el flujo de crear/unirse a squad funciona en un
-   entorno con teclado sano (el código no cambió desde que se probó parcialmente), y cargar
-   festivales/line-ups reales desde el panel admin en vez de los datos de ejemplo.
+3. Siguiente foco sugerido: revisar si el flujo de crear/unirse a squad funciona en un
+   entorno con teclado sano (el código no cambió desde que se probó parcialmente en la
+   sesión 1), y cargar festivales/line-ups reales desde el panel admin en vez de los datos
+   de ejemplo. Festival Hub (line-up, Voy/Tal vez/No voy, boletos) ya quedó verificado de
+   punta a punta en la sesión 3.

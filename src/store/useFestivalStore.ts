@@ -6,6 +6,7 @@ export type FestivalWithIntent = {
   festival: Tables<'festivals'>;
   myStatus: FestivalStatus | null;
   squadGoingCount: number;
+  lineup: Tables<'festival_lineup'>[];
 };
 
 type Status = 'idle' | 'loading' | 'ready' | 'error';
@@ -53,17 +54,30 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
       return;
     }
 
+    const { data: lineupRows, error: lineupErr } = await supabase
+      .from('festival_lineup')
+      .select('*')
+      .in('festival_id', festivalIds)
+      .order('horario', { ascending: true, nullsFirst: false });
+
+    if (lineupErr) {
+      set({ status: 'error', error: lineupErr.message });
+      return;
+    }
+
     const festivals: FestivalWithIntent[] = (festivalRows ?? []).map((festival) => {
       const rowsForFestival = (intentRows ?? []).filter((i) => i.festival_id === festival.id);
       const mine = rowsForFestival.find((i) => i.user_id === userId);
       const squadGoingCount = rowsForFestival.filter(
         (i) => i.user_id !== userId && i.status === 'voy',
       ).length;
+      const lineup = (lineupRows ?? []).filter((l) => l.festival_id === festival.id);
 
       return {
         festival,
         myStatus: (mine?.status as FestivalStatus) ?? null,
         squadGoingCount,
+        lineup,
       };
     });
 
