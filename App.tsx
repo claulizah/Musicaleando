@@ -23,6 +23,7 @@ import { HomeScreen } from './src/screens/main/HomeScreen';
 import { ProfileScreen } from './src/screens/main/ProfileScreen';
 import { SquadsScreen } from './src/screens/main/SquadsScreen';
 import { SquadDetailScreen } from './src/screens/main/SquadDetailScreen';
+import { FestivalHubScreen } from './src/screens/main/FestivalHubScreen';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -111,6 +112,7 @@ export default function App() {
           <Stack.Screen name="Profile" component={ProfileScreen} />
           <Stack.Screen name="Squads" component={SquadsScreen} />
           <Stack.Screen name="SquadDetail" component={SquadDetailScreen} />
+          <Stack.Screen name="Festivals" component={FestivalHubScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </GestureHandlerRootView>

@@ -59,9 +59,14 @@ export function HomeScreen({ navigation }: Props) {
             <Text style={styles.eyebrow}>MUSICALEANDO</Text>
             <Text style={styles.title}>Hola de nuevo</Text>
           </View>
-          <Pressable style={styles.squadButton} onPress={() => navigation.navigate('Squads')}>
-            <Text style={styles.squadButtonText}>👥</Text>
-          </Pressable>
+          <View style={styles.headerButtons}>
+            <Pressable style={styles.squadButton} onPress={() => navigation.navigate('Festivals')}>
+              <Text style={styles.squadButtonText}>🎪</Text>
+            </Pressable>
+            <Pressable style={styles.squadButton} onPress={() => navigation.navigate('Squads')}>
+              <Text style={styles.squadButtonText}>👥</Text>
+            </Pressable>
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -127,6 +132,11 @@ const styles = StyleSheet.create({
     ...type.display,
     color: colors.textPrimary,
     marginTop: spacing.xs,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    flexShrink: 0,
   },
   squadButton: {
     flexShrink: 0,
