@@ -11,6 +11,7 @@ import { spacing } from '../../../theme';
 export function Step2Generos({ onAdvance }: { onAdvance: () => void }) {
   const answers = useQuizStore((s) => s.answers);
   const toggleGenero = useQuizStore((s) => s.toggleGenero);
+  const generoIds = answers.generoIds ?? [];
 
   return (
     <View style={styles.container}>
@@ -24,7 +25,7 @@ export function Step2Generos({ onAdvance }: { onAdvance: () => void }) {
             label={genero.label}
             gradient={genero.gradient}
             image={GENEROS_IMAGES[genero.id]}
-            selected={answers.generoIds.includes(genero.id)}
+            selected={generoIds.includes(genero.id)}
             onPress={() => toggleGenero(genero.id)}
             style={styles.tile}
           />
@@ -32,7 +33,7 @@ export function Step2Generos({ onAdvance }: { onAdvance: () => void }) {
       </ScrollView>
       <PrimaryButton
         label="Continuar"
-        disabled={answers.generoIds.length === 0}
+        disabled={generoIds.length === 0}
         onPress={onAdvance}
       />
     </View>

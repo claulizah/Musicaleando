@@ -231,7 +231,7 @@ export const EMPTY_QUIZ_ANSWERS: QuizAnswers = {
 export function isQuizComplete(answers: QuizAnswers): boolean {
   return Boolean(
     answers.duelVisualId &&
-      answers.generoIds.length > 0 &&
+      (answers.generoIds ?? []).length > 0 &&
       answers.energia !== undefined &&
       answers.eraId &&
       answers.guiltyPleasureId &&
@@ -246,7 +246,7 @@ export function isQuizComplete(answers: QuizAnswers): boolean {
 export function hasAnyAnswer(answers: QuizAnswers): boolean {
   return Boolean(
     answers.duelVisualId ||
-      answers.generoIds.length > 0 ||
+      (answers.generoIds ?? []).length > 0 ||
       answers.energia !== undefined ||
       answers.eraId ||
       answers.guiltyPleasureId ||
@@ -272,7 +272,7 @@ export function energiaEmoji(value: number): string {
 export function buildFlavorLine(answers: QuizAnswers): string {
   const fragments: string[] = [];
 
-  const genero = GENEROS.find((g) => g.id === answers.generoIds[0]);
+  const genero = GENEROS.find((g) => g.id === answers.generoIds?.[0]);
   const era = ERA.find((e) => e.id === answers.eraId);
   if (genero && era) {
     fragments.push(`le entra al ${genero.flavorLabel} ${era.flavorPhrase}`);

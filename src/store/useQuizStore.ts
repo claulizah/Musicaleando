@@ -40,12 +40,13 @@ export const useQuizStore = create<QuizState>()(
       setDuelVisual: (id) => set((s) => ({ answers: { ...s.answers, duelVisualId: id } })),
       toggleGenero: (id) =>
         set((s) => {
-          const has = s.answers.generoIds.includes(id);
+          const current = s.answers.generoIds ?? [];
+          const has = current.includes(id);
           const generoIds = has
-            ? s.answers.generoIds.filter((g) => g !== id)
-            : s.answers.generoIds.length >= 3
-              ? s.answers.generoIds
-              : [...s.answers.generoIds, id];
+            ? current.filter((g) => g !== id)
+            : current.length >= 3
+              ? current
+              : [...current, id];
           return { answers: { ...s.answers, generoIds } };
         }),
       setEnergia: (value) => set((s) => ({ answers: { ...s.answers, energia: value } })),
@@ -76,6 +77,18 @@ export const useQuizStore = create<QuizState>()(
     {
       name: 'musicaleando.quiz-draft',
       storage: createJSONStorage(() => AsyncStorage),
+      // AsyncStorage rehydration is async and can resolve after prefillFromProfile()
+      // has already set fresh in-memory answers, silently clobbering them with a
+      // persisted draft — guard every rehydrated `answers` against a missing/corrupt
+      // shape (e.g. an old draft saved before a field like generoIds existed).
+      merge: (persisted, current) => {
+        const persistedState = (persisted as Partial<QuizState>) ?? {};
+        return {
+          ...current,
+          ...persistedState,
+          answers: { ...EMPTY_QUIZ_ANSWERS, ...persistedState.answers },
+        };
+      },
     },
   ),
 );
