@@ -337,6 +337,45 @@ export type Database = {
           },
         ]
       }
+      squad_playlist: {
+        Row: {
+          added_at: string
+          added_by: string
+          id: string
+          song_id: string
+          squad_id: string
+        }
+        Insert: {
+          added_at?: string
+          added_by: string
+          id?: string
+          song_id: string
+          squad_id: string
+        }
+        Update: {
+          added_at?: string
+          added_by?: string
+          id?: string
+          song_id?: string
+          squad_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "squad_playlist_song_id_fkey"
+            columns: ["song_id"]
+            isOneToOne: false
+            referencedRelation: "songs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "squad_playlist_squad_id_fkey"
+            columns: ["squad_id"]
+            isOneToOne: false
+            referencedRelation: "squads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

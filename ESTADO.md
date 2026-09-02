@@ -1,6 +1,6 @@
 # Estado del proyecto — Musicaleando
 
-Última actualización: 2026-09-02 (sesión 3). Este archivo es el punto de partida para
+Última actualización: 2026-09-02 (sesión 4). Este archivo es el punto de partida para
 retomar el trabajo en una sesión nueva sin perder contexto.
 
 Proyecto Supabase: `ijwyykfuyeaahvxmaild` ("Sound Project", org `ljcnanwlkijozacnyhck`).
@@ -169,7 +169,52 @@ que funcionó de forma confiable para diagnosticar y avanzar pese a esto:
   host.exp.exponent` para relanzarla limpia contra el Metro que sigue vivo (no hace falta
   reiniciar Metro, solo la app).
 
-## Pendiente del Sprint 2
+## Squads: playlist colaborativa + verificación end-to-end (sesión 4, 2026-09-02)
+
+Al empezar la sesión se revisó el código existente antes de tocar nada (siguiendo el
+prompt de continuación) y se encontró que **Squads ya estaba implementado de una sesión
+anterior**, más completo de lo que "Pendiente" de este archivo sugería: esquema
+`squads`/`squad_members`, RPCs `create_squad`/`join_squad` (`SECURITY DEFINER`), RLS vía
+`is_squad_member()`, tope de 12 miembros ya enforced en `join_squad` (`raise exception` si
+`member_count >= 12`), compat score por trigger (`recompute_squad_compat`), y las pantallas
+`SquadsScreen`/`SquadDetailScreen` con "% contigo" calculado en cliente
+([compat.ts](src/lib/compat.ts)). Nada de esto se reconstruyó — solo se agregó lo que
+faltaba y se verificó en vivo.
+
+- **Playlist colaborativa agregada** (era el único punto pendiente real del alcance de
+  Squads): tabla `squad_playlist` (`squad_id`, `song_id` → catálogo `songs` existente,
+  `added_by`, `added_at`, unique por par) con RLS: select/insert solo si
+  `is_squad_member()`, delete solo el que la agregó o el owner del squad — mismo patrón
+  `SECURITY DEFINER`/función reutilizada que ya se documentó para evitar la recursión de
+  RLS. [useSquadPlaylistStore.ts](src/store/useSquadPlaylistStore.ts) nuevo, integrado en
+  `SquadDetailScreen` ([SquadDetailScreen.tsx](src/screens/main/SquadDetailScreen.tsx)):
+  sección "Playlist del squad" con lista de canciones agregadas y un picker de
+  género → canción (sin campos de texto, para no depender del teclado del emulador).
+- **Verificado en emulador de punta a punta como usuario normal** (mismo usuario dueño del
+  squad "Los Vi", ya existente): abrir Squads → abrir detalle → tocar "+ Agregar canción"
+  → elegir género "Rock" → tocar una canción → aparece en "Playlist del squad" con
+  "agregada por ti" y **persiste** (confirmado por SQL, fila en `squad_playlist` con
+  `added_by` de un usuario `is_admin = false`) → long-press sobre la canción → confirmar
+  "Quitar" → desaparece de la UI y se confirmó por SQL (`count(*) = 0`) que se borró de la
+  tabla. Limpieza de datos de prueba incluida en la misma verificación (no quedó basura).
+- **"Quitar del squad" (owner-only) completado**: el archivo ya tenía `isOwner` y
+  `handleRemoveMember` declarados pero sin usar en el JSX (código a medio terminar,
+  encontrado al releer el archivo mid-sesión). Se conectó a un botón "Quitar" visible solo
+  para el owner junto a cada miembro que no sea él mismo — cumple el requisito original de
+  que "solo el owner puede remover miembros" (la policy `squad_members_delete_owner` ya lo
+  permitía a nivel de RLS, solo faltaba la UI). No se verificó visualmente el botón en
+  dispositivo (el squad de prueba solo tenía 2 miembros y remover al otro habría alterado
+  datos reales del usuario) — confirmado solo por lectura de código + que la policy RLS
+  correspondiente ya existía y fue validada en la sesión 3.
+- **RLS de no-miembro**: no se hizo una prueba en vivo con una segunda cuenta separada esta
+  sesión (se priorizó terminar y verificar la playlist). Confianza alta por diseño: las 3
+  policies de `squad_playlist` reutilizan literalmente `is_squad_member()`, la misma
+  función ya usada por `squads`/`squad_members`/`festival_intent` y validada explícitamente
+  en la sesión 3. Si se quiere una confirmación end-to-end explícita, crear una segunda
+  cuenta anónima y confirmar que un `select`/`insert` contra el squad ajeno devuelve vacío
+  o error de RLS.
+
+## Pendiente
 
 - Cargar festivales y line-ups **reales** desde el panel admin (los 3 sembrados siguen
   siendo ficticios con links `example.com`) — el panel ya soporta hacerlo, solo falta
@@ -180,11 +225,14 @@ que funcionó de forma confiable para diagnosticar y avanzar pese a esto:
 - El panel no tiene forma de promover a otro usuario a admin desde la UI (hoy requiere
   SQL directo, `update public.users set is_admin = true where id = ...`) — si se necesita
   dar acceso a más de una persona, considerar una pantalla simple de gestión de admins.
-- Confirmar visualmente el flujo completo de crear/unirse a un squad (bloqueado por el bug
-  de teclado del emulador documentado en la sesión 1 — no se reintentó en la sesión 3).
 - El invite code de squad se puede compartir hoy solo como texto plano vía `Alert` (no abre
   share sheet nativo) — ver "Decisiones técnicas" para el porqué; podría mejorarse a un
   share sheet real de solo-texto en vez de un Alert.
+- Verificar en vivo con una segunda cuenta que un usuario no-miembro no puede leer/escribir
+  `squad_playlist` de un squad ajeno (ver nota arriba — alta confianza por diseño, sin
+  prueba end-to-end fresca esta sesión).
+- Verificar visualmente el botón "Quitar" (owner remueve miembro) en un squad con 3+
+  miembros — el squad de prueba actual solo tiene 2.
 
 ## Decisiones técnicas tomadas en el camino (no estaban en el prompt original)
 
@@ -255,8 +303,8 @@ que funcionó de forma confiable para diagnosticar y avanzar pese a esto:
 2. Panel admin: `cd admin && npm run dev` (o usar el Browser tool con la config `"admin"`
    de `.claude/launch.json`), entrar en `/login` con `clauliz.acosta@gmail.com` — cambiar
    la contraseña temporal desde Supabase Auth antes de compartir acceso.
-3. Siguiente foco sugerido: revisar si el flujo de crear/unirse a squad funciona en un
-   entorno con teclado sano (el código no cambió desde que se probó parcialmente en la
-   sesión 1), y cargar festivales/line-ups reales desde el panel admin en vez de los datos
-   de ejemplo. Festival Hub (line-up, Voy/Tal vez/No voy, boletos) ya quedó verificado de
-   punta a punta en la sesión 3.
+3. Siguiente foco sugerido: cargar festivales/line-ups reales desde el panel admin en vez
+   de los datos de ejemplo (único pendiente grande que queda sin tocar). Festival Hub
+   (line-up, Voy/Tal vez/No voy, boletos) y Squads (crear/unirse, compat score, quitar
+   miembro, playlist colaborativa) ya quedaron verificados de punta a punta en las
+   sesiones 3 y 4 respectivamente.
