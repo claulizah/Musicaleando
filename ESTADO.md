@@ -1,6 +1,6 @@
 # Estado del proyecto — Musicaleando
 
-Última actualización: 2026-09-02. Este archivo es el punto de partida para
+Última actualización: 2026-09-02 (sesión 2). Este archivo es el punto de partida para
 retomar el trabajo en una sesión nueva sin perder contexto.
 
 Proyecto Supabase: `ijwyykfuyeaahvxmaild` ("Sound Project", org `ljcnanwlkijozacnyhck`).
@@ -73,15 +73,58 @@ mismo grupo que esta fila?" sobre una tabla de membresía debe pasar por una fun
 `SECURITY DEFINER`, nunca hacer un subquery directo contra la misma tabla que lleva la
 política.
 
+## Panel de administración web — completado y verificado (sesión 2, 2026-09-02)
+
+Proyecto Next.js 16 (App Router, Turbopack, React 19) en `admin/`, dependencias propias
+(`admin/node_modules`, `admin/package-lock.json`, no comparte instalación con la app Expo).
+
+- **Auth**: login/signup con Supabase Auth (email/password, tabla `auth.users` — separado
+  de las sesiones anónimas que usa la app móvil). `/login` y `/signup` son las únicas rutas
+  públicas; `src/proxy.ts` (antes `middleware.ts` — Next 16 renombró la convención) redirige
+  a `/login` si no hay sesión, y a `/` si ya hay sesión y se visita una ruta pública.
+- **Gate de admin**: `src/lib/admin.ts` (`requireAdmin()`) verifica `users.is_admin` para
+  el usuario autenticado en cada página protegida; si no es admin muestra "Acceso no
+  autorizado" en vez de la data.
+- **Alta de festival**: formulario en `/festivals/new` (nombre, ciudad, fechas, link de
+  boletos opcional) → inserta en `festivals`.
+- **Importación de line-up vía CSV**: en el detalle de cada festival (`/festivals/[id]`),
+  parseo client-side con `papaparse` (columnas `artista` obligatoria, `escenario`/`horario`
+  opcionales), preview en tabla antes de confirmar, luego insert en `festival_lineup`.
+  También permite editar el link de boletos y quitar artistas del line-up individualmente.
+- **Verificado en navegador de punta a punta** (no solo compilado): signup → confirmación
+  de email (forzada por SQL para la cuenta bootstrap, ver abajo) → login → crear festival →
+  importar CSV de 3 artistas (parseo correcto, preview correcto, insert correcto) → editar
+  link de boletos (guardado confirmado) → quitar un artista del line-up (bajó de 3 a 2
+  filas). Festival y line-up de prueba (`Festival de Prueba QA`) limpiados de la base al
+  terminar — el `ON DELETE CASCADE` de `festival_lineup.festival_id → festivals.id` borró
+  las filas de line-up automáticamente al borrar el festival (confirmado con un `count`).
+- **Cuenta admin bootstrap creada**: `clauliz.acosta@gmail.com` en `auth.users`, con fila
+  en `public.users` con `is_admin = true` (migración `bootstrap_admin_user`). Contraseña
+  temporal generada y entregada en el chat de la sesión — **cámbiala desde Supabase Auth
+  antes de compartir acceso al panel**, no quedó guardada en ningún archivo del repo.
+- **Cómo correr el panel**: `cd admin && npm run dev` (usa `admin/.env.local`, no
+  versionado, con `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`). También
+  registrado en `.claude/launch.json` como configuración `"admin"` para abrirlo con el
+  Browser tool. RLS ya restringe todo insert/update/delete en `festivals`/`festival_lineup`
+  a `users.is_admin = true` — el rol `anon` del panel solo puede escribir si la sesión
+  logueada tiene ese flag.
+- **Botón "Comprar boletos"** (app móvil, ya implementado antes de esta sesión, sin
+  cambios): funcional vía `Linking.openURL`. Ahora que el panel admin existe, ya se le
+  puede cargar un link real a un festival editando su `link_boletos` desde
+  `/festivals/[id]` — sigue pendiente cargar festivales/links reales (los 3 sembrados
+  siguen con `link_boletos` de ejemplo, `example.com`).
+
 ## Pendiente del Sprint 2
 
-- **Panel de administración web** (proyecto separado, Next.js o SPA ligera) — no se empezó.
-  Necesita: form para alta de festival, importación de line-up vía CSV, protegido por rol
-  admin (columna `users.is_admin` ya existe en el schema, RLS de escritura en
-  `festivals`/`festival_lineup` ya está lista y probada — falta solo la UI web).
-- **Botón "Comprar boletos"**: implementado y funcional (`Linking.openURL`), pero los 3
-  festivales sembrados tienen links de ejemplo (`example.com`) porque no hay panel admin
-  para cargar links reales todavía.
+- Cargar festivales y line-ups **reales** desde el panel admin (los 3 sembrados siguen
+  siendo ficticios con links `example.com`) — el panel ya soporta hacerlo, solo falta
+  hacerlo.
+- No hay UI para editar nombre/ciudad/fechas de un festival ya creado desde el panel (solo
+  alta y edición del link de boletos) — si hace falta, agregar un form de edición en
+  `/festivals/[id]`.
+- El panel no tiene forma de promover a otro usuario a admin desde la UI (hoy requiere
+  SQL directo, `update public.users set is_admin = true where id = ...`) — si se necesita
+  dar acceso a más de una persona, considerar una pantalla simple de gestión de admins.
 - Confirmar visualmente el flujo completo de crear/unirse a un squad (bloqueado por el bug
   de teclado del emulador, no por el código — ver abajo).
 - Confirmar que el botón "Voy"/"Tal vez"/"No voy" en Festival Hub cambia visualmente al
@@ -91,6 +134,23 @@ política.
   share sheet real de solo-texto en vez de un Alert.
 
 ## Decisiones técnicas tomadas en el camino (no estaban en el prompt original)
+
+- **Auth del panel admin es email/password, separada de las sesiones anónimas de la app**:
+  la app móvil usa `signInAnonymously()` (ver `src/lib/supabase.ts`), así que ningún usuario
+  tenía email ni forma de "iniciar sesión" desde una web. Se decidió con el usuario (no
+  automáticamente) usar signup real de Supabase Auth para el panel — cuenta separada del
+  concepto de "usuario de la app". El campo `users.is_admin` es el puente: cualquier fila en
+  `public.users` (sea de sesión anónima o de esta auth nueva) con ese flag puede administrar.
+- **`src/proxy.ts` en vez de `middleware.ts`**: Next.js 16 renombró la convención de
+  middleware a "proxy" (`npx @next/codemod middleware-to-proxy` es el migrador oficial); se
+  usó el nombre nuevo directamente para no arrancar con una convención deprecada.
+- **Tipos de Supabase escritos a mano** (`admin/src/lib/database.types.ts`) en vez de
+  generados con `generate_typescript_types`, porque el panel solo toca 3 tablas
+  (`users`, `festivals`, `festival_lineup`). Ojo si se agregan más tablas al panel: el tipo
+  `Database` de `@supabase/supabase-js` v2.114+ exige `__InternalSupabase.PostgrestVersion`
+  y `Relationships: []` en cada tabla o la inferencia de tipos colapsa silenciosamente a
+  `never` en every `.from(...)` (mensajes de error confusos tipo "Property X does not exist
+  on type 'never'" sin mencionar la causa real).
 
 - **SDK de Expo bajado de 57 a 54**: el Expo Go del teléfono del usuario solo soporta SDK 54.
   Se bajaron todas las dependencias con `expo install --fix`.
@@ -136,10 +196,12 @@ política.
 
 ## Cómo retomar
 
-1. `npx expo start` desde la raíz del proyecto (usa el `.env` ya configurado).
-2. Emulador: `Pixel_8` AVD ya existe (`emulator -avd Pixel_8`), o usar el teléfono físico
+1. App móvil: `npx expo start` desde la raíz del proyecto (usa el `.env` ya configurado).
+   Emulador: `Pixel_8` AVD ya existe (`emulator -avd Pixel_8`), o usar el teléfono físico
    con Expo Go (mismo QR/URL de siempre mientras Metro corra en la misma red).
-3. Revisar primero si el flujo de crear/unirse a squad funciona en un entorno con teclado
-   sano (el código no cambió desde que se probó parcialmente).
-4. Siguiente bloque de trabajo sugerido: panel de administración web (nuevo proyecto,
-   probablemente en una carpeta hermana o subcarpeta `admin/`, mismo Supabase).
+2. Panel admin: `cd admin && npm run dev` (o usar el Browser tool con la config `"admin"`
+   de `.claude/launch.json`), entrar en `/login` con `clauliz.acosta@gmail.com` — cambiar
+   la contraseña temporal desde Supabase Auth antes de compartir acceso.
+3. Pendiente de esta sesión: revisar si el flujo de crear/unirse a squad funciona en un
+   entorno con teclado sano (el código no cambió desde que se probó parcialmente), y cargar
+   festivales/line-ups reales desde el panel admin en vez de los datos de ejemplo.
