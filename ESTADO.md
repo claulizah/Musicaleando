@@ -1,6 +1,6 @@
 # Estado del proyecto — Musicaleando
 
-Última actualización: 2026-09-03 (sesión 5). Este archivo es el punto de partida para
+Última actualización: 2026-09-03 (sesión 6). Este archivo es el punto de partida para
 retomar el trabajo en una sesión nueva sin perder contexto.
 
 Proyecto Supabase: `ijwyykfuyeaahvxmaild` ("Sound Project", org `ljcnanwlkijozacnyhck`).
@@ -307,6 +307,73 @@ nada nuevo, solo usarlo con datos reales.
   papaparse, preview, confirmar importación) corrió sin tocar código, igual que si un
   humano hubiera arrastrado el archivo.
 
+## Sprint 3 (primera mitad): Torneo Sonoro, guilty pleasures, tarjeta compartible — completado y verificado (sesión 6, 2026-09-03)
+
+Antes de tocar nada se revisó el onboarding para confirmar qué tanto de "Torneo Sonoro" ya
+existía, como pedía el prompt de continuación. Hallazgo: **no existía ningún mecanismo de
+bracket/torneo**, ni en el onboarding ni en ningún otro lado. Lo que el spec llama "duelo"
+en el cuestionario ([Step1DuelVisual.tsx](src/screens/onboarding/quizSteps/Step1DuelVisual.tsx)
+y [Step10DuelFinal.tsx](src/screens/onboarding/quizSteps/Step10DuelFinal.tsx)) son dos
+preguntas de opción única (2 y 4 opciones respectivamente) que **no eliminan nada y no
+afectan el arquetipo** — son solo decorativas para la `flavor line` (`buildFlavorLine` en
+[archetypes.ts](src/lib/archetypes.ts)). El arquetipo lo determinan únicamente energía +
+eje social (`computeArchetype`). Por lo tanto Torneo Sonoro se construyó desde cero, sin
+reconstruir nada existente porque no había nada de bracket que reconstruir.
+
+- **Torneo Sonoro (standalone, rejugable)**: nuevo
+  [TorneoScreen.tsx](src/screens/main/TorneoScreen.tsx) + lógica de bracket en
+  [tournament.ts](src/lib/tournament.ts). Bracket de eliminación simple sobre los 8
+  `GENEROS` ya existentes (barajados con Fisher-Yates en cada partida — no siempre el mismo
+  orden), 3 rondas (Ronda de 8 → Semifinal → Gran Final), 7 duelos, reutilizando
+  `GradientTile`+`GENEROS_IMAGES` (mismo patrón visual que los "duelo" del quiz, no
+  componentes nuevos) y `QuizProgressBar` para el progreso. Accesible desde un botón 🏆 en
+  `HomeScreen` y desde "Jugar Torneo Sonoro" en `ProfileScreen` — no es parte del flujo de
+  onboarding, se puede jugar cuantas veces se quiera.
+- **El campeón actualiza `music_profile` y dispara el recálculo de compat_score
+  correctamente — confirmado, no hubo que agregar ningún trigger nuevo**: antes de escribir
+  código se revisó si ya existía un trigger de recompute (el prompt lo pedía explícitamente)
+  y **sí existía, ya wired desde una sesión anterior**: `music_profile_recompute_compat`
+  (`AFTER INSERT OR UPDATE OF generos, energia ON music_profile`) llama a
+  `trigger_recompute_squads_for_user()`, que recalcula `squad_members.compat_score` para
+  todos los squads del usuario vía `recompute_squad_compat()`. Nueva acción
+  `applyTournamentChampion(userId, championId)` en
+  [useProfileStore.ts](src/store/useProfileStore.ts): agrega el género campeón a
+  `generos` (si no estaba ya) y guarda `flavor.torneo_campeon`/`flavor.torneo_fecha` — como
+  toca la columna `generos`, el trigger dispara solo. **Verificado en vivo, no solo por
+  lectura de código**: se jugó el torneo completo en el emulador con la cuenta real de "El
+  Caos Controlado" (owner del squad "Los Vi"), el campeón resultó "Indie / Alternativo"
+  (no estaba antes en sus géneros), y por SQL se confirmó que `squad_members.compat_score`
+  de **ambos** miembros de "Los Vi" quedó recalculado con el vector de géneros nuevo
+  (`generos: ["electronica","indie"]`) inmediatamente después del guardado.
+- **Tarjeta compartible del campeón — reutilizando el componente existente, no uno nuevo**:
+  `ArchetypeCard` ([ArchetypeCard.tsx](src/components/ArchetypeCard.tsx)) ya era genérico
+  (label/emoji/descripción/gradiente + imagen opcional), solo se relajó el tipo de `id` de
+  `ArchetypeId` a `string` para poder pasarle un género de torneo en vez de uno de los 12
+  arquetipos fijos. El flujo de captura+compartir (`react-native-view-shot` +
+  `expo-sharing`) es el mismo patrón exacto de `RevealScreen`, copiado sin reinventar.
+  **Verificado en emulador**: se tocó "Compartir" en la pantalla de resultado del torneo y
+  el share sheet nativo de Android se abrió con la imagen ya renderizada (tarjeta morada
+  "Campeón: Indie / Alternativo" con la descripción y el brand "Musicaleando" visibles en
+  la miniatura del share sheet).
+- **Guilty pleasures**: ya existían como pregunta de opción única del quiz (paso 5,
+  `guilty_pleasures` como array de un solo elemento). El pedido de esta sesión era una
+  sección donde el usuario pueda "marcar/reconocer" varios — se agregó a `ProfileScreen`
+  (no al torneo, tiene más sentido como algo que se ajusta libremente en el perfil) una
+  lista de chips tocables con las mismas 6 opciones e imágenes ya existentes
+  (`GUILTY_PLEASURES`/`GUILTY_PLEASURE_IMAGES`), multi-select real (toggle, no radio), con
+  nueva acción `updateGuiltyPleasures(userId, ids)` en `useProfileStore` que escribe el
+  array completo. **Verificado en emulador + SQL**: la opción del quiz ("boy band") ya
+  aparecía pre-marcada al abrir el perfil; se tocó una segunda opción ("Lloro con baladas
+  manejando") y quedó marcada visualmente **y** persistida
+  (`guilty_pleasures: ["boyband","ballad_cry"]` confirmado por SQL) sin desmarcar la
+  primera — confirma que es multi-select real, no reemplazo de un solo valor.
+- **Sin cambios de esquema/DB nuevos**: todo se guarda en columnas que ya existían
+  (`music_profile.generos`, `.flavor`, `.guilty_pleasures`) — no se creó ninguna tabla ni
+  migración esta sesión.
+- No quedaron datos de prueba sintéticos que limpiar: toda la verificación se hizo sobre la
+  cuenta real de "El Caos Controlado" (mismo patrón que sesiones anteriores cuando verifican
+  con la cuenta del dueño), sin crear cuentas temporales nuevas.
+
 ## Pendiente
 
 - No hay UI para editar nombre/ciudad/fechas de un festival ya creado desde el panel (solo
@@ -325,6 +392,23 @@ nada nuevo, solo usarlo con datos reales.
   `festival_lineup`.
 - Solo se cargaron 16 de los +60 artistas confirmados del cartel (los principales/cabezas
   de cartel) — se puede ampliar con otro CSV si se quiere el cartel completo.
+- **Sprint 3, segunda mitad (no implementada aún, según alcance acordado con el usuario)**:
+  - Compañero ideal.
+  - Trends comunitarios con votación.
+  - Import opcional de Spotify/Apple Music.
+  - Reacciones al cartel.
+- Torneo Sonoro es sobre géneros (los 8 `GENEROS` del quiz), no sobre canciones/artistas —
+  fue la interpretación más natural dado que no había ninguna especificación exacta de
+  "qué compite" en el prompt original; si el spec real quería otra cosa (p. ej. canciones
+  del catálogo `songs`), avisar antes de la próxima sesión para ajustar sin rehacer el
+  bracket engine (`tournament.ts` ya es genérico sobre una lista de ids).
+- El botón "Jugar de nuevo" en el resultado del torneo reinicia el bracket completo desde
+  cero (nuevo shuffle) sin confirmación — si se juega dos veces seguidas el segundo campeón
+  simplemente se agrega a `generos` igual que el primero (no reemplaza), así que jugar
+  varias veces solo va sumando géneros al perfil, nunca los quita. Es el comportamiento
+  esperado dado que `generos` representa géneros que le gustan al usuario, pero vale la pena
+  tenerlo presente si se agregan más features que dependan de "el campeón actual" (hoy
+  `flavor.torneo_campeon` siempre guarda solo el último).
 
 ## Decisiones técnicas tomadas en el camino (no estaban en el prompt original)
 
@@ -386,6 +470,13 @@ nada nuevo, solo usarlo con datos reales.
 - La sesión también sufrió varias interrupciones/reinicios del entorno (procesos en
   background — emulador, Metro — murieron entre turnos sin aviso limpio) que obligaron a
   relanzar todo varias veces.
+- (Sesión 6) El mismo "Expo Go isn't responding" volvió a aparecer una vez a mitad de la
+  verificación del torneo, sin patrón claro (no fue por escribir texto esta vez, ocurrió
+  navegando entre pantallas). Se resolvió igual que en sesiones anteriores: `adb shell am
+  force-stop host.exp.exponent` + relanzar con `am start -a android.intent.action.VIEW -d
+  "exp://127.0.0.1:8081" host.exp.exponent` (con `adb reverse tcp:8081 tcp:8081` ya
+  activo) — Metro no necesitó reiniciarse, solo la app. Sigue pareciendo un problema de
+  recursos del emulador, no del código.
 
 ## Cómo retomar
 
@@ -395,8 +486,8 @@ nada nuevo, solo usarlo con datos reales.
 2. Panel admin: `cd admin && npm run dev` (o usar el Browser tool con la config `"admin"`
    de `.claude/launch.json`), entrar en `/login` con `clauliz.acosta@gmail.com` — cambiar
    la contraseña temporal desde Supabase Auth antes de compartir acceso.
-3. Siguiente foco sugerido: ya no hay pendientes grandes de datos — Festival Hub corre
-   sobre un festival real (Corona Capital 2026, línk de boletos real) y Squads está
-   verificado de punta a punta incluyendo RLS con cuentas reales. Lo que queda son mejoras
-   de UI del panel admin (editar/eliminar festival, gestión de admins) o ampliar el
-   cartel de Corona Capital más allá de los 16 artistas principales — ver "Pendiente".
+3. Siguiente foco sugerido: segunda mitad del Sprint 3 — Compañero ideal, Trends
+   comunitarios con votación, import opcional de Spotify/Apple Music, reacciones al cartel
+   (ver "Pendiente" en la sección de Sprint 3 arriba). Antes de empezar, confirmar con el
+   usuario si "Torneo Sonoro sobre géneros" (la interpretación usada en la sesión 6) es la
+   correcta, ya que el spec original no lo especificaba con precisión.

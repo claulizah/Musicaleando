@@ -5,7 +5,9 @@ import { ArchetypeDef } from '../lib/archetypes';
 import { colors, radii, spacing, type } from '../theme';
 
 type Props = {
-  archetype: ArchetypeDef;
+  // Also used for the Torneo Sonoro champion card, which isn't one of the 12
+  // fixed archetypes — id only needs to be a string there, not ArchetypeId.
+  archetype: Omit<ArchetypeDef, 'id'> & { id: string };
   flavor?: string;
   image?: ImageSourcePropType;
 };

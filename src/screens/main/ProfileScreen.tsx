@@ -7,14 +7,17 @@ import { PrimaryButton } from '../../components/PrimaryButton';
 import { RootStackParamList } from '../../navigation/types';
 import { useProfileStore } from '../../store/useProfileStore';
 import { useQuizStore } from '../../store/useQuizStore';
+import { useSessionStore } from '../../store/useSessionStore';
 import { ARCHETYPES, GENEROS, GUILTY_PLEASURES, SocialAxis, buildFlavorLine } from '../../lib/archetypes';
-import { ARCHETYPE_IMAGES } from '../../lib/images';
+import { ARCHETYPE_IMAGES, GENEROS_IMAGES } from '../../lib/images';
 import { colors, radii, spacing, type } from '../../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 
 export function ProfileScreen({ navigation }: Props) {
+  const userId = useSessionStore((s) => s.userId);
   const profile = useProfileStore((s) => s.profile);
+  const updateGuiltyPleasures = useProfileStore((s) => s.updateGuiltyPleasures);
   const prefillFromProfile = useQuizStore((s) => s.prefillFromProfile);
   const goToStep = useQuizStore((s) => s.goToStep);
 
@@ -37,6 +40,14 @@ export function ProfileScreen({ navigation }: Props) {
   const guiltyIds = (profile.guilty_pleasures as string[]) ?? [];
   const social = profile.social as SocialAxis;
   const flavorData = (profile.flavor as Record<string, string | null>) ?? {};
+  const championId = flavorData.torneo_campeon ?? undefined;
+  const champion = championId ? GENEROS.find((g) => g.id === championId) : undefined;
+
+  const toggleGuilty = (id: string) => {
+    if (!userId) return;
+    const next = guiltyIds.includes(id) ? guiltyIds.filter((g) => g !== id) : [...guiltyIds, id];
+    updateGuiltyPleasures(userId, next);
+  };
 
   const flavor = buildFlavorLine({
     generoIds,
@@ -93,15 +104,39 @@ export function ProfileScreen({ navigation }: Props) {
           </View>
         </View>
 
-        {guiltyIds.length > 0 && (
+        {champion && (
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Guilty pleasure</Text>
-            <Text style={styles.bodyText}>
-              {GUILTY_PLEASURES.find((g) => g.id === guiltyIds[0])?.label ?? guiltyIds[0]}
-            </Text>
+            <Text style={styles.sectionLabel}>Campeón del Torneo Sonoro</Text>
+            <View style={styles.chipRow}>
+              <View style={styles.chip}>
+                <Text style={styles.chipText}>
+                  {champion.emoji} {champion.label}
+                </Text>
+              </View>
+            </View>
           </View>
         )}
 
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Guilty pleasures</Text>
+          <Text style={styles.hintText}>Marca los que se te apliquen — puedes elegir varios.</Text>
+          <View style={styles.chipRow}>
+            {GUILTY_PLEASURES.map((option) => {
+              const selected = guiltyIds.includes(option.id);
+              return (
+                <Pressable
+                  key={option.id}
+                  onPress={() => toggleGuilty(option.id)}
+                  style={[styles.chip, selected && styles.chipSelected]}
+                >
+                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{option.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <PrimaryButton label="Jugar Torneo Sonoro" variant="secondary" onPress={() => navigation.navigate('Torneo')} />
         <PrimaryButton label="Retomar y refinar cuestionario" variant="secondary" onPress={refine} />
       </ScrollView>
     </Screen>
@@ -165,6 +200,17 @@ const styles = StyleSheet.create({
   chipText: {
     ...type.body,
     color: colors.textPrimary,
+  },
+  chipSelected: {
+    borderColor: colors.accentSecondary,
+    backgroundColor: colors.accentSecondaryMuted,
+  },
+  chipTextSelected: {
+    color: colors.textPrimary,
+  },
+  hintText: {
+    ...type.body,
+    color: colors.textMuted,
   },
   bodyText: {
     ...type.bodyLg,

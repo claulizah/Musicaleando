@@ -8,4 +8,5 @@ export type RootStackParamList = {
   Squads: undefined;
   SquadDetail: { squadId: string };
   Festivals: undefined;
+  Torneo: undefined;
 };

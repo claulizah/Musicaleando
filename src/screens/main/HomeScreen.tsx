@@ -60,6 +60,9 @@ export function HomeScreen({ navigation }: Props) {
             <Text style={styles.title}>Hola de nuevo</Text>
           </View>
           <View style={styles.headerButtons}>
+            <Pressable style={styles.squadButton} onPress={() => navigation.navigate('Torneo')}>
+              <Text style={styles.squadButtonText}>🏆</Text>
+            </Pressable>
             <Pressable style={styles.squadButton} onPress={() => navigation.navigate('Festivals')}>
               <Text style={styles.squadButtonText}>🎪</Text>
             </Pressable>

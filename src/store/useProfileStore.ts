@@ -12,9 +12,11 @@ type ProfileState = {
   error: string | null;
   fetch: (userId: string) => Promise<void>;
   saveFromQuiz: (userId: string, answers: QuizAnswers) => Promise<ArchetypeId>;
+  applyTournamentChampion: (userId: string, championId: string) => Promise<void>;
+  updateGuiltyPleasures: (userId: string, ids: string[]) => Promise<void>;
 };
 
-export const useProfileStore = create<ProfileState>((set) => ({
+export const useProfileStore = create<ProfileState>((set, get) => ({
   profile: null,
   status: 'idle',
   error: null,
@@ -69,5 +71,37 @@ export const useProfileStore = create<ProfileState>((set) => ({
     if (error) throw error;
     set({ profile: data, status: 'ready' });
     return arquetipo;
+  },
+
+  applyTournamentChampion: async (userId, championId) => {
+    const current = get().profile;
+    const generos = Array.from(new Set([...(((current?.generos as string[]) ?? [])), championId]));
+    const flavor = {
+      ...((current?.flavor as Record<string, unknown>) ?? {}),
+      torneo_campeon: championId,
+      torneo_fecha: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase
+      .from('music_profile')
+      .update({ generos, flavor })
+      .eq('user_id', userId)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    set({ profile: data, status: 'ready' });
+  },
+
+  updateGuiltyPleasures: async (userId, ids) => {
+    const { data, error } = await supabase
+      .from('music_profile')
+      .update({ guilty_pleasures: ids })
+      .eq('user_id', userId)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    set({ profile: data, status: 'ready' });
   },
 }));
