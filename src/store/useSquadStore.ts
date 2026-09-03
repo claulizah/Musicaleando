@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import { Tables } from '../types/database';
+import { useSessionStore } from './useSessionStore';
 
 export type SquadMemberWithProfile = {
   user_id: string;
@@ -122,6 +123,19 @@ export const useSquadStore = create<SquadState>((set, get) => ({
       .eq('squad_id', squadId)
       .eq('user_id', userId);
     if (error) throw error;
-    set({ squads: get().squads.filter((s) => s.squad.id !== squadId) });
+
+    // Only drop the whole squad from local state when the current session's own
+    // membership was removed. When the owner removes someone else, the squad
+    // itself is still ours — just prune that one member, or the screen briefly
+    // flashes "Cargando squad..." while it silently refetches from scratch.
+    if (userId === useSessionStore.getState().userId) {
+      set({ squads: get().squads.filter((s) => s.squad.id !== squadId) });
+    } else {
+      set({
+        squads: get().squads.map((s) =>
+          s.squad.id === squadId ? { ...s, members: s.members.filter((m) => m.user_id !== userId) } : s,
+        ),
+      });
+    }
   },
 }));

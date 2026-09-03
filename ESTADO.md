@@ -1,6 +1,6 @@
 # Estado del proyecto — Musicaleando
 
-Última actualización: 2026-09-02 (sesión 4). Este archivo es el punto de partida para
+Última actualización: 2026-09-03 (sesión 5). Este archivo es el punto de partida para
 retomar el trabajo en una sesión nueva sin perder contexto.
 
 Proyecto Supabase: `ijwyykfuyeaahvxmaild` ("Sound Project", org `ljcnanwlkijozacnyhck`).
@@ -214,25 +214,117 @@ faltaba y se verificó en vivo.
   cuenta anónima y confirmar que un `select`/`insert` contra el squad ajeno devuelve vacío
   o error de RLS.
 
+## Squads: verificaciones pendientes cerradas + bugfix (sesión 5, 2026-09-03)
+
+Las dos verificaciones que habían quedado pendientes de la sesión 4 se cerraron con cuentas
+reales (no solo revisión de policy), usando un script Node con `@supabase/supabase-js` y el
+anon key público del proyecto (mismo que usa la app) para crear sesiones anónimas de prueba
+independientes del emulador — permite probar RLS "de verdad" (respetando policies, no con
+el rol elevado del MCP de Supabase) sin depender del teclado del emulador.
+
+- **RLS de no-miembro (confirmado con cuenta real)**: se creó un usuario C que nunca se unió
+  a "Los Vi". `select` contra `squad_members`/`squad_playlist`/`squads` de ese squad devuelve
+  `[]` (RLS filtra, no error). `insert` directo contra `squad_playlist` y contra
+  `squad_members` devuelve error `42501` ("new row violates row-level security policy").
+  Confirma que `is_squad_member()` funciona igual para la tabla nueva (`squad_playlist`) que
+  para las ya validadas en sesión 3.
+- **Botón "Quitar" (owner remueve miembro), confirmado con cuenta real y en emulador**: se
+  unió un usuario B de prueba a "Los Vi" (vía `join_squad` con el código real, llevando el
+  squad a 3 miembros como pedía el prompt), se usó el emulador (sesión real del owner,
+  "El Caos Controlado") para tocar "Quitar" sobre B y confirmar en el diálogo. Confirmado
+  por SQL que la fila de B desapareció de `squad_members`. Confirmado además que B **pierde
+  acceso real**, no solo visual: reutilizando la sesión (JWT) ya abierta de B, un `select`
+  posterior contra `squad_members`/`squad_playlist`/`squads` de "Los Vi" devuelve `[]` —
+  RLS lo bloquea inmediatamente después de la remoción, sin necesidad de que B cierre sesión.
+- **Bug encontrado y arreglado**: `leaveSquad` en
+  [useSquadStore.ts](src/store/useSquadStore.ts) borraba el squad completo del estado local
+  sin importar de quién era la membresía removida — al usarlo para "el owner remueve a otro
+  miembro" (en vez de "yo salgo"), la pantalla mostraba brevemente "Cargando squad..." antes
+  de refrescar solo. Se corrigió para distinguir: si el `userId` removido es el de la sesión
+  actual (`useSessionStore`), se quita el squad completo de la lista local (comportamiento
+  correcto para "Salir del squad"); si es otro miembro, solo se filtra ese miembro del
+  array local (sin parpadeo). Verificado en emulador después del fix: la remoción del owner
+  ya no muestra el loading intermedio.
+- Datos de prueba (2 usuarios anónimos temporales + su membresía) limpiados de la base al
+  terminar; `squad_playlist` y `squad_members` de "Los Vi" quedaron en el estado real
+  (2 miembros: el owner y el miembro original).
+
+## Festivales reales cargados vía panel admin (sesión 5, 2026-09-03)
+
+Antes de tocar nada se revisó el panel: la importación CSV de line-up **ya existía completa**
+desde la sesión 2 ([lineup-importer.tsx](admin/src/app/festivals/[id]/lineup-importer.tsx) +
+[actions.ts](admin/src/app/festivals/[id]/actions.ts)), igual que el alta de festival por
+formulario ([festivals/new](admin/src/app/festivals/new/page.tsx)) — no hizo falta construir
+nada nuevo, solo usarlo con datos reales.
+
+- **Festival real elegido con el usuario**: Corona Capital 2026 (Ciudad de México, 20–22 de
+  noviembre de 2026, Autódromo Hermanos Rodríguez) — confirmado por búsqueda web contra
+  fuentes de prensa (Chilango, Sopitas, N+, Milenio; ver esa sesión para los links). Se
+  cargó vía la UI real del panel (login → `/festivals/new` → CSV de 16 artistas reales del
+  cartel oficial: Gorillaz, James Blake, The Kooks, Mumford & Sons, CHVRCHES (viernes 20),
+  Twenty One Pilots, The Offspring, Pierce The Veil, Mother Mother, Bunt (sábado 21), The
+  Strokes, The xx, Daniel Caesar, Underworld, Lola Young, Lil Yachty (domingo 22)). No se
+  cargó el cartel completo (+60 artistas) porque el horario exacto por artista no está
+  publicado todavía a esta distancia del evento — se usó medianoche de cada día como
+  placeholder de `horario` (visible en la app como "20 nov, 06:00" por la conversión de
+  zona horaria; es un artefacto cosmético, no un bug, hasta que Ticketmaster publique
+  horarios reales).
+- **Link de boletos real**: `https://www.ticketmaster.com.mx/corona-capital-boletos/artist/1608797`
+  — verificado en emulador que "Comprar boletos" abre Chrome en esa URL exacta y carga la
+  página real de Ticketmaster México (cartel del festival visible). Con esto, el pendiente
+  de "links de boletos reales" del Sprint 2 queda resuelto para este festival — no estaba
+  bloqueado por falta de datos externos, solo por no haberlo hecho todavía.
+- **Los 3 festivales de ejemplo (`Festival Nocturno`, `Encuentro Sonoro`, `Vibra Costera`)
+  se borraron** de la base (`DELETE` directo por SQL, no hay botón de eliminar festival en
+  el panel — ver pendiente abajo). El `ON DELETE CASCADE` limpió su `festival_lineup`
+  automáticamente; también borró una fila real de `festival_intent` (`status='voy'` del
+  usuario owner de "Los Vi" contra "Festival Nocturno", creada como parte de la
+  verificación de la sesión 3) — esperado y aceptado, ya que reemplazar los datos de
+  ejemplo era justamente el objetivo de esta sesión.
+- **RLS re-confirmada específicamente para el camino de importación CSV**: el import no
+  agrega tabla ni RPC nueva — usa `festival_lineup`/`festivals` de siempre a través de
+  server actions con la sesión real del admin (cookies + anon key, ver
+  [admin/src/lib/supabase/server.ts](admin/src/lib/supabase/server.ts)), así que la RLS ya
+  validada en sesión 3 aplica igual. Aun así se hizo una prueba en vivo con una cuenta
+  anónima no-admin: `insert` a `festivals` → error 42501; `insert` a `festival_lineup` →
+  error 42501; `update` de `link_boletos` del festival real → no dio error pero afectó
+  **0 filas** (comportamiento normal de Postgrest/RLS en `UPDATE`: la política filtra la
+  fila antes de aplicar el cambio, así que no hay excepción pero tampoco hay escritura) —
+  confirmado por SQL que el link real de Ticketmaster no cambió. Cuenta de prueba borrada
+  al terminar.
+- **Contraseña del admin reseteada**: no se tenía guardada la contraseña temporal de la
+  sesión 2 (correctamente, nunca se guardó en el repo). El usuario autorizó explícitamente
+  resetearla por SQL (`crypt()` de `pgcrypto` sobre `auth.users.encrypted_password`,
+  migración `reset_bootstrap_admin_password_session5`) para poder entrar al panel — la
+  nueva contraseña temporal se dio una sola vez en el chat de esta sesión, igual que antes;
+  **el usuario debe cambiarla desde Supabase Auth** antes de compartir acceso al panel.
+- **Nota técnica**: el Browser tool de esta sesión no tiene un control nativo para
+  seleccionar un archivo real en el `<input type=file>` del importador CSV (intentar
+  `form_input` con una ruta falla: los navegadores no permiten setear `.value` en inputs de
+  archivo por seguridad). Se resolvió construyendo el CSV como `Blob`/`File` vía
+  `javascript_tool` dentro de la página y asignándolo a `input.files` con un
+  `DataTransfer`, disparando el evento `change` a mano — el resto del flujo (parseo con
+  papaparse, preview, confirmar importación) corrió sin tocar código, igual que si un
+  humano hubiera arrastrado el archivo.
+
 ## Pendiente
 
-- Cargar festivales y line-ups **reales** desde el panel admin (los 3 sembrados siguen
-  siendo ficticios con links `example.com`) — el panel ya soporta hacerlo, solo falta
-  hacerlo.
 - No hay UI para editar nombre/ciudad/fechas de un festival ya creado desde el panel (solo
-  alta y edición del link de boletos) — si hace falta, agregar un form de edición en
-  `/festivals/[id]`.
+  alta y edición del link de boletos), ni para **eliminarlo** (se necesitó SQL directo esta
+  sesión para quitar los 3 festivales de ejemplo) — si hace falta, agregar ambos al detalle
+  en `/festivals/[id]`.
 - El panel no tiene forma de promover a otro usuario a admin desde la UI (hoy requiere
   SQL directo, `update public.users set is_admin = true where id = ...`) — si se necesita
   dar acceso a más de una persona, considerar una pantalla simple de gestión de admins.
 - El invite code de squad se puede compartir hoy solo como texto plano vía `Alert` (no abre
   share sheet nativo) — ver "Decisiones técnicas" para el porqué; podría mejorarse a un
   share sheet real de solo-texto en vez de un Alert.
-- Verificar en vivo con una segunda cuenta que un usuario no-miembro no puede leer/escribir
-  `squad_playlist` de un squad ajeno (ver nota arriba — alta confianza por diseño, sin
-  prueba end-to-end fresca esta sesión).
-- Verificar visualmente el botón "Quitar" (owner remueve miembro) en un squad con 3+
-  miembros — el squad de prueba actual solo tiene 2.
+- El `horario` del line-up de Corona Capital 2026 es un placeholder (medianoche de cada
+  día) porque el cartel oficial todavía no publica horarios por artista — cuando
+  Ticketmaster/el festival los publique, actualizar vía CSV o edición manual en
+  `festival_lineup`.
+- Solo se cargaron 16 de los +60 artistas confirmados del cartel (los principales/cabezas
+  de cartel) — se puede ampliar con otro CSV si se quiere el cartel completo.
 
 ## Decisiones técnicas tomadas en el camino (no estaban en el prompt original)
 
@@ -303,8 +395,8 @@ faltaba y se verificó en vivo.
 2. Panel admin: `cd admin && npm run dev` (o usar el Browser tool con la config `"admin"`
    de `.claude/launch.json`), entrar en `/login` con `clauliz.acosta@gmail.com` — cambiar
    la contraseña temporal desde Supabase Auth antes de compartir acceso.
-3. Siguiente foco sugerido: cargar festivales/line-ups reales desde el panel admin en vez
-   de los datos de ejemplo (único pendiente grande que queda sin tocar). Festival Hub
-   (line-up, Voy/Tal vez/No voy, boletos) y Squads (crear/unirse, compat score, quitar
-   miembro, playlist colaborativa) ya quedaron verificados de punta a punta en las
-   sesiones 3 y 4 respectivamente.
+3. Siguiente foco sugerido: ya no hay pendientes grandes de datos — Festival Hub corre
+   sobre un festival real (Corona Capital 2026, línk de boletos real) y Squads está
+   verificado de punta a punta incluyendo RLS con cuentas reales. Lo que queda son mejoras
+   de UI del panel admin (editar/eliminar festival, gestión de admins) o ampliar el
+   cartel de Corona Capital más allá de los 16 artistas principales — ver "Pendiente".
