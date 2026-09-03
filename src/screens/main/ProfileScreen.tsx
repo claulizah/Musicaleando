@@ -1,16 +1,27 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Screen } from '../../components/Screen';
 import { ArchetypeCard } from '../../components/ArchetypeCard';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { RootStackParamList } from '../../navigation/types';
-import { useProfileStore } from '../../store/useProfileStore';
+import { useProfileStore, TorneoCampeon } from '../../store/useProfileStore';
 import { useQuizStore } from '../../store/useQuizStore';
 import { useSessionStore } from '../../store/useSessionStore';
 import { ARCHETYPES, GENEROS, GUILTY_PLEASURES, SocialAxis, buildFlavorLine } from '../../lib/archetypes';
-import { ARCHETYPE_IMAGES, GENEROS_IMAGES } from '../../lib/images';
+import { ARCHETYPE_IMAGES } from '../../lib/images';
 import { colors, radii, spacing, type } from '../../theme';
+
+// Older test data (before the tournament switched from genres to real
+// artists) stored torneo_campeon as a plain genre id string — treat that
+// shape as "no champion" instead of crashing on the new object fields.
+function readTorneoCampeon(flavor: Record<string, unknown>): TorneoCampeon | undefined {
+  const raw = flavor.torneo_campeon;
+  if (raw && typeof raw === 'object' && 'artistName' in raw) {
+    return raw as TorneoCampeon;
+  }
+  return undefined;
+}
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 
@@ -39,9 +50,8 @@ export function ProfileScreen({ navigation }: Props) {
   const generoIds = (profile.generos as string[]) ?? [];
   const guiltyIds = (profile.guilty_pleasures as string[]) ?? [];
   const social = profile.social as SocialAxis;
-  const flavorData = (profile.flavor as Record<string, string | null>) ?? {};
-  const championId = flavorData.torneo_campeon ?? undefined;
-  const champion = championId ? GENEROS.find((g) => g.id === championId) : undefined;
+  const flavorData = (profile.flavor as Record<string, unknown>) ?? {};
+  const champion = readTorneoCampeon(flavorData);
 
   const toggleGuilty = (id: string) => {
     if (!userId) return;
@@ -53,8 +63,8 @@ export function ProfileScreen({ navigation }: Props) {
     generoIds,
     energia: profile.energia,
     guiltyPleasureId: guiltyIds[0],
-    eraId: flavorData.era ?? undefined,
-    concertoId: flavorData.concierto ?? undefined,
+    eraId: (flavorData.era as string | null) ?? undefined,
+    concertoId: (flavorData.concierto as string | null) ?? undefined,
   });
 
   const refine = () => {
@@ -62,9 +72,9 @@ export function ProfileScreen({ navigation }: Props) {
       generoIds,
       energia: profile.energia,
       social,
-      eraId: flavorData.era ?? undefined,
+      eraId: (flavorData.era as string | null) ?? undefined,
       guiltyPleasureId: guiltyIds[0],
-      concertoId: flavorData.concierto ?? undefined,
+      concertoId: (flavorData.concierto as string | null) ?? undefined,
     });
     goToStep(0);
     navigation.navigate('Quiz');
@@ -107,12 +117,13 @@ export function ProfileScreen({ navigation }: Props) {
         {champion && (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>Campeón del Torneo Sonoro</Text>
-            <View style={styles.chipRow}>
-              <View style={styles.chip}>
-                <Text style={styles.chipText}>
-                  {champion.emoji} {champion.label}
-                </Text>
-              </View>
+            <View style={styles.championRow}>
+              {champion.artistImageUrl ? (
+                <Image source={{ uri: champion.artistImageUrl }} style={styles.championImage} />
+              ) : (
+                <Text style={styles.championEmoji}>🎤</Text>
+              )}
+              <Text style={styles.chipText}>{champion.artistName}</Text>
             </View>
           </View>
         )}
@@ -200,6 +211,26 @@ const styles = StyleSheet.create({
   chipText: {
     ...type.body,
     color: colors.textPrimary,
+  },
+  championRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.bgElevated,
+    borderRadius: radii.pill,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignSelf: 'flex-start',
+  },
+  championImage: {
+    width: 32,
+    height: 32,
+    borderRadius: radii.pill,
+  },
+  championEmoji: {
+    fontSize: 20,
   },
   chipSelected: {
     borderColor: colors.accentSecondary,

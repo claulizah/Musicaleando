@@ -1,6 +1,6 @@
 # Estado del proyecto — Musicaleando
 
-Última actualización: 2026-09-03 (sesión 6). Este archivo es el punto de partida para
+Última actualización: 2026-09-03 (sesión 7). Este archivo es el punto de partida para
 retomar el trabajo en una sesión nueva sin perder contexto.
 
 Proyecto Supabase: `ijwyykfuyeaahvxmaild` ("Sound Project", org `ljcnanwlkijozacnyhck`).
@@ -374,6 +374,81 @@ reconstruir nada existente porque no había nada de bracket que reconstruir.
   cuenta real de "El Caos Controlado" (mismo patrón que sesiones anteriores cuando verifican
   con la cuenta del dueño), sin crear cuentas temporales nuevas.
 
+## Torneo Sonoro corregido: artistas reales de Spotify, no géneros (sesión 7, 2026-09-03)
+
+La sesión 6 dejó una duda abierta: si el torneo debía enfrentar géneros (lo que se
+construyó) o artistas reales. Se resolvió releyendo el spec original con el usuario —
+sección "Fase 2: Torneo Sonoro" dice explícitamente: *"Bracket de eliminación con 8
+artistas elegidos según los géneros de la Fase 1: cuartos → semifinal → gran final = solo 3
+taps hasta un 'campeón musical'. Cada matchup muestra nombre e imagen del artista (dato de
+catálogo público de Spotify)."* Es decir: 8 artistas, no 8 géneros — los géneros solo sirven
+para **elegir** qué artistas entran al bracket.
+
+- **Fuente de datos real, no fallback curado**: el usuario ya tenía una app de Spotify
+  Developer con credenciales propias, así que se implementó Client Credentials Flow de
+  verdad en vez del fallback manual que el prompt de continuación dejaba como aceptable.
+  **El client secret nunca tocó el repo ni el bundle de la app** — se pidió al usuario que
+  lo guardara directamente como secreto de Edge Function en el dashboard de Supabase (no
+  hay tool de MCP para escribir secretos, y el Supabase CLI local no estaba autenticado/
+  linkeado a este proyecto, así que no había forma de hacerlo por mí sin pedirle el secreto
+  en texto plano — se optó por lo primero).
+- **Nueva Edge Function `spotify-artists`** (`verify_jwt: true`, solo invocable con sesión
+  válida — igual que el resto de RPCs de la app): recibe `{ generos: string[] }` (los
+  géneros del `music_profile` del usuario), hace el flujo Client Credentials contra
+  `accounts.spotify.com/api/token` (token cacheado en memoria del isolate mientras esté
+  vivo), y busca artistas por género con `GET /v1/search?q=genre:"<term>"&type=artist`
+  — **no** con `/v1/recommendations` ni `/v1/artists/{id}/related-artists`, que Spotify
+  restringió a apps con "extended quota mode" desde noviembre 2024; Search se mantiene
+  abierto para cualquier app. Reparte los resultados round-robin entre los géneros pedidos
+  (para que un solo género no domine el bracket), ordena por popularidad, y si el usuario
+  tiene menos de los géneros necesarios para completar 8 artistas, rellena con un género
+  fallback (`pop`). Cada artista devuelto viene etiquetado con el `generoId` interno del que
+  salió (necesario para que el cliente sepa qué género reforzar en `music_profile.generos`
+  al coronar un campeón — ver abajo).
+- **Bug real encontrado y arreglado durante el desarrollo, no solo teórico**: el límite
+  documentado de Spotify Search (`limit`, rango 1-50) **no aplica igual para esta app** —
+  pedir `limit=15` devolvía `400 Invalid limit` de forma consistente (confirmado con curl
+  directo contra la API de Spotify, fuera de la Edge Function, para descartar que fuera un
+  bug del código); `limit=10` funciona. Quedó documentado en un comentario en el código —
+  ver [supabase/functions/spotify-artists/index.ts](supabase/functions/spotify-artists/index.ts).
+- **`TorneoScreen.tsx` reescrito**: en vez de 8 `GENEROS` fijos baraja los 8 artistas que
+  devuelve la función (fetch al montar la pantalla, con estados `loading`/`error`/`ready` —
+  antes no existía manejo de error de red porque los géneros eran datos locales que nunca
+  fallaban). El resto de la mecánica **no se tocó**: mismas 3 rondas, mismo
+  `QuizProgressBar`/`GradientTile` reusados (ahora con `image: {uri: artist.imageUrl}` en
+  vez de `require()` local), mismo flujo de captura+compartir de `ArchetypeCard`, rejugable
+  desde Home/Perfil, "Jugar de nuevo" rebaraja el mismo pool de 8 sin pedirle a Spotify de
+  nuevo.
+- **`applyTournamentChampion` cambió de firma**: antes tomaba un `championId` (string de
+  género); ahora toma el objeto `TournamentArtist` completo y guarda
+  `flavor.torneo_campeon = { generoId, artistId, artistName, artistImageUrl }` en vez de un
+  string plano, además de seguir reforzando `music_profile.generos` con el `generoId` del
+  artista campeón — **esto es lo que sigue disparando el trigger
+  `music_profile_recompute_compat`** (`AFTER UPDATE OF generos, ...`), el mecanismo no
+  cambió de la sesión 6, solo lo que se le pasa a `generos`. `ProfileScreen.tsx` se
+  actualizó para leer el nuevo shape del objeto (con guarda defensiva: si encuentra el
+  shape viejo — un string plano de una partida de la sesión 6 — lo trata como "sin campeón
+  todavía" en vez de romper).
+- **Verificado en emulador + SQL, no solo compilado**: se jugó el bracket completo de punta
+  a punta con la cuenta real ("El Caos Controlado", géneros `electronica`+`indie`) — cada
+  duelo mostró nombre e imagen real de artista (Gracie Abrams, Marshmello, Daft Punk, Tame
+  Impala, PinkPantheress, Gorillaz, Phoebe Bridgers, Alex Warren — todos de Spotify, no
+  inventados), campeón final "Gracie Abrams" con su foto real en la tarjeta y el texto
+  actualizado a "De 8 artistas en pista...". Confirmado por SQL que
+  `music_profile.flavor.torneo_campeon` guardó el objeto completo
+  (`artistId`/`generoId`/`artistName`/`artistImageUrl`) y que `updated_at` se refrescó en el
+  mismo instante del guardado (la actualización sí tocó la columna `generos`, que es lo que
+  dispara el trigger — mismo mecanismo ya validado en la sesión 6, no se repitió la prueba
+  con un valor distinto porque el género del campeón ya estaba en `generos` de la sesión
+  anterior). Se volvió a entrar al torneo una segunda vez para confirmar que "Jugar de
+  nuevo"/reingreso rebaraja con un orden distinto (confirmado: la segunda partida arrancó
+  con un par distinto al de la primera). Perfil verificado mostrando el chip del campeón con
+  la foto real de Gracie Abrams.
+- **Nada de datos de prueba residuales**: toda la verificación fue sobre la cuenta real
+  existente, sin cuentas sintéticas nuevas. Los llamados de prueba a la Edge Function por
+  `curl` durante el debugging no tocaron la base de datos (la función no escribe nada, solo
+  Spotify + retorno).
+
 ## Pendiente
 
 - No hay UI para editar nombre/ciudad/fechas de un festival ya creado desde el panel (solo
@@ -397,18 +472,17 @@ reconstruir nada existente porque no había nada de bracket que reconstruir.
   - Trends comunitarios con votación.
   - Import opcional de Spotify/Apple Music.
   - Reacciones al cartel.
-- Torneo Sonoro es sobre géneros (los 8 `GENEROS` del quiz), no sobre canciones/artistas —
-  fue la interpretación más natural dado que no había ninguna especificación exacta de
-  "qué compite" en el prompt original; si el spec real quería otra cosa (p. ej. canciones
-  del catálogo `songs`), avisar antes de la próxima sesión para ajustar sin rehacer el
-  bracket engine (`tournament.ts` ya es genérico sobre una lista de ids).
+- ~~Torneo Sonoro es sobre géneros, no sobre artistas~~ — **resuelto en sesión 7**, ver esa
+  sección: el torneo ahora enfrenta artistas reales (Spotify), no géneros. Se dejó esta
+  entrada tachada en vez de borrarla para que quede rastro de la duda y su resolución.
 - El botón "Jugar de nuevo" en el resultado del torneo reinicia el bracket completo desde
-  cero (nuevo shuffle) sin confirmación — si se juega dos veces seguidas el segundo campeón
-  simplemente se agrega a `generos` igual que el primero (no reemplaza), así que jugar
-  varias veces solo va sumando géneros al perfil, nunca los quita. Es el comportamiento
-  esperado dado que `generos` representa géneros que le gustan al usuario, pero vale la pena
-  tenerlo presente si se agregan más features que dependan de "el campeón actual" (hoy
-  `flavor.torneo_campeon` siempre guarda solo el último).
+  cero (nuevo shuffle de los mismos 8 artistas ya cargados, sin volver a pedirle a Spotify)
+  sin confirmación — si se juega dos veces seguidas el segundo campeón simplemente refuerza
+  `generos` igual que el primero (no reemplaza), así que jugar varias veces solo va sumando
+  géneros al perfil, nunca los quita. Es el comportamiento esperado dado que `generos`
+  representa géneros que le gustan al usuario, pero vale la pena tenerlo presente si se
+  agregan más features que dependan de "el campeón actual" (hoy `flavor.torneo_campeon`
+  siempre guarda solo el último).
 
 ## Decisiones técnicas tomadas en el camino (no estaban en el prompt original)
 
@@ -486,8 +560,18 @@ reconstruir nada existente porque no había nada de bracket que reconstruir.
 2. Panel admin: `cd admin && npm run dev` (o usar el Browser tool con la config `"admin"`
    de `.claude/launch.json`), entrar en `/login` con `clauliz.acosta@gmail.com` — cambiar
    la contraseña temporal desde Supabase Auth antes de compartir acceso.
-3. Siguiente foco sugerido: segunda mitad del Sprint 3 — Compañero ideal, Trends
+3. Edge Function `spotify-artists` (proyecto Supabase `ijwyykfuyeaahvxmaild`): el código
+   fuente vive en el repo en
+   [supabase/functions/spotify-artists/index.ts](supabase/functions/spotify-artists/index.ts)
+   (se desplegó vía el MCP de Supabase, no vía CLI local — no hay `supabase/config.toml` ni
+   proyecto linkeado; para redesplegar tras editarla, usar la tool `deploy_edge_function`
+   del MCP con `verify_jwt: true`, o instalar y linkear el Supabase CLI). Requiere los
+   secretos `SPOTIFY_CLIENT_ID`/`SPOTIFY_CLIENT_SECRET` ya cargados en el dashboard (Edge
+   Functions → Manage secrets) — si se rota la app de Spotify Developer, actualizarlos ahí,
+   no hace falta redesplegar la función.
+4. Siguiente foco sugerido: segunda mitad del Sprint 3 — Compañero ideal, Trends
    comunitarios con votación, import opcional de Spotify/Apple Music, reacciones al cartel
-   (ver "Pendiente" en la sección de Sprint 3 arriba). Antes de empezar, confirmar con el
-   usuario si "Torneo Sonoro sobre géneros" (la interpretación usada en la sesión 6) es la
-   correcta, ya que el spec original no lo especificaba con precisión.
+   (ver "Pendiente" en la sección de Sprint 3 arriba). El "Import opcional de Spotify/Apple
+   Music" puede reutilizar el patrón de Client Credentials ya wired en `spotify-artists`
+   como referencia, aunque un import real de la librería del usuario necesitaría Authorization
+   Code Flow (login del usuario en Spotify), no Client Credentials.

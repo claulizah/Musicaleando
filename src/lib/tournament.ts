@@ -1,22 +1,24 @@
-// Torneo Sonoro: single-elimination bracket over the 8 GENEROS. Purely a
-// standalone, replayable feature — distinct from the quiz's "duelo_visual"/
-// "duelo_final" steps, which are single flavor-only questions, not a bracket.
-import { GENEROS } from './archetypes';
+// Torneo Sonoro: single-elimination bracket over 8 real artists (name +
+// image from Spotify), chosen from the user's favorite genres — per spec,
+// "Bracket de eliminación con 8 artistas elegidos según los géneros de la
+// Fase 1: cuartos → semifinal → gran final". Distinct from the quiz's
+// "duelo_visual"/"duelo_final" steps, which are single flavor-only
+// questions, not a bracket.
 
-export const TOURNAMENT_ROUNDS = Math.log2(GENEROS.length); // 3 rounds for 8 items
-export const TOURNAMENT_DUEL_COUNT = GENEROS.length - 1; // 7 duels total
+export const TOURNAMENT_SIZE = 8;
+export const TOURNAMENT_DUEL_COUNT = TOURNAMENT_SIZE - 1; // 7 duels total
 
-export function shuffledGeneroIds(): string[] {
-  const ids = GENEROS.map((g) => g.id);
-  for (let i = ids.length - 1; i > 0; i--) {
+export function shuffled<T>(items: T[]): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [ids[i], ids[j]] = [ids[j], ids[i]];
+    [copy[i], copy[j]] = [copy[j], copy[i]];
   }
-  return ids;
+  return copy;
 }
 
 export function roundLabel(roundIndex: number): string {
-  const remaining = GENEROS.length / 2 ** roundIndex;
+  const remaining = TOURNAMENT_SIZE / 2 ** roundIndex;
   if (remaining === 2) return 'Gran final';
   if (remaining === 4) return 'Semifinal';
   return `Ronda de ${remaining}`;

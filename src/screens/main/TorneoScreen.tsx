@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
@@ -13,32 +13,58 @@ import { RootStackParamList } from '../../navigation/types';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useProfileStore } from '../../store/useProfileStore';
 import { GENEROS } from '../../lib/archetypes';
-import { GENEROS_IMAGES } from '../../lib/images';
-import { TOURNAMENT_DUEL_COUNT, roundLabel, shuffledGeneroIds } from '../../lib/tournament';
+import { fetchTournamentArtists, TournamentArtist } from '../../lib/spotify';
+import { TOURNAMENT_DUEL_COUNT, roundLabel, shuffled } from '../../lib/tournament';
 import { colors, spacing, type } from '../../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Torneo'>;
+type LoadStatus = 'loading' | 'ready' | 'error';
+
+function generoGradient(generoId: string): readonly [string, string] {
+  return GENEROS.find((g) => g.id === generoId)?.gradient ?? (['#8B5CF6', '#4C3184'] as const);
+}
 
 export function TorneoScreen({ navigation }: Props) {
   const userId = useSessionStore((s) => s.userId);
+  const profile = useProfileStore((s) => s.profile);
   const applyTournamentChampion = useProfileStore((s) => s.applyTournamentChampion);
 
-  const [queue, setQueue] = useState<string[]>(() => shuffledGeneroIds());
-  const [winners, setWinners] = useState<string[]>([]);
+  const [loadStatus, setLoadStatus] = useState<LoadStatus>('loading');
+  const [pool, setPool] = useState<TournamentArtist[]>([]);
+  const [queue, setQueue] = useState<TournamentArtist[]>([]);
+  const [winners, setWinners] = useState<TournamentArtist[]>([]);
   const [roundIndex, setRoundIndex] = useState(0);
   const [duelIndex, setDuelIndex] = useState(0);
-  const [championId, setChampionId] = useState<string | null>(null);
+  const [champion, setChampion] = useState<TournamentArtist | null>(null);
   const [saving, setSaving] = useState(false);
   const [sharing, setSharing] = useState(false);
   const cardRef = useRef<View>(null);
 
-  const pairA = GENEROS.find((g) => g.id === queue[0])!;
-  const pairB = GENEROS.find((g) => g.id === queue[1])!;
+  const loadArtists = async () => {
+    setLoadStatus('loading');
+    try {
+      const generos = (profile?.generos as string[] | undefined) ?? [];
+      const artists = await fetchTournamentArtists(generos);
+      setPool(artists);
+      setQueue(shuffled(artists));
+      setLoadStatus('ready');
+    } catch {
+      setLoadStatus('error');
+    }
+  };
 
-  const choose = async (winnerId: string) => {
+  useEffect(() => {
+    loadArtists();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const pairA = queue[0];
+  const pairB = queue[1];
+
+  const choose = async (winner: TournamentArtist) => {
     Haptics.selectionAsync();
     const restOfQueue = queue.slice(2);
-    const nextWinners = [...winners, winnerId];
+    const nextWinners = [...winners, winner];
     const nextDuelIndex = duelIndex + 1;
 
     if (restOfQueue.length >= 2) {
@@ -49,7 +75,7 @@ export function TorneoScreen({ navigation }: Props) {
     }
 
     if (nextWinners.length === 1) {
-      setChampionId(nextWinners[0]);
+      setChampion(nextWinners[0]);
       setDuelIndex(nextDuelIndex);
       if (userId) {
         setSaving(true);
@@ -71,11 +97,11 @@ export function TorneoScreen({ navigation }: Props) {
   };
 
   const playAgain = () => {
-    setQueue(shuffledGeneroIds());
+    setQueue(shuffled(pool));
     setWinners([]);
     setRoundIndex(0);
     setDuelIndex(0);
-    setChampionId(null);
+    setChampion(null);
   };
 
   const handleShare = async () => {
@@ -96,21 +122,40 @@ export function TorneoScreen({ navigation }: Props) {
     }
   };
 
-  if (championId) {
-    const genero = GENEROS.find((g) => g.id === championId)!;
+  if (loadStatus === 'loading') {
+    return (
+      <Screen style={styles.center}>
+        <Text style={styles.calculatingText}>Armando el bracket con artistas reales...</Text>
+      </Screen>
+    );
+  }
+
+  if (loadStatus === 'error') {
+    return (
+      <Screen style={styles.center}>
+        <Text style={styles.errorText}>
+          No pudimos cargar artistas para el torneo. Revisa tu conexión e intenta de nuevo.
+        </Text>
+        <PrimaryButton label="Reintentar" onPress={loadArtists} />
+        <PrimaryButton label="Volver" variant="ghost" onPress={() => navigation.goBack()} />
+      </Screen>
+    );
+  }
+
+  if (champion) {
     return (
       <Screen style={styles.center}>
         <View style={styles.cardWrap}>
           <ArchetypeCard
             ref={cardRef}
             archetype={{
-              id: genero.id,
-              label: `Campeón: ${genero.label}`,
-              emoji: genero.emoji,
-              description: 'De 8 géneros en pista, este ganó el Torneo Sonoro.',
-              gradient: genero.gradient,
+              id: champion.id,
+              label: `Campeón: ${champion.name}`,
+              emoji: '🎤',
+              description: 'De 8 artistas en pista, este ganó el Torneo Sonoro.',
+              gradient: generoGradient(champion.generoId),
             }}
-            image={GENEROS_IMAGES[genero.id]}
+            image={champion.imageUrl ? { uri: champion.imageUrl } : undefined}
           />
         </View>
         {saving && <Text style={styles.savingHint}>Guardando en tu perfil...</Text>}
@@ -142,19 +187,19 @@ export function TorneoScreen({ navigation }: Props) {
 
       <View style={styles.duelRow}>
         <GradientTile
-          emoji={pairA.emoji}
-          label={pairA.label}
-          gradient={pairA.gradient}
-          image={GENEROS_IMAGES[pairA.id]}
-          onPress={() => choose(pairA.id)}
+          emoji="🎤"
+          label={pairA.name}
+          gradient={generoGradient(pairA.generoId)}
+          image={pairA.imageUrl ? { uri: pairA.imageUrl } : undefined}
+          onPress={() => choose(pairA)}
           style={styles.tile}
         />
         <GradientTile
-          emoji={pairB.emoji}
-          label={pairB.label}
-          gradient={pairB.gradient}
-          image={GENEROS_IMAGES[pairB.id]}
-          onPress={() => choose(pairB.id)}
+          emoji="🎤"
+          label={pairB.name}
+          gradient={generoGradient(pairB.generoId)}
+          image={pairB.imageUrl ? { uri: pairB.imageUrl } : undefined}
+          onPress={() => choose(pairB)}
           style={styles.tile}
         />
       </View>
@@ -213,6 +258,16 @@ const styles = StyleSheet.create({
   savingHint: {
     ...type.body,
     color: colors.textSecondary,
+  },
+  calculatingText: {
+    ...type.bodyLg,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  errorText: {
+    ...type.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
   actions: {
     width: '100%',

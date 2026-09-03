@@ -2,9 +2,17 @@ import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import { Tables } from '../types/database';
 import { ArchetypeId, QuizAnswers, computeArchetype } from '../lib/archetypes';
+import { TournamentArtist } from '../lib/spotify';
 
 type MusicProfile = Tables<'music_profile'>;
 type Status = 'idle' | 'loading' | 'ready' | 'error';
+
+export type TorneoCampeon = {
+  generoId: string;
+  artistId: string;
+  artistName: string;
+  artistImageUrl?: string;
+};
 
 type ProfileState = {
   profile: MusicProfile | null;
@@ -12,7 +20,7 @@ type ProfileState = {
   error: string | null;
   fetch: (userId: string) => Promise<void>;
   saveFromQuiz: (userId: string, answers: QuizAnswers) => Promise<ArchetypeId>;
-  applyTournamentChampion: (userId: string, championId: string) => Promise<void>;
+  applyTournamentChampion: (userId: string, champion: TournamentArtist) => Promise<void>;
   updateGuiltyPleasures: (userId: string, ids: string[]) => Promise<void>;
 };
 
@@ -73,12 +81,23 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     return arquetipo;
   },
 
-  applyTournamentChampion: async (userId, championId) => {
+  applyTournamentChampion: async (userId, champion) => {
     const current = get().profile;
-    const generos = Array.from(new Set([...(((current?.generos as string[]) ?? [])), championId]));
+    // Crowning an artist champion reinforces the genre it came from — touching
+    // `generos` is also what re-triggers the compat_score recompute trigger
+    // (music_profile_recompute_compat fires on UPDATE OF generos, energia).
+    const generos = Array.from(
+      new Set([...(((current?.generos as string[]) ?? [])), champion.generoId]),
+    );
+    const torneoCampeon: TorneoCampeon = {
+      generoId: champion.generoId,
+      artistId: champion.id,
+      artistName: champion.name,
+      artistImageUrl: champion.imageUrl,
+    };
     const flavor = {
       ...((current?.flavor as Record<string, unknown>) ?? {}),
-      torneo_campeon: championId,
+      torneo_campeon: torneoCampeon,
       torneo_fecha: new Date().toISOString(),
     };
 
