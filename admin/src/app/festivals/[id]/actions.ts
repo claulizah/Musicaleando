@@ -72,3 +72,58 @@ export async function deleteLineupRow(festivalId: string, rowId: string): Promis
   revalidatePath(`/festivals/${festivalId}`);
   return {};
 }
+
+export async function createAnnouncement(
+  festivalId: string,
+  formData: FormData,
+): Promise<{ error?: string }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) return { error: 'No autorizado.' };
+
+  const tipo = String(formData.get('tipo') ?? '');
+  const titulo = String(formData.get('titulo') ?? '').trim();
+  const descripcion = String(formData.get('descripcion') ?? '').trim() || null;
+  const sponsor_nombre = String(formData.get('sponsor_nombre') ?? '').trim() || null;
+  const codigo_descuento = String(formData.get('codigo_descuento') ?? '').trim() || null;
+
+  if (!['simple', 'rifa', 'descuento'].includes(tipo)) {
+    return { error: 'Tipo de anuncio inválido.' };
+  }
+  if (!titulo) return { error: 'El anuncio necesita un título.' };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { error } = await supabase.from('announcements').insert({
+    festival_id: festivalId,
+    tipo,
+    titulo,
+    descripcion,
+    sponsor_nombre,
+    codigo_descuento: tipo === 'descuento' ? codigo_descuento : null,
+    created_by: user?.id ?? null,
+  });
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/festivals/${festivalId}`);
+  return {};
+}
+
+export async function deleteAnnouncement(
+  festivalId: string,
+  announcementId: string,
+): Promise<{ error?: string }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) return { error: 'No autorizado.' };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from('announcements').delete().eq('id', announcementId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/festivals/${festivalId}`);
+  return {};
+}

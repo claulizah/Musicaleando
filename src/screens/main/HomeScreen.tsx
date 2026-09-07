@@ -63,6 +63,9 @@ export function HomeScreen({ navigation }: Props) {
             <Pressable style={styles.squadButton} onPress={() => navigation.navigate('Torneo')}>
               <Text style={styles.squadButtonText}>🏆</Text>
             </Pressable>
+            <Pressable style={styles.squadButton} onPress={() => navigation.navigate('CommunityTrends')}>
+              <Text style={styles.squadButtonText}>📈</Text>
+            </Pressable>
             <Pressable style={styles.squadButton} onPress={() => navigation.navigate('Festivals')}>
               <Text style={styles.squadButtonText}>🎪</Text>
             </Pressable>

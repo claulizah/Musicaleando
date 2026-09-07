@@ -27,12 +27,17 @@ export default async function DashboardPage() {
     <main className="mx-auto max-w-3xl px-4 py-10">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Festivales</h1>
-        <Link
-          href="/festivals/new"
-          className="rounded-md bg-black px-3 py-2 text-sm text-white"
-        >
-          + Nuevo festival
-        </Link>
+        <div className="flex items-center gap-3">
+          <Link href="/sponsors" className="text-sm underline">
+            Patrocinadores
+          </Link>
+          <Link
+            href="/festivals/new"
+            className="rounded-md bg-black px-3 py-2 text-sm text-white"
+          >
+            + Nuevo festival
+          </Link>
+        </div>
       </div>
       <ul className="flex flex-col gap-3">
         {festivals?.map((f) => (

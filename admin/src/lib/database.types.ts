@@ -53,6 +53,48 @@ export type Database = {
           },
         ];
       };
+      sponsors: {
+        Row: {
+          id: string;
+          nombre: string;
+          contacto: string | null;
+          ofrece: string | null;
+          created_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['sponsors']['Row'], 'id' | 'created_at'> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['sponsors']['Row']>;
+        Relationships: [];
+      };
+      announcements: {
+        Row: {
+          id: string;
+          festival_id: string;
+          tipo: string;
+          titulo: string;
+          descripcion: string | null;
+          sponsor_nombre: string | null;
+          codigo_descuento: string | null;
+          created_by: string | null;
+          created_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['announcements']['Row'], 'id' | 'created_at'> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['announcements']['Row']>;
+        Relationships: [
+          {
+            foreignKeyName: 'announcements_festival_id_fkey';
+            columns: ['festival_id'];
+            isOneToOne: false;
+            referencedRelation: 'festivals';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
     };
   };
 };

@@ -1,6 +1,8 @@
-import React from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import * as DocumentPicker from 'expo-document-picker';
+import { File } from 'expo-file-system';
 import { Screen } from '../../components/Screen';
 import { ArchetypeCard } from '../../components/ArchetypeCard';
 import { PrimaryButton } from '../../components/PrimaryButton';
@@ -10,6 +12,7 @@ import { useQuizStore } from '../../store/useQuizStore';
 import { useSessionStore } from '../../store/useSessionStore';
 import { ARCHETYPES, GENEROS, GUILTY_PLEASURES, SocialAxis, buildFlavorLine } from '../../lib/archetypes';
 import { ARCHETYPE_IMAGES } from '../../lib/images';
+import { parseListeningHistory, topArtists, fetchImportGenres } from '../../lib/musicImport';
 import { colors, radii, spacing, type } from '../../theme';
 
 // Older test data (before the tournament switched from genres to real
@@ -29,8 +32,10 @@ export function ProfileScreen({ navigation }: Props) {
   const userId = useSessionStore((s) => s.userId);
   const profile = useProfileStore((s) => s.profile);
   const updateGuiltyPleasures = useProfileStore((s) => s.updateGuiltyPleasures);
+  const applyImportResult = useProfileStore((s) => s.applyImportResult);
   const prefillFromProfile = useQuizStore((s) => s.prefillFromProfile);
   const goToStep = useQuizStore((s) => s.goToStep);
+  const [importing, setImporting] = useState(false);
 
   // profile.arquetipo can be an id from a retired archetype set (e.g. a profile
   // saved before an archetype-engine change) — guard the lookup, not just presence.
@@ -78,6 +83,47 @@ export function ProfileScreen({ navigation }: Props) {
     });
     goToStep(0);
     navigation.navigate('Quiz');
+  };
+
+  const handleImport = async () => {
+    if (!userId) return;
+    const picked = await DocumentPicker.getDocumentAsync({ type: 'application/json' });
+    if (picked.canceled) return;
+
+    setImporting(true);
+    try {
+      const raw = await new File(picked.assets[0].uri).text();
+      const parsed = parseListeningHistory(raw);
+      if (!parsed) {
+        Alert.alert(
+          'No pudimos leer ese archivo',
+          'No parece un export reconocible de Spotify o Apple Music. Tu perfil por cuestionario sigue igual.',
+        );
+        return;
+      }
+
+      const result = await fetchImportGenres(topArtists(parsed, 30));
+      if (result.generos.length === 0) {
+        Alert.alert(
+          'No reconocimos suficientes artistas',
+          `Leímos ${parsed.recognizedEntries} entradas pero no encontramos géneros en común. Tu perfil por cuestionario sigue igual.`,
+        );
+        return;
+      }
+
+      await applyImportResult(userId, result);
+      Alert.alert(
+        'Importación lista',
+        `Reforzamos tu perfil con ${result.generos.length} género(s) a partir de ${result.matchedArtists.length} artista(s) reconocidos.`,
+      );
+    } catch (err) {
+      Alert.alert(
+        'No se pudo importar',
+        err instanceof Error ? err.message : 'Intenta de nuevo más tarde. Tu perfil por cuestionario sigue igual.',
+      );
+    } finally {
+      setImporting(false);
+    }
   };
 
   return (
@@ -148,6 +194,15 @@ export function ProfileScreen({ navigation }: Props) {
         </View>
 
         <PrimaryButton label="Jugar Torneo Sonoro" variant="secondary" onPress={() => navigation.navigate('Torneo')} />
+        <PrimaryButton
+          label={importing ? 'Importando...' : 'Importar de Spotify / Apple Music'}
+          variant="secondary"
+          onPress={handleImport}
+          loading={importing}
+        />
+        {profile.origen === 'import' && (
+          <Text style={styles.hintText}>Tu perfil incluye datos de una importación.</Text>
+        )}
         <PrimaryButton label="Retomar y refinar cuestionario" variant="secondary" onPress={refine} />
       </ScrollView>
     </Screen>

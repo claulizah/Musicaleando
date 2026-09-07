@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Tables } from '../types/database';
 import { ArchetypeId, QuizAnswers, computeArchetype } from '../lib/archetypes';
 import { TournamentArtist } from '../lib/spotify';
+import { ImportGenreResult } from '../lib/musicImport';
 
 type MusicProfile = Tables<'music_profile'>;
 type Status = 'idle' | 'loading' | 'ready' | 'error';
@@ -22,6 +23,7 @@ type ProfileState = {
   saveFromQuiz: (userId: string, answers: QuizAnswers) => Promise<ArchetypeId>;
   applyTournamentChampion: (userId: string, champion: TournamentArtist) => Promise<void>;
   updateGuiltyPleasures: (userId: string, ids: string[]) => Promise<void>;
+  applyImportResult: (userId: string, result: ImportGenreResult) => Promise<void>;
 };
 
 export const useProfileStore = create<ProfileState>((set, get) => ({
@@ -116,6 +118,33 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     const { data, error } = await supabase
       .from('music_profile')
       .update({ guilty_pleasures: ids })
+      .eq('user_id', userId)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    set({ profile: data, status: 'ready' });
+  },
+
+  applyImportResult: async (userId, result) => {
+    if (result.generos.length === 0) {
+      throw new Error('No reconocimos suficientes artistas de tu historial para inferir géneros.');
+    }
+    const current = get().profile;
+    // Merge, don't replace — an import refines the profile, it shouldn't
+    // erase what the quiz already established.
+    const generos = Array.from(
+      new Set([...(((current?.generos as string[]) ?? [])), ...result.generos]),
+    );
+    const flavor = {
+      ...((current?.flavor as Record<string, unknown>) ?? {}),
+      import_fecha: new Date().toISOString(),
+      import_top_artists: result.matchedArtists.slice(0, 5).map((a) => a.name),
+    };
+
+    const { data, error } = await supabase
+      .from('music_profile')
+      .update({ generos, flavor, origen: 'import' })
       .eq('user_id', userId)
       .select('*')
       .single();

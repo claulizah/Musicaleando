@@ -376,6 +376,328 @@ export type Database = {
           },
         ]
       }
+      community_shares: {
+        Row: {
+          id: string
+          user_id: string
+          song_ids: string[]
+          caption: string | null
+          ciudad: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          song_ids: string[]
+          caption?: string | null
+          ciudad?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          song_ids?: string[]
+          caption?: string | null
+          ciudad?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_shares_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_share_votes: {
+        Row: {
+          share_id: string
+          user_id: string
+          created_at: string
+        }
+        Insert: {
+          share_id: string
+          user_id: string
+          created_at?: string
+        }
+        Update: {
+          share_id?: string
+          user_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_share_votes_share_id_fkey"
+            columns: ["share_id"]
+            isOneToOne: false
+            referencedRelation: "community_shares"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_share_votes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      festival_reactions: {
+        Row: {
+          festival_id: string
+          user_id: string
+          reaction: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          festival_id: string
+          user_id: string
+          reaction: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          festival_id?: string
+          user_id?: string
+          reaction?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "festival_reactions_festival_id_fkey"
+            columns: ["festival_id"]
+            isOneToOne: false
+            referencedRelation: "festivals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "festival_reactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      festival_feedback: {
+        Row: {
+          festival_id: string
+          user_id: string
+          tags: string[]
+          comentario: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          festival_id: string
+          user_id: string
+          tags?: string[]
+          comentario?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          festival_id?: string
+          user_id?: string
+          tags?: string[]
+          comentario?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "festival_feedback_festival_id_fkey"
+            columns: ["festival_id"]
+            isOneToOne: false
+            referencedRelation: "festivals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "festival_feedback_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      // Actually a view (community_share_stats), modeled here as a read-only
+      // "table" so the existing Tables<T> helper works for it unchanged —
+      // Insert/Update are never used since the app only ever selects from it.
+      community_share_stats: {
+        Row: {
+          share_id: string
+          user_id: string
+          song_ids: string[]
+          caption: string | null
+          ciudad: string | null
+          created_at: string
+          vote_count: number
+        }
+        Insert: {
+          share_id?: string
+          user_id?: string
+          song_ids?: string[]
+          caption?: string | null
+          ciudad?: string | null
+          created_at?: string
+          vote_count?: number
+        }
+        Update: {
+          share_id?: string
+          user_id?: string
+          song_ids?: string[]
+          caption?: string | null
+          ciudad?: string | null
+          created_at?: string
+          vote_count?: number
+        }
+        Relationships: []
+      }
+      festival_comments: {
+        Row: {
+          id: string
+          festival_id: string
+          user_id: string
+          texto: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          festival_id: string
+          user_id: string
+          texto: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          festival_id?: string
+          user_id?: string
+          texto?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "festival_comments_festival_id_fkey"
+            columns: ["festival_id"]
+            isOneToOne: false
+            referencedRelation: "festivals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "festival_comments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sponsors: {
+        Row: {
+          id: string
+          nombre: string
+          contacto: string | null
+          ofrece: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          nombre: string
+          contacto?: string | null
+          ofrece?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          nombre?: string
+          contacto?: string | null
+          ofrece?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      announcements: {
+        Row: {
+          id: string
+          festival_id: string
+          tipo: string
+          titulo: string
+          descripcion: string | null
+          sponsor_nombre: string | null
+          codigo_descuento: string | null
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          festival_id: string
+          tipo: string
+          titulo: string
+          descripcion?: string | null
+          sponsor_nombre?: string | null
+          codigo_descuento?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          festival_id?: string
+          tipo?: string
+          titulo?: string
+          descripcion?: string | null
+          sponsor_nombre?: string | null
+          codigo_descuento?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcements_festival_id_fkey"
+            columns: ["festival_id"]
+            isOneToOne: false
+            referencedRelation: "festivals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      announcement_interest: {
+        Row: {
+          announcement_id: string
+          user_id: string
+          created_at: string
+        }
+        Insert: {
+          announcement_id: string
+          user_id: string
+          created_at?: string
+        }
+        Update: {
+          announcement_id?: string
+          user_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcement_interest_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "announcements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_interest_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -419,3 +741,5 @@ export type Mood = "fiesta" | "chill" | "electronica"
 export type ProfileOrigen = "quiz" | "import" | "live"
 export type TrendTipo = "energia_vs_ciudad" | "dato_arquetipo" | "genero_dominante"
 export type FestivalStatus = "voy" | "tal_vez" | "no_voy"
+export type FestivalReactionType = "like" | "dislike"
+export type AnnouncementTipo = "simple" | "rifa" | "descuento"

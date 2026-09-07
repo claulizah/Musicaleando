@@ -1,6 +1,6 @@
 # Estado del proyecto — Musicaleando
 
-Última actualización: 2026-09-03 (sesión 7). Este archivo es el punto de partida para
+Última actualización: 2026-09-07 (sesión 9). Este archivo es el punto de partida para
 retomar el trabajo en una sesión nueva sin perder contexto.
 
 Proyecto Supabase: `ijwyykfuyeaahvxmaild` ("Sound Project", org `ljcnanwlkijozacnyhck`).
@@ -449,6 +449,221 @@ para **elegir** qué artistas entran al bracket.
   `curl` durante el debugging no tocaron la base de datos (la función no escribe nada, solo
   Spotify + retorno).
 
+## Sprint 3 (segunda mitad, parcial): Trends comunitarios, reacciones al cartel, import — completado y verificado (sesión 8, 2026-09-03)
+
+Antes de tocar nada se revisó el código existente (FestivalHubScreen/useFestivalStore,
+useSquadPlaylistStore como patrón de "elegir canción del catálogo", useTrendStore como
+patrón de trend individual) para no reconstruir nada — ninguna de las tres features de esta
+sesión existía todavía en ninguna forma parcial.
+
+- **"Compañero ideal" quedó explícitamente en pausa**: se propuso una interpretación
+  (sugerencia 1:1 del usuario con `compat_score` más alto de entre *todos* los usuarios de
+  la app, no solo squadmates, vía una función SQL nueva tipo `find_best_compat_match`
+  porque hoy RLS bloquea leer el `music_profile` de otros usuarios directamente) y el
+  usuario pidió pausarla "hasta que se defina" — **no se implementó nada de esto**, ni
+  tablas ni pantalla. Sigue sin mecánica definida.
+- **Trends comunitarios (votación)**: tablas nuevas `community_shares` (`song_ids uuid[]`
+  — soporta canción suelta o "playlist" de varias, `ciudad` denormalizada de
+  `users.ciudad` al momento de compartir porque RLS de `users` solo deja leer la fila
+  propia) y `community_share_votes` (un voto por usuario por share, un tap = toggle
+  like/unlike). Vista `community_share_stats` (`security_invoker = true`) con el conteo de
+  votos para rankear. RLS: select público en ambas tablas, insert/delete solo la fila
+  propia (`auth.uid() = user_id`) — mismo patrón que `festival_intent`. Pantalla nueva
+  [CommunityTrendsScreen.tsx](src/screens/main/CommunityTrendsScreen.tsx) (ruta
+  `CommunityTrends`, botón 📈 en Home): toggle Global/Mi ciudad, selector de canciones por
+  género reutilizando el patrón visual de "agregar canción" de Squads pero con multi-select
+  real (checkbox, no un tap-y-cierra) para poder compartir varias como "playlist", ranking
+  con "Trend comunitario de la semana" (el más votado, ventana de 7 días) destacado arriba
+  y el resto abajo. **Es un complemento al Torneo Sonoro, no comparte tablas ni lógica**:
+  Torneo es puntual/eliminación sobre artistas de Spotify; esto es una señal continua sobre
+  el catálogo propio de canciones (`songs`), sin límite de participaciones.
+  **Verificado en emulador + SQL**: se compartieron 2 canciones reales del catálogo
+  ("Cuerdas Rotas" + "Riff Final", género Rock) como una sola "playlist", apareció
+  inmediatamente como "Trend comunitario de la semana", se votó (❤️ 1) y se confirmó por
+  SQL tanto la fila de `community_shares` (`song_ids` con los 2 ids correctos) como el
+  `vote_count = 1` en la vista.
+- **Reacciones al cartel**: tablas nuevas `festival_reactions` (`like`/`dislike`, upsert por
+  `festival_id`+`user_id`, un tap sobre la misma reacción la quita — toggle) y
+  `festival_feedback` (tags fijos + comentario libre opcional, un registro por usuario por
+  festival, editable). Tags fijos definidos en
+  [festivalFeedback.ts](src/lib/festivalFeedback.ts) (`mas_urbano`, `headliner_internacional`,
+  `mas_locales` — los tres ejemplos literales del prompt). RLS: select público, insert
+  propio, **update y delete solo la fila propia** — se verificó explícitamente que el
+  patrón es select-todos/write-solo-mía, igual que se pidió comparándolo con
+  `festivals`/`squad_members` de sesiones anteriores. UI agregada directo a
+  [FestivalHubScreen.tsx](src/screens/main/FestivalHubScreen.tsx) (aplica a todos los
+  festivales por igual, no fue necesario nada específico de Corona Capital — se probó ahí
+  primero por ser el único festival real cargado). **Verificado en emulador + SQL sobre
+  Corona Capital 2026**: 👍 confirmado con POST 201 en los logs de la API y la fila
+  correspondiente en `festival_reactions` (`reaction: 'like'`); feedback con tag
+  `mas_urbano` confirmado en `festival_feedback` (`comentario: null` porque el campo de
+  texto no se probó — ver nota de entorno abajo). El toggle de reacción también quedó
+  confirmado de forma no intencional pero útil: un doble-tap accidental durante las pruebas
+  generó un POST 201 seguido de un DELETE 204 sobre la misma fila, confirmando que
+  "tocar de nuevo la misma reacción la quita" funciona de verdad, no solo en la UI
+  optimista.
+- **Import opcional de Spotify/Apple Music**: **sin OAuth**, tal como pedía el prompt — el
+  usuario elige un archivo con `expo-document-picker` (paquete nuevo, junto con
+  `expo-file-system` para leerlo; ninguno de los dos estaba instalado, se agregaron con
+  `npx expo install`). Parseo 100% cliente en
+  [musicImport.ts](src/lib/musicImport.ts), tolerante a varios formatos: intenta
+  `master_metadata_album_artist_name` (Spotify Extended Streaming History real),
+  `artistName` (export viejo de Spotify), y varias claves razonables para un export de
+  Apple Music (`artist`, `Artist Name`, `Container Artist Name`, o `Track Description` con
+  formato "Artista - Canción"). Un archivo que no matchea ninguna clave conocida en
+  **ningún** registro devuelve `null` (no un import vacío silencioso) y la pantalla
+  muestra una alerta amigable explicando que el perfil por cuestionario sigue intacto — así
+  se maneja el caso límite de "archivo corrupto/formato inesperado" que pedía el prompt sin
+  necesitar un archivo corrupto real para la prueba (la rama de código se revisó, no se
+  reprodujo un archivo roto en vivo por límite de tiempo de la sesión — ver "Pendiente").
+  El cliente extrae los artistas más escuchados (hasta 30) y se los manda a una Edge
+  Function nueva, `import-listening-history`
+  ([supabase/functions/import-listening-history/index.ts](supabase/functions/import-listening-history/index.ts)),
+  que **no** llama a Spotify para leer el género de cada artista — ver el hallazgo de abajo,
+  esa vía está bloqueada por Spotify en este tier — sino que arma un índice inverso
+  (nombre de artista → género interno) buscando los artistas top de cada uno de los 8
+  géneros vía `genre:"X"` Search (la misma llamada validada para Torneo Sonoro) y matchea
+  los nombres del usuario contra ese índice. El resultado (hasta 3 géneros, ponderados por
+  reproducciones) se aplica a `music_profile` igual que el campeón del torneo: refuerza
+  `generos` (nunca reemplaza) y marca `origen: 'import'`.
+  - **Hallazgo real durante el desarrollo, cambió el diseño de la función**: la ruta obvia
+    — buscar cada artista por nombre y leer su campo `genres` — **no funciona en este tier
+    de acceso de Spotify**. Confirmado con curl directo (fuera del código, para descartar
+    bug propio) contra `/v1/search` y también contra `/v1/artists/{id}` con artistas muy
+    conocidos (Metallica, Bad Bunny): **ninguno de los dos endpoints devuelve el campo
+    `genres` en absoluto** (tampoco `popularity` ni `followers`) — confirma que la
+    restricción de "extended quota mode" de Spotify de noviembre 2024 alcanza más lejos de
+    lo que se pensaba en la sesión 7 (no solo Recommendations/Related Artists). El diseño
+    final usa `genre:"X"` Search en la dirección que Spotify sí permite (que ya se sabía
+    que funcionaba, por Torneo Sonoro) en vez de la dirección bloqueada.
+  - **Verificado en emulador + SQL de punta a punta**: se generó un JSON de prueba con
+    formato real de Spotify Extended Streaming History (`master_metadata_album_artist_name`)
+    con 5 artistas reales conocidos (Gracie Abrams, Marshmello, Daft Punk, Tame Impala,
+    Arctic Monkeys) más un "artista" inventado para probar el camino de no-match, se
+    empujó al emulador con `adb push` a `/sdcard/Download/` (se necesitó forzar un
+    `MEDIA_SCANNER_SCAN_FILE` porque el picker de Android no lo indexaba de inmediato pese
+    a que `content query` ya lo veía — ver "Problemas de entorno"), se seleccionó desde el
+    picker nativo de Android dentro de la app, y la app mostró "Reforzamos tu perfil con 3
+    género(s) a partir de 5 artista(s) reconocidos." Confirmado por SQL:
+    `music_profile.generos` pasó de `[electronica, indie]` a
+    `[electronica, indie, rock]` (rock se agregó nuevo, por Tame Impala/Arctic Monkeys),
+    `origen = 'import'`, `flavor.import_top_artists` con los 5 nombres reales. **El trigger
+    de compat_score volvió a dispararse correctamente** sin tocarlo: `squad_members.compat_score`
+    de ambos miembros de "Los Vi" subió de 21 a 51 en el mismo momento (antes no
+    compartían ningún género, ahora comparten `rock` con el otro miembro del squad).
+  - El archivo de prueba se borró del almacenamiento del emulador al terminar (no es dato
+    de la app, solo un artefacto local del picker).
+- **Bug de tsconfig heredado de la sesión 7, encontrado y arreglado al inicio de esta
+  sesión**: `npx tsc` fallaba con `Cannot find name 'Deno'` sobre
+  `supabase/functions/spotify-artists/index.ts` — la sesión 7 agregó ese archivo al repo
+  después del último `tsc` limpio y nunca lo volvió a correr. Se agregó `"supabase"` al
+  `exclude` de `tsconfig.json` (las Edge Functions corren en Deno, no las compila ni
+  ejecuta Metro/el bundler de la app — no deben pasar por el typecheck de la app).
+
+## Sesión 9 (2026-09-07): pendientes físicos siguen bloqueados, spec de Sprint 4 leído, Comentarios + Anuncios construidos
+
+**Spec**: no existía `musicaleando-spec.html` en ningún lado del sistema de archivos — el
+usuario lo compartió como un Artifact publicado (link pegado en el chat). Se leyó completo
+desde ahí (guardado localmente por la tool de lectura de Artifacts) antes de tocar nada.
+
+**Los dos pendientes físicos de la sesión 8 siguen sin poder probarse**: esta sesión
+tampoco tuvo un teléfono físico conectado (`adb devices` solo mostró el emulador). El
+usuario confirmó explícitamente que no había forma de conectar uno esta sesión, así que —
+siguiendo la instrucción de decirlo en vez de darlo por bueno — **el camino de archivo de
+import corrupto y el campo de comentario libre en reacciones al cartel siguen sin
+verificación en vivo**, ahora van dos sesiones seguidas. Ambos siguen respaldados solo por
+revisión de código.
+
+**Decisiones tomadas para las 3 features de Sprint 4 que quedaron sin construir** (ver
+"Pendiente" abajo) — confirmadas con el usuario antes de escribir código, para no repetir
+el error de construir dos veces que pasó con Torneo Sonoro:
+- **Recomendaciones V1 (motor propio)**: el spec pide similitud coseno contra "metadata
+  pública de artistas (género, popularidad vía Search/Get Artist)" — pero ya está
+  confirmado (sesión 7/8) que Spotify no expone `genres` ni `popularity` en este tier, ni
+  siquiera en `/v1/artists/{id}`. El usuario confirmó reusar el mismo truco de índice
+  inverso por género (`genre:"X"` Search) ya validado en Torneo Sonoro e Import, en vez de
+  depender de esos campos.
+- **Mapa del festival**: el spec dice "capa vectorial estática por festival", pero no hay
+  geodata en ningún lado (el CSV de line-up solo tiene `escenario` como texto, sin
+  coordenadas). El usuario eligió explícitamente: el admin sube una imagen del recinto y
+  coloca pines por escenario tocando la imagen (x/y en %, no GPS real); en la app, tocar un
+  pin muestra el line-up de ese escenario. Esto requiere agregar subida de imágenes al
+  panel admin (no existe hoy — Supabase Storage no se ha usado todavía en este proyecto,
+  hay que crear un bucket).
+- **Festival generado por gustos**: no tiene sección propia en el spec (solo aparece como
+  chip/bullet, a diferencia de Torneo Sonoro que sí tenía su "Fase 2" detallada) — la
+  lectura más razonable, cruzando con "Recomendaciones de horario/escenario basadas en el
+  perfil musical" del módulo Festival Hub, es que es la misma engine V1 aplicada al
+  line-up real de un festival específico (`festival_lineup.artista`) para resaltar/generar
+  un mini-itinerario personalizado. No se confirmó explícitamente con el usuario porque se
+  desprende directamente de V1 + Festival Hub sin alternativas razonables — si al construir
+  aparece otra interpretación, confirmar antes de seguir.
+- Ninguna de las tres se implementó esta sesión — quedaron solo como decisiones de diseño
+  ya acordadas, listas para construir en la siguiente sesión sin tener que volver a
+  preguntar.
+
+### Comentarios por festival — completado y verificado
+
+Tabla nueva `festival_comments` (`festival_id`, `user_id`, `texto`, `created_at`), RLS
+select-todos / insert-propio / delete-propio — mismo patrón que `festival_reactions` de la
+sesión 8. Agregado a `useFestivalStore` (fetch junto con reacciones/feedback, más
+`postComment`/`deleteComment`) y a [FestivalHubScreen.tsx](src/screens/main/FestivalHubScreen.tsx)
+como un feed toggle "▸ Comentarios (N)" con lista + campo de texto + botón Enviar, y un
+link "Borrar" visible solo en los comentarios propios.
+
+**Verificado, pero no visualmente en el emulador** — ver "Problemas de entorno" abajo: el
+emulador entró en un loop de ANR ("System UI isn't responding" / "Process system isn't
+responding") que no se resolvió ni con esperas largas ni con un reinicio completo en frío
+(sin snapshot), algo peor que lo documentado en sesiones anteriores. En vez de seguir
+insistiendo sin resultado, se verificó el mecanismo completo por REST usando
+`@supabase/supabase-js` con sesiones anónimas reales (mismo enfoque que la sesión 5 usó
+para RLS de squads) contra Corona Capital 2026:
+- Insertar un comentario como usuario A → éxito, aparece en el `select` público.
+- Borrar el comentario propio → éxito.
+- Insertar un comentario como usuario A, intentar borrarlo como usuario B → **0 filas
+  afectadas, sin error** (RLS lo filtra silenciosamente, comportamiento esperado de
+  Postgrest en `DELETE`), el comentario sigue existiendo — confirma que "solo el autor
+  borra el suyo" funciona de verdad, no solo en la política escrita.
+- Los usuarios anónimos temporales y sus filas de prueba se borraron al terminar (no
+  quedó nada residual).
+
+### Anuncios y promociones con patrocinadores — completado y verificado
+
+Tres tablas nuevas: `sponsors` (admin-only, puede tener datos de contacto sensibles),
+`announcements` (`tipo`: simple/rifa/descuento, `sponsor_nombre` denormalizado desde
+`sponsors` para que la app móvil nunca necesite leer esa tabla directamente, select
+público / write admin-only) y `announcement_interest` ("me interesa", un tap = toggle,
+select público para poder contarlo, insert/delete propio). RLS de `announcements` y
+`sponsors` sigue exactamente el patrón admin de `festivals`/`festival_lineup` (columna
+`users.is_admin`).
+
+- **Panel admin**: página nueva `/sponsors` (listar + alta + borrar patrocinadores) y
+  sección nueva "Anuncios y promociones" dentro de `/festivals/[id]` (listar + alta con
+  tipo condicional — el campo "código de descuento" solo aparece si `tipo=descuento` — +
+  borrar). La selección de ganador de rifa y el dashboard de interés agregado **no se
+  construyeron** — el spec los pone explícitamente en Sprint 5 ("Rifas + selección de
+  ganador"), así que el panel de esta sesión solo publica/borra anuncios y muestra el
+  conteo crudo de "me interesa" por anuncio, sin más.
+- **App móvil**: sección nueva en cada tarjeta de festival en
+  [FestivalHubScreen.tsx](src/screens/main/FestivalHubScreen.tsx) con badge por tipo
+  (📣/🎟️/💸), nombre del patrocinador, código de descuento cuando aplica, y botón
+  toggle "☆/★ Me interesa (N)".
+- **Verificado en el panel admin, en el navegador, de punta a punta**: se creó un
+  patrocinador de prueba ("Cerveza Volcán") y un anuncio tipo rifa vinculado a Corona
+  Capital 2026, confirmado por SQL después de cada paso. **Nota de esta sesión**: los
+  primeros dos intentos de click en el botón de submit no dispararon el server action —
+  los refs de `read_page`/`find` quedaban obsoletos tras el re-render de React del
+  formulario (`useActionState`); clickear por coordenada tomada de un screenshot fresco sí
+  funcionó de forma confiable. Si un formulario del admin panel "no hace nada" al hacer
+  click con una tool de browser, tomar un screenshot nuevo y clickear por coordenada en vez
+  de reusar un `ref` de una lectura anterior.
+- **Verificado por REST** (mismo motivo que Comentarios — emulador no disponible): "me
+  interesa" insertado, contado (1) y borrado (toggle) con una sesión anónima real contra el
+  anuncio de prueba.
+- El patrocinador y el anuncio de prueba ("Cerveza Volcán") se borraron al terminar — no
+  eran datos reales del proyecto (a diferencia de Corona Capital, que si es real), así que
+  no debían quedar como si lo fueran.
+
 ## Pendiente
 
 - No hay UI para editar nombre/ciudad/fechas de un festival ya creado desde el panel (solo
@@ -467,11 +682,27 @@ para **elegir** qué artistas entran al bracket.
   `festival_lineup`.
 - Solo se cargaron 16 de los +60 artistas confirmados del cartel (los principales/cabezas
   de cartel) — se puede ampliar con otro CSV si se quiere el cartel completo.
-- **Sprint 3, segunda mitad (no implementada aún, según alcance acordado con el usuario)**:
-  - Compañero ideal.
-  - Trends comunitarios con votación.
-  - Import opcional de Spotify/Apple Music.
-  - Reacciones al cartel.
+- **Sprint 3 — sigue pendiente**:
+  - **Compañero ideal**: sin implementar, en pausa explícita por el usuario hasta definir
+    la mecánica (ver sesión 8). La interpretación propuesta (compat_score más alto entre
+    todos los usuarios de la app, no solo squadmates) no fue ni confirmada ni descartada.
+  - No se probó en vivo el camino de archivo corrupto/formato no reconocido del import
+    (`parseListeningHistory` devuelve `null` y la UI muestra alerta amigable — revisado por
+    código, no reproducido con un archivo roto real en el emulador por tiempo).
+  - El comentario libre de "¿Qué le cambiarías?" en reacciones al cartel no se probó en
+    vivo (se guardó feedback con tags pero `comentario: null`) — el `TextInput` disparó el
+    mismo bug de teclado/reset-de-navegación documentado en "Problemas de entorno esta
+    sesión", no se insistió por tiempo. El código en sí no cambia entre guardar con o sin
+    comentario (mismo campo opcional), así que el riesgo de que esté roto es bajo, pero no
+    hay confirmación visual.
+  - "Mi ciudad" en Trends comunitarios no tiene datos reales que filtrar todavía — ningún
+    usuario tiene `users.ciudad` seteado (no hay UI en la app para editarlo). El código del
+    filtro está completo y correcto, solo no hay forma de probarlo con datos reales hasta
+    que exista una pantalla de "editar mi perfil" con ciudad, o se cargue manualmente por
+    SQL para una prueba puntual.
+  - No hay aggregate visible de los tags de "¿Qué le cambiarías?" entre todos los usuarios
+    (solo se guarda/lee el feedback propio) — si se quiere mostrar "la gente pide más
+    urbano" como dato agregado, falta esa vista/consulta.
 - ~~Torneo Sonoro es sobre géneros, no sobre artistas~~ — **resuelto en sesión 7**, ver esa
   sección: el torneo ahora enfrenta artistas reales (Spotify), no géneros. Se dejó esta
   entrada tachada en vez de borrarla para que quede rastro de la duda y su resolución.
@@ -483,6 +714,23 @@ para **elegir** qué artistas entran al bracket.
   representa géneros que le gustan al usuario, pero vale la pena tenerlo presente si se
   agregan más features que dependan de "el campeón actual" (hoy `flavor.torneo_campeon`
   siempre guarda solo el último).
+- **Sprint 4 — sigue pendiente (decisiones ya tomadas con el usuario en sesión 9, ver esa
+  sección — no hace falta volver a preguntar, solo construir)**:
+  - Recomendaciones V1 (motor propio): reusar el índice inverso por género de Torneo
+    Sonoro/Import en vez de `genres`/`popularity` de Spotify (no disponibles en este tier).
+  - Festival generado por gustos: aplicar esa misma engine V1 al line-up real de un
+    festival (`festival_lineup.artista`) para un mini-itinerario personalizado —
+    interpretación no confirmada explícitamente con el usuario, revisar si al construir
+    aparece una lectura distinta.
+  - Mapa del festival: imagen subida por el admin + pines por escenario (x/y en %, no
+    GPS). Requiere crear un bucket de Supabase Storage (no se ha usado en este proyecto
+    todavía) y agregar subida de imágenes al panel admin.
+  - Comentarios por festival y Anuncios y promociones **sí quedaron completos** esta
+    sesión — ver más arriba.
+- **Sprint 4 — dashboard de interés agregado y selección de ganador de rifa** son
+  explícitamente Sprint 5 según el spec ("Rifas + selección de ganador") — el panel admin
+  de esta sesión solo publica/borra anuncios y muestra el conteo crudo de interesados, sin
+  UI para elegir ganador ni notificación push automática.
 
 ## Decisiones técnicas tomadas en el camino (no estaban en el prompt original)
 
@@ -551,6 +799,44 @@ para **elegir** qué artistas entran al bracket.
   "exp://127.0.0.1:8081" host.exp.exponent` (con `adb reverse tcp:8081 tcp:8081` ya
   activo) — Metro no necesitó reiniciarse, solo la app. Sigue pareciendo un problema de
   recursos del emulador, no del código.
+- (Sesión 8) Reaparición del bug de teclado ya documentado, pero con un síntoma nuevo: tocar
+  un `TextInput` (el campo de comentario de "¿Qué le cambiarías?") y luego enviar texto por
+  `adb shell input text` no solo falló en escribir — la navegación de la app saltó
+  completo a `Home`, como si se hubiera perdido el stack de navegación. Se reprodujo dos
+  veces seguidas con el mismo patrón exacto (tocar el campo, mandar texto con `%s` como
+  separador de espacios). No se investigó la causa raíz porque el resto del formulario
+  (chips de tags, botón guardar) funcionaba perfecto sin tocar el `TextInput` — se evitó el
+  campo de texto en las pruebas de esta sesión en vez de perder tiempo depurando un problema
+  de entorno ya documentado como recurrente. Importante: **cualquier interacción con
+  `TextInput` en este emulador debería tratarse con sospecha** hasta que se investigue si es
+  el emulador (más probable, dado el patrón repetido en sesiones distintas) o algo real de
+  la app — probar en el teléfono físico del usuario sería la forma más rápida de descartar
+  una cosa u otra.
+- (Sesión 8) El picker de archivos nativo de Android (`expo-document-picker`) no mostró un
+  archivo recién copiado con `adb push` a `/sdcard/Download/` hasta forzar
+  `adb shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file://<ruta>`
+  — el archivo ya aparecía en `content query --uri content://media/external/file` con el
+  MIME type correcto, pero la carpeta "Downloads" del picker (`DocumentsUI`) usa su propio
+  índice/caché que no se refrescó solo. Si se necesita repetir esto en una sesión futura,
+  hacer el broadcast de una vez en vez de perder tiempo re-abriendo el picker.
+- **(Sesión 9) El peor episodio de ANR documentado hasta ahora**: al retomar la sesión
+  (después de una pausa de varios días — ni el emulador ni Metro seguían corriendo), el
+  emulador entró en un loop de "System UI isn't responding" / "Process system isn't
+  responding" que **no se resolvió con esperas largas (hasta 30s) ni con un reinicio
+  completo en frío del emulador** (`adb emu kill` + matar procesos residuales + arrancar de
+  nuevo con `-no-snapshot-load` para descartar un snapshot corrupto) — la ANR volvió a
+  aparecer en el primer intento de interacción incluso en el emulador recién arrancado.
+  Una señal adicional: `adb shell screencap` devolvió en un momento `Unable to fork in
+  order to send intent for media scanner`, un error de "no se pudo crear un proceso nuevo"
+  — indica que la máquina host, no el emulador en sí, estaba bajo presión de recursos real
+  en ese momento (aunque el conteo de `node.exe` no era anormal, ~9 procesos). En vez de
+  seguir insistiendo sin resultado, se hizo la verificación de esta sesión por REST directo
+  (ver secciones de Comentarios/Anuncios arriba) y se documentó el bloqueo en vez de forzar
+  una confirmación visual que no se pudo obtener. **Para la próxima sesión**: si el mismo
+  loop de ANR aparece de entrada, no repetir el ciclo esperar→reiniciar→esperar más de una
+  o dos veces — pivotear a verificación por REST/SQL más rápido, y considerar revisar qué
+  más está corriendo en la máquina host (no solo procesos de este proyecto) antes de
+  arrancar el emulador.
 
 ## Cómo retomar
 
@@ -569,9 +855,30 @@ para **elegir** qué artistas entran al bracket.
    secretos `SPOTIFY_CLIENT_ID`/`SPOTIFY_CLIENT_SECRET` ya cargados en el dashboard (Edge
    Functions → Manage secrets) — si se rota la app de Spotify Developer, actualizarlos ahí,
    no hace falta redesplegar la función.
-4. Siguiente foco sugerido: segunda mitad del Sprint 3 — Compañero ideal, Trends
-   comunitarios con votación, import opcional de Spotify/Apple Music, reacciones al cartel
-   (ver "Pendiente" en la sección de Sprint 3 arriba). El "Import opcional de Spotify/Apple
-   Music" puede reutilizar el patrón de Client Credentials ya wired en `spotify-artists`
-   como referencia, aunque un import real de la librería del usuario necesitaría Authorization
-   Code Flow (login del usuario en Spotify), no Client Credentials.
+4. Edge Function `import-listening-history`: código fuente en
+   [supabase/functions/import-listening-history/index.ts](supabase/functions/import-listening-history/index.ts),
+   mismo patrón de despliegue/secretos que `spotify-artists` (punto 3). **No** usa el campo
+   `genres` de la API de Spotify — está confirmado que no está disponible en este tier de
+   acceso (ver sesión 8) — usa un índice inverso construido con `genre:"X"` Search.
+5. Sponsors/Announcements: tablas `sponsors`/`announcements`/`announcement_interest` y
+   panel admin en `/sponsors` y dentro de `/festivals/[id]` — ver sesión 9. Selección de
+   ganador de rifa y dashboard de interés agregado quedan para Sprint 5 a propósito.
+6. Siguiente foco sugerido: Sprint 4 — Recomendaciones V1 (motor propio) y Festival
+   generado por gustos (mismo engine, aplicado al line-up real de un festival), después
+   Mapa del festival (necesita un bucket nuevo de Supabase Storage + subida de imágenes en
+   el admin panel, que no existe todavía). Las decisiones de diseño de las tres ya están
+   tomadas con el usuario (sesión 9) — no hace falta volver a preguntar, solo construir.
+   - **Compañero ideal sigue sin definir**: no avanzar en código hasta que el usuario
+     confirme o corrija la interpretación propuesta en la sesión 8.
+   - **Van dos sesiones seguidas (8 y 9) sin poder probar en físico**: el camino de archivo
+     corrupto del import y el campo de comentario libre de reacciones al cartel siguen sin
+     verificación visual — solo revisión de código + (desde sesión 9) verificación por REST
+     del resto del mecanismo de comentarios. Si hay un teléfono físico disponible en algún
+     momento, priorizar probar ahí antes que seguir peleando con el emulador.
+   - Si se agrega una pantalla de "editar mi perfil" en algún momento (nombre/ciudad), eso
+     desbloquea probar "Mi ciudad" en Trends comunitarios con datos reales.
+7. Si el emulador vuelve a entrar en el loop de ANR documentado en "Problemas de entorno"
+   (sesión 9) desde el primer arranque, no perder mucho tiempo reintentando — usar
+   verificación por REST/SQL con `@supabase/supabase-js` y sesiones anónimas reales (ver
+   ejemplo de script en la sección de Comentarios de la sesión 9) para confirmar RLS y
+   mecánica de escritura, y documentar la verificación visual como bloqueada.

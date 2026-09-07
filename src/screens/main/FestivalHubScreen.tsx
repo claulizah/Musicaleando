@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Screen } from '../../components/Screen';
 import { RootStackParamList } from '../../navigation/types';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useFestivalStore, FestivalWithIntent } from '../../store/useFestivalStore';
-import { FestivalStatus } from '../../types/database';
+import { FestivalReactionType, FestivalStatus } from '../../types/database';
+import { FEEDBACK_TAGS } from '../../lib/festivalFeedback';
 import { colors, radii, spacing, type } from '../../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Festivals'>;
@@ -29,6 +30,11 @@ export function FestivalHubScreen({ navigation }: Props) {
   const error = useFestivalStore((s) => s.error);
   const fetchFestivals = useFestivalStore((s) => s.fetch);
   const setFestivalStatus = useFestivalStore((s) => s.setStatus);
+  const setReaction = useFestivalStore((s) => s.setReaction);
+  const submitFeedback = useFestivalStore((s) => s.submitFeedback);
+  const postComment = useFestivalStore((s) => s.postComment);
+  const deleteComment = useFestivalStore((s) => s.deleteComment);
+  const toggleInterest = useFestivalStore((s) => s.toggleInterest);
 
   useEffect(() => {
     if (userId) fetchFestivals(userId);
@@ -63,6 +69,18 @@ export function FestivalHubScreen({ navigation }: Props) {
             key={entry.festival.id}
             entry={entry}
             onSetStatus={(s) => userId && setFestivalStatus(userId, entry.festival.id, s)}
+            onSetReaction={(r) => userId && setReaction(userId, entry.festival.id, r)}
+            onSubmitFeedback={(tags, comentario) =>
+              userId ? submitFeedback(userId, entry.festival.id, tags, comentario) : Promise.resolve()
+            }
+            userId={userId}
+            onPostComment={(texto) =>
+              userId ? postComment(userId, entry.festival.id, texto) : Promise.resolve()
+            }
+            onDeleteComment={(commentId) => deleteComment(entry.festival.id, commentId)}
+            onToggleInterest={(announcementId) =>
+              userId ? toggleInterest(userId, entry.festival.id, announcementId) : Promise.resolve()
+            }
           />
         ))}
       </ScrollView>
@@ -73,12 +91,62 @@ export function FestivalHubScreen({ navigation }: Props) {
 function FestivalCard({
   entry,
   onSetStatus,
+  onSetReaction,
+  onSubmitFeedback,
+  userId,
+  onPostComment,
+  onDeleteComment,
+  onToggleInterest,
 }: {
   entry: FestivalWithIntent;
   onSetStatus: (status: FestivalStatus) => void;
+  onSetReaction: (reaction: FestivalReactionType) => void;
+  onSubmitFeedback: (tags: string[], comentario: string | null) => Promise<void>;
+  userId: string | null;
+  onPostComment: (texto: string) => Promise<void>;
+  onDeleteComment: (commentId: string) => void;
+  onToggleInterest: (announcementId: string) => Promise<void>;
 }) {
-  const { festival, myStatus, squadGoingCount, lineup } = entry;
+  const { festival, myStatus, squadGoingCount, lineup, reactions, feedback, comments, announcements } = entry;
   const [showLineup, setShowLineup] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<string[]>(feedback.mine?.tags ?? []);
+  const [comentario, setComentario] = useState(feedback.mine?.comentario ?? '');
+  const [savingFeedback, setSavingFeedback] = useState(false);
+  const [commentDraft, setCommentDraft] = useState('');
+  const [postingComment, setPostingComment] = useState(false);
+
+  const toggleTag = (tagId: string) => {
+    setSelectedTags((prev) =>
+      prev.includes(tagId) ? prev.filter((t) => t !== tagId) : [...prev, tagId],
+    );
+  };
+
+  const handleSubmitFeedback = async () => {
+    setSavingFeedback(true);
+    try {
+      await onSubmitFeedback(selectedTags, comentario.trim() || null);
+      setShowFeedback(false);
+    } catch (err) {
+      Alert.alert('No se pudo enviar', err instanceof Error ? err.message : 'Intenta de nuevo.');
+    } finally {
+      setSavingFeedback(false);
+    }
+  };
+
+  const handlePostComment = async () => {
+    if (!commentDraft.trim()) return;
+    setPostingComment(true);
+    try {
+      await onPostComment(commentDraft);
+      setCommentDraft('');
+    } catch (err) {
+      Alert.alert('No se pudo comentar', err instanceof Error ? err.message : 'Intenta de nuevo.');
+    } finally {
+      setPostingComment(false);
+    }
+  };
 
   return (
     <View style={styles.card}>
@@ -140,6 +208,132 @@ function FestivalCard({
         >
           <Text style={styles.ticketsButtonText}>Comprar boletos ↗</Text>
         </Pressable>
+      )}
+
+      {announcements.length > 0 && (
+        <View style={styles.announcementsWrap}>
+          {announcements.map((a) => (
+            <View key={a.id} style={styles.announcementCard}>
+              <View style={styles.announcementHeader}>
+                <Text style={styles.announcementBadge}>
+                  {a.tipo === 'rifa' ? '🎟️ Rifa' : a.tipo === 'descuento' ? '💸 Descuento' : '📣 Anuncio'}
+                </Text>
+                {a.sponsor_nombre && <Text style={styles.announcementSponsor}>{a.sponsor_nombre}</Text>}
+              </View>
+              <Text style={styles.announcementTitle}>{a.titulo}</Text>
+              {a.descripcion && <Text style={styles.announcementDesc}>{a.descripcion}</Text>}
+              {a.tipo === 'descuento' && a.codigo_descuento && (
+                <Text style={styles.announcementCode}>Código: {a.codigo_descuento}</Text>
+              )}
+              <Pressable
+                style={[styles.interestButton, a.mineInterested && styles.interestButtonActive]}
+                onPress={() => onToggleInterest(a.id)}
+              >
+                <Text
+                  style={[styles.interestButtonText, a.mineInterested && styles.interestButtonTextActive]}
+                >
+                  {a.mineInterested ? '★ Me interesa' : '☆ Me interesa'} ({a.interestCount})
+                </Text>
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      )}
+
+      <View style={styles.reactionRow}>
+        <Pressable
+          style={[styles.reactionButton, reactions.mine === 'like' && styles.reactionButtonActive]}
+          onPress={() => onSetReaction('like')}
+        >
+          <Text style={styles.reactionButtonText}>👍 {reactions.likes}</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.reactionButton, reactions.mine === 'dislike' && styles.reactionButtonActive]}
+          onPress={() => onSetReaction('dislike')}
+        >
+          <Text style={styles.reactionButtonText}>👎 {reactions.dislikes}</Text>
+        </Pressable>
+        <Pressable style={styles.feedbackToggle} onPress={() => setShowFeedback((v) => !v)}>
+          <Text style={styles.feedbackToggleText}>
+            {feedback.mine ? '✎ Tu feedback' : '¿Qué le cambiarías?'}
+          </Text>
+        </Pressable>
+      </View>
+
+      {showFeedback && (
+        <View style={styles.feedbackCard}>
+          <View style={styles.tagWrap}>
+            {FEEDBACK_TAGS.map((tag) => {
+              const selected = selectedTags.includes(tag.id);
+              return (
+                <Pressable
+                  key={tag.id}
+                  style={[styles.tagChip, selected && styles.tagChipSelected]}
+                  onPress={() => toggleTag(tag.id)}
+                >
+                  <Text style={[styles.tagChipText, selected && styles.tagChipTextSelected]}>
+                    {tag.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <TextInput
+            style={styles.commentInput}
+            placeholder="Comentario libre (opcional)"
+            placeholderTextColor={colors.textMuted}
+            value={comentario}
+            onChangeText={setComentario}
+            multiline
+          />
+          <Pressable
+            style={[styles.saveFeedbackButton, savingFeedback && styles.confirmButtonDisabled]}
+            disabled={savingFeedback}
+            onPress={handleSubmitFeedback}
+          >
+            <Text style={styles.saveFeedbackButtonText}>
+              {savingFeedback ? 'Guardando...' : 'Guardar feedback'}
+            </Text>
+          </Pressable>
+        </View>
+      )}
+
+      <Pressable onPress={() => setShowComments((v) => !v)}>
+        <Text style={styles.lineupToggle}>
+          {showComments ? '▾' : '▸'} Comentarios ({comments.length})
+        </Text>
+      </Pressable>
+
+      {showComments && (
+        <View style={styles.commentsCard}>
+          {comments.length === 0 && <Text style={styles.hint}>Sé el primero en comentar.</Text>}
+          {comments.map((c) => (
+            <View key={c.id} style={styles.commentRow}>
+              <Text style={styles.commentText}>{c.texto}</Text>
+              {c.user_id === userId && (
+                <Pressable hitSlop={8} onPress={() => onDeleteComment(c.id)}>
+                  <Text style={styles.removeLink}>Borrar</Text>
+                </Pressable>
+              )}
+            </View>
+          ))}
+          <View style={styles.commentComposeRow}>
+            <TextInput
+              style={styles.commentComposeInput}
+              placeholder="Escribe un comentario..."
+              placeholderTextColor={colors.textMuted}
+              value={commentDraft}
+              onChangeText={setCommentDraft}
+            />
+            <Pressable
+              style={[styles.commentSendButton, postingComment && styles.confirmButtonDisabled]}
+              disabled={postingComment}
+              onPress={handlePostComment}
+            >
+              <Text style={styles.commentSendButtonText}>{postingComment ? '...' : 'Enviar'}</Text>
+            </Pressable>
+          </View>
+        </View>
       )}
     </View>
   );
@@ -240,5 +434,197 @@ const styles = StyleSheet.create({
   ticketsButtonText: {
     ...type.label,
     color: colors.accentPrimary,
+  },
+  reactionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  reactionButton: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  reactionButtonActive: {
+    borderColor: colors.accentPrimary,
+    backgroundColor: colors.accentPrimaryMuted,
+  },
+  reactionButtonText: {
+    ...type.label,
+    color: colors.textPrimary,
+  },
+  feedbackToggle: {
+    marginLeft: 'auto',
+  },
+  feedbackToggleText: {
+    ...type.label,
+    color: colors.accentSecondary,
+  },
+  feedbackCard: {
+    backgroundColor: colors.bg,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  tagWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  tagChip: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bgElevated,
+  },
+  tagChipSelected: {
+    borderColor: colors.accentSecondary,
+    backgroundColor: colors.accentSecondaryMuted,
+  },
+  tagChipText: {
+    ...type.label,
+    color: colors.textSecondary,
+  },
+  tagChipTextSelected: {
+    color: colors.textPrimary,
+  },
+  commentInput: {
+    ...type.body,
+    color: colors.textPrimary,
+    backgroundColor: colors.bgElevated,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.sm,
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
+  saveFeedbackButton: {
+    alignItems: 'center',
+    backgroundColor: colors.accentSecondary,
+    borderRadius: radii.pill,
+    paddingVertical: spacing.sm,
+  },
+  confirmButtonDisabled: {
+    opacity: 0.5,
+  },
+  saveFeedbackButtonText: {
+    ...type.label,
+    color: colors.onAccent,
+  },
+  announcementsWrap: {
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  announcementCard: {
+    backgroundColor: colors.accentSecondaryMuted,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.accentSecondary,
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  announcementHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  announcementBadge: {
+    ...type.label,
+    color: colors.accentSecondary,
+  },
+  announcementSponsor: {
+    ...type.caption,
+    color: colors.textSecondary,
+  },
+  announcementTitle: {
+    ...type.bodyLg,
+    color: colors.textPrimary,
+  },
+  announcementDesc: {
+    ...type.body,
+    color: colors.textSecondary,
+  },
+  announcementCode: {
+    ...type.label,
+    color: colors.textPrimary,
+    fontFamily: type.h2.fontFamily,
+  },
+  interestButton: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.xs,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bg,
+  },
+  interestButtonActive: {
+    borderColor: colors.accentPrimary,
+    backgroundColor: colors.accentPrimaryMuted,
+  },
+  interestButtonText: {
+    ...type.label,
+    color: colors.textSecondary,
+  },
+  interestButtonTextActive: {
+    color: colors.accentPrimary,
+  },
+  commentsCard: {
+    backgroundColor: colors.bg,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  commentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  commentText: {
+    ...type.body,
+    color: colors.textPrimary,
+    flex: 1,
+  },
+  commentComposeRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  commentComposeInput: {
+    ...type.body,
+    color: colors.textPrimary,
+    backgroundColor: colors.bgElevated,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    flex: 1,
+  },
+  commentSendButton: {
+    backgroundColor: colors.accentSecondary,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  commentSendButtonText: {
+    ...type.label,
+    color: colors.onAccent,
+  },
+  removeLink: {
+    ...type.caption,
+    color: colors.textMuted,
   },
 });
