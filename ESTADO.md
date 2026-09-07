@@ -1,10 +1,15 @@
 # Estado del proyecto — Musicaleando
 
-Última actualización: 2026-09-07 (sesión 9). Este archivo es el punto de partida para
-retomar el trabajo en una sesión nueva sin perder contexto.
+Última actualización: 2026-09-07 (sesión 9, cierre). Este archivo es el punto de partida
+para retomar el trabajo en una sesión nueva sin perder contexto.
+
+**Estado en una línea**: Sprints 1-4 completos (con algunos pendientes de verificación
+física documentados abajo, ninguno bloqueante). **Próximo foco: Sprint 5** — leer el spec
+de nuevo antes de construir nada (ver punto 7 de "Cómo retomar").
 
 Proyecto Supabase: `ijwyykfuyeaahvxmaild` ("Sound Project", org `ljcnanwlkijozacnyhck`).
-Repo: rama `master`, sin remoto configurado todavía.
+Repo: rama `master`, sin remoto configurado todavía. Último commit: `74185d1` (Mapa del
+festival).
 
 ## Completado y verificado en dispositivo (no solo compilado — probado tocando la app)
 
@@ -560,7 +565,7 @@ sesión existía todavía en ninguna forma parcial.
   `exclude` de `tsconfig.json` (las Edge Functions corren en Deno, no las compila ni
   ejecuta Metro/el bundler de la app — no deben pasar por el typecheck de la app).
 
-## Sesión 9 (2026-09-07): pendientes físicos siguen bloqueados, spec de Sprint 4 leído, Comentarios + Anuncios construidos
+## Sesión 9 (2026-09-07): Sprint 4 completo (Comentarios, Anuncios, Recomendaciones V1, Festival generado por gustos, Mapa del festival) — pendientes físicos de sesión 8 siguen bloqueados
 
 **Spec**: no existía `musicaleando-spec.html` en ningún lado del sistema de archivos — el
 usuario lo compartió como un Artifact publicado (link pegado en el chat). Se leyó completo
@@ -1009,26 +1014,54 @@ está en el spec ni hay fuente de datos para ella.
    mismo patrón de despliegue/secretos que las anteriores. Ninguna escribe en la base de
    datos (puro cálculo sobre datos de Spotify), verificadas por curl directo, no por REST
    con sesión de usuario.
-7. Siguiente foco sugerido: **Mapa del festival**, única feature de Sprint 4 que falta.
-   Diseño ya acordado con el usuario (sesión 9): el admin sube una imagen del recinto +
-   coloca pines por escenario (x/y en %); en la app, tocar un pin muestra el line-up de ese
-   escenario. Necesita crear un bucket de Supabase Storage nuevo (no usado en este proyecto
-   todavía) y agregar subida de imágenes al panel admin — no hace falta volver a preguntar,
-   solo construir. Con eso, Sprint 4 queda completo.
+7. **Sprint 4 está completo** (las 5 features del chip list: Festival generado por gustos,
+   Mapa del festival, Recomendaciones V1, Comentarios por festival, Anuncios y promociones)
+   — commit `74185d1` (Mapa del festival) y el commit anterior de la sesión 9 con el resto.
+   **Siguiente foco: Sprint 5.** El detalle exacto del spec para Sprint 5 **no está guardado
+   en este repo ni en el sistema de archivos** — se leyó desde un Artifact publicado que el
+   usuario compartió por link en el chat de la sesión 9 (ver nota al inicio de esa sección),
+   y ese contenido no persiste entre sesiones. **Antes de construir nada de Sprint 5, pedirle
+   al usuario el link del Artifact del spec de nuevo (o releerlo si ya está accesible) y
+   confirmar el alcance exacto** — no asumir a partir de lo que se infiere abajo. Lo único
+   que se sabe con certeza de sesiones anteriores (mencionado de pasada, no es el spec
+   completo):
+   - **Selección de ganador de rifa**: el panel admin de Sprint 4 (`/festivals/[id]`, sección
+     de Anuncios) ya publica/borra anuncios tipo `rifa` y muestra el conteo crudo de
+     `announcement_interest`, pero no tiene UI para elegir un ganador entre los interesados
+     ni para notificarlo.
+   - **Dashboard de interés agregado**: hoy cada anuncio solo muestra su propio conteo de
+     "me interesa"; un dashboard agregado (comparar interés entre anuncios/festivales, quizás
+     con filtros) no existe.
+   - Puede haber más features de Sprint 5 en el spec que no se mencionaron explícitamente en
+     ninguna sesión anterior — de ahí la importancia de releer el spec completo antes de
+     empezar, siguiendo la misma disciplina que ya costó un rework en Torneo Sonoro por no
+     confirmar antes de construir.
    - **Compañero ideal sigue sin definir**: no avanzar en código hasta que el usuario
-     confirme o corrija la interpretación propuesta en la sesión 8.
+     confirme o corrija la interpretación propuesta en la sesión 8 (compat_score más alto
+     entre todos los usuarios de la app, no solo squadmates). No es parte de ningún sprint
+     numerado explícito, pero sigue pendiente y en pausa.
    - **Van dos sesiones seguidas (8 y 9) sin poder probar en físico**: el camino de archivo
      corrupto del import y el campo de comentario libre de reacciones al cartel siguen sin
-     verificación visual — solo revisión de código + (desde sesión 9) verificación por REST
-     del resto del mecanismo de comentarios. Si hay un teléfono físico disponible en algún
-     momento, priorizar probar ahí antes que seguir peleando con el emulador.
+     verificación visual — solo revisión de código + verificación por REST del resto del
+     mecanismo de comentarios. Si hay un teléfono físico disponible en algún momento,
+     priorizar probar ahí antes que seguir peleando con el emulador.
    - Tampoco se pudo verificar visualmente Recomendaciones V1/Festival generado por gustos
-     esta sesión, por el mismo motivo — backend ya confirmado por curl, falta la UI en
-     dispositivo.
+     ni Mapa del festival (imagen real) en dispositivo — backend/DB ya confirmados por
+     curl/SQL, falta la UI en un dispositivo real o un navegador con soporte de subida de
+     archivos.
    - Si se agrega una pantalla de "editar mi perfil" en algún momento (nombre/ciudad), eso
      desbloquea probar "Mi ciudad" en Trends comunitarios con datos reales.
-7. Si el emulador vuelve a entrar en el loop de ANR documentado en "Problemas de entorno"
+8. Si el emulador vuelve a entrar en el loop de ANR documentado en "Problemas de entorno"
    (sesión 9) desde el primer arranque, no perder mucho tiempo reintentando — usar
    verificación por REST/SQL con `@supabase/supabase-js` y sesiones anónimas reales (ver
    ejemplo de script en la sección de Comentarios de la sesión 9) para confirmar RLS y
    mecánica de escritura, y documentar la verificación visual como bloqueada.
+9. Si hace falta autenticarse en el panel admin y no se tiene la contraseña a mano (se
+   pierde la sesión del navegador entre sesiones de trabajo), pedirle permiso al usuario y
+   resetearla temporalmente por SQL (`crypt()` de `pgcrypto` sobre
+   `auth.users.encrypted_password`, mismo patrón que sesiones 5 y 9) — nunca guardar la
+   contraseña en este archivo ni en el repo. Para cualquier verificación por script que
+   requiera sesión de admin (email/password), usar la UI real del navegador en vez de un
+   script Node con la contraseña en texto plano — el "auto mode classifier" del entorno
+   bloquea ese patrón (ver "Problemas de entorno" sesión 9); un script con sesión anónima
+   (`signInAnonymously()`, sin contraseña) sí funciona para verificar RLS de lectura pública.
