@@ -6,7 +6,7 @@ import { RootStackParamList } from '../../navigation/types';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useProfileStore } from '../../store/useProfileStore';
 import { useFestivalStore, FestivalWithIntent } from '../../store/useFestivalStore';
-import { FestivalReactionType, FestivalStatus } from '../../types/database';
+import { FestivalReactionType, FestivalStatus, SurveyCalificacion, SurveyVolveria } from '../../types/database';
 import { FEEDBACK_TAGS } from '../../lib/festivalFeedback';
 import { fetchFestivalPersonalization, FestivalGenreMatch } from '../../lib/spotify';
 import { GENEROS } from '../../lib/archetypes';
@@ -18,6 +18,19 @@ const STATUS_OPTIONS: { id: FestivalStatus; label: string }[] = [
   { id: 'voy', label: 'Voy' },
   { id: 'tal_vez', label: 'Tal vez' },
   { id: 'no_voy', label: 'No voy' },
+];
+
+const CALIFICACION_OPTIONS: { id: SurveyCalificacion; label: string; emoji: string }[] = [
+  { id: 'genial', label: 'Genial', emoji: '🤩' },
+  { id: 'bien', label: 'Bien', emoji: '🙂' },
+  { id: 'regular', label: 'Regular', emoji: '😐' },
+  { id: 'malo', label: 'Malo', emoji: '😞' },
+];
+
+const VOLVERIA_OPTIONS: { id: SurveyVolveria; label: string }[] = [
+  { id: 'si', label: 'Sí' },
+  { id: 'tal_vez', label: 'Tal vez' },
+  { id: 'no', label: 'No' },
 ];
 
 function formatRange(inicio: string, fin: string): string {
@@ -39,6 +52,7 @@ export function FestivalHubScreen({ navigation }: Props) {
   const postComment = useFestivalStore((s) => s.postComment);
   const deleteComment = useFestivalStore((s) => s.deleteComment);
   const toggleInterest = useFestivalStore((s) => s.toggleInterest);
+  const submitSurvey = useFestivalStore((s) => s.submitSurvey);
 
   useEffect(() => {
     if (userId) fetchFestivals(userId);
@@ -85,6 +99,9 @@ export function FestivalHubScreen({ navigation }: Props) {
             onToggleInterest={(announcementId) =>
               userId ? toggleInterest(userId, entry.festival.id, announcementId) : Promise.resolve()
             }
+            onSubmitSurvey={(calificacion, volveria) =>
+              userId ? submitSurvey(userId, entry.festival.id, calificacion, volveria) : Promise.resolve()
+            }
             generos={generos}
           />
         ))}
@@ -102,6 +119,7 @@ function FestivalCard({
   onPostComment,
   onDeleteComment,
   onToggleInterest,
+  onSubmitSurvey,
   generos,
 }: {
   entry: FestivalWithIntent;
@@ -112,9 +130,10 @@ function FestivalCard({
   onPostComment: (texto: string) => Promise<void>;
   onDeleteComment: (commentId: string) => void;
   onToggleInterest: (announcementId: string) => Promise<void>;
+  onSubmitSurvey: (calificacion: SurveyCalificacion, volveria: SurveyVolveria) => Promise<void>;
   generos: string[];
 }) {
-  const { festival, myStatus, squadGoingCount, lineup, reactions, feedback, comments, announcements, mapPins } =
+  const { festival, myStatus, squadGoingCount, lineup, reactions, feedback, comments, announcements, mapPins, survey } =
     entry;
   const [showLineup, setShowLineup] = useState(false);
   const [showMap, setShowMap] = useState(false);
@@ -128,6 +147,8 @@ function FestivalCard({
   const [postingComment, setPostingComment] = useState(false);
   const [personalized, setPersonalized] = useState<FestivalGenreMatch[] | null>(null);
   const [loadingPersonalized, setLoadingPersonalized] = useState(false);
+  const [surveyCalificacion, setSurveyCalificacion] = useState<SurveyCalificacion | null>(null);
+  const [savingSurvey, setSavingSurvey] = useState(false);
 
   const handlePersonalize = async () => {
     if (generos.length === 0 || lineup.length === 0) return;
@@ -173,6 +194,18 @@ function FestivalCard({
       Alert.alert('No se pudo comentar', err instanceof Error ? err.message : 'Intenta de nuevo.');
     } finally {
       setPostingComment(false);
+    }
+  };
+
+  const handleSurveyVolveria = async (volveria: SurveyVolveria) => {
+    if (!surveyCalificacion) return;
+    setSavingSurvey(true);
+    try {
+      await onSubmitSurvey(surveyCalificacion, volveria);
+    } catch (err) {
+      Alert.alert('No se pudo enviar', err instanceof Error ? err.message : 'Intenta de nuevo.');
+    } finally {
+      setSavingSurvey(false);
     }
   };
 
@@ -298,6 +331,42 @@ function FestivalCard({
           );
         })}
       </View>
+
+      {survey.due && (
+        <View style={styles.surveyCard}>
+          <Text style={styles.surveyTitle}>¿Qué tal estuvo {festival.nombre}?</Text>
+          {!surveyCalificacion ? (
+            <View style={styles.surveyRow}>
+              {CALIFICACION_OPTIONS.map((option) => (
+                <Pressable
+                  key={option.id}
+                  style={styles.surveyOption}
+                  onPress={() => setSurveyCalificacion(option.id)}
+                >
+                  <Text style={styles.surveyEmoji}>{option.emoji}</Text>
+                  <Text style={styles.surveyOptionLabel}>{option.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : (
+            <>
+              <Text style={styles.surveyQuestion}>¿Volverías el próximo año?</Text>
+              <View style={styles.surveyRow}>
+                {VOLVERIA_OPTIONS.map((option) => (
+                  <Pressable
+                    key={option.id}
+                    style={[styles.surveyOption, savingSurvey && styles.confirmButtonDisabled]}
+                    disabled={savingSurvey}
+                    onPress={() => handleSurveyVolveria(option.id)}
+                  >
+                    <Text style={styles.surveyOptionLabel}>{option.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          )}
+        </View>
+      )}
 
       {festival.link_boletos && (
         <Pressable
@@ -787,6 +856,44 @@ const styles = StyleSheet.create({
   },
   personalizeRow: {
     ...type.body,
+    color: colors.textPrimary,
+  },
+  surveyCard: {
+    backgroundColor: colors.accentPrimaryMuted,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.accentPrimary,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  surveyTitle: {
+    ...type.bodyLg,
+    color: colors.textPrimary,
+  },
+  surveyQuestion: {
+    ...type.label,
+    color: colors.textSecondary,
+  },
+  surveyRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  surveyOption: {
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bgElevated,
+  },
+  surveyEmoji: {
+    fontSize: 20,
+  },
+  surveyOptionLabel: {
+    ...type.label,
     color: colors.textPrimary,
   },
 });

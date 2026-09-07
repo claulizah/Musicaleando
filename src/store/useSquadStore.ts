@@ -17,22 +17,33 @@ export type SquadWithMembers = {
   members: SquadMemberWithProfile[];
 };
 
+export type SquadComparisonRow = {
+  user_id: string;
+  nombre: string | null;
+  energia: number;
+  generos_count: number;
+  festivales_confirmados: number;
+};
+
 type Status = 'idle' | 'loading' | 'ready' | 'error';
 
 type SquadState = {
   squads: SquadWithMembers[];
   status: Status;
   error: string | null;
+  comparisonBySquad: Record<string, SquadComparisonRow[]>;
   fetchMySquads: (userId: string) => Promise<void>;
   createSquad: (nombre: string) => Promise<void>;
   joinSquad: (code: string) => Promise<void>;
   leaveSquad: (squadId: string, userId: string) => Promise<void>;
+  fetchComparison: (squadId: string) => Promise<void>;
 };
 
 export const useSquadStore = create<SquadState>((set, get) => ({
   squads: [],
   status: 'idle',
   error: null,
+  comparisonBySquad: {},
 
   fetchMySquads: async (userId) => {
     set({ status: 'loading', error: null });
@@ -137,5 +148,18 @@ export const useSquadStore = create<SquadState>((set, get) => ({
         ),
       });
     }
+  },
+
+  fetchComparison: async (squadId) => {
+    // Squadmates' music_profile rows aren't readable directly by the client
+    // (RLS only allows selecting your own) — this RPC is a narrow, scoped
+    // read that bypasses that for one squad at a time, gated by
+    // is_squad_member() same as everything else squad-related.
+    const { data, error } = await supabase.rpc('squad_comparison', { p_squad_id: squadId });
+    if (error) {
+      set({ error: error.message });
+      return;
+    }
+    set({ comparisonBySquad: { ...get().comparisonBySquad, [squadId]: data ?? [] } });
   },
 }));

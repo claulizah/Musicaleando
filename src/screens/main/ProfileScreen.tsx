@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as DocumentPicker from 'expo-document-picker';
 import { File } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import { captureRef } from 'react-native-view-shot';
 import { Screen } from '../../components/Screen';
 import { ArchetypeCard } from '../../components/ArchetypeCard';
 import { PrimaryButton } from '../../components/PrimaryButton';
@@ -10,9 +12,12 @@ import { RootStackParamList } from '../../navigation/types';
 import { useProfileStore, readTorneoCampeon } from '../../store/useProfileStore';
 import { useQuizStore } from '../../store/useQuizStore';
 import { useSessionStore } from '../../store/useSessionStore';
+import { useAchievementsStore } from '../../store/useAchievementsStore';
 import { ARCHETYPES, GENEROS, GUILTY_PLEASURES, SocialAxis, buildFlavorLine } from '../../lib/archetypes';
 import { ARCHETYPE_IMAGES } from '../../lib/images';
 import { parseListeningHistory, topArtists, fetchImportGenres } from '../../lib/musicImport';
+import { badgeFor } from '../../lib/badges';
+import { nextLevel } from '../../lib/levels';
 import { colors, radii, spacing, type } from '../../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
@@ -24,7 +29,35 @@ export function ProfileScreen({ navigation }: Props) {
   const applyImportResult = useProfileStore((s) => s.applyImportResult);
   const prefillFromProfile = useQuizStore((s) => s.prefillFromProfile);
   const goToStep = useQuizStore((s) => s.goToStep);
+  const badges = useAchievementsStore((s) => s.badges);
+  const level = useAchievementsStore((s) => s.level);
+  const festivalesConfirmados = useAchievementsStore((s) => s.festivalesConfirmados);
+  const fetchAchievements = useAchievementsStore((s) => s.fetch);
   const [importing, setImporting] = useState(false);
+  const [sharingLevel, setSharingLevel] = useState(false);
+  const levelCardRef = useRef<View>(null);
+
+  useEffect(() => {
+    if (userId) fetchAchievements(userId);
+  }, [userId, fetchAchievements]);
+
+  const handleShareLevel = async () => {
+    if (!levelCardRef.current) return;
+    setSharingLevel(true);
+    try {
+      const uri = await captureRef(levelCardRef, { format: 'png', quality: 1 });
+      const available = await Sharing.isAvailableAsync();
+      if (available) {
+        await Sharing.shareAsync(uri, { mimeType: 'image/png' });
+      } else {
+        Alert.alert('Compartir no disponible', 'Este dispositivo no soporta compartir archivos.');
+      }
+    } catch {
+      Alert.alert('No se pudo generar la imagen', 'Intenta de nuevo en unos segundos.');
+    } finally {
+      setSharingLevel(false);
+    }
+  };
 
   // profile.arquetipo can be an id from a retired archetype set (e.g. a profile
   // saved before an archetype-engine change) — guard the lookup, not just presence.
@@ -159,6 +192,44 @@ export function ProfileScreen({ navigation }: Props) {
                 <Text style={styles.championEmoji}>🎤</Text>
               )}
               <Text style={styles.chipText}>{champion.artistName}</Text>
+            </View>
+          </View>
+        )}
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Tu nivel</Text>
+          <ArchetypeCard
+            ref={levelCardRef}
+            archetype={{ id: level.id, label: level.label, emoji: level.emoji, description: level.description, gradient: level.gradient }}
+            flavor={
+              nextLevel(level)
+                ? `${festivalesConfirmados} festival(es) confirmados · siguiente: ${nextLevel(level)!.label}`
+                : `${festivalesConfirmados} festival(es) confirmados · nivel máximo`
+            }
+          />
+          <PrimaryButton
+            label="Compartir mi nivel"
+            variant="secondary"
+            onPress={handleShareLevel}
+            loading={sharingLevel}
+          />
+        </View>
+
+        {badges.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Insignias</Text>
+            <View style={styles.chipRow}>
+              {badges.map((b) => {
+                const def = badgeFor(b.badge_id);
+                if (!def) return null;
+                return (
+                  <View key={b.badge_id} style={styles.chip}>
+                    <Text style={styles.chipText}>
+                      {def.emoji} {def.label}
+                    </Text>
+                  </View>
+                );
+              })}
             </View>
           </View>
         )}

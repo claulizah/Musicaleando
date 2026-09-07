@@ -10,11 +10,470 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
+      announcement_interest: {
+        Row: {
+          announcement_id: string
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          announcement_id: string
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          announcement_id?: string
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcement_interest_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "announcements"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcement_interest_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      announcements: {
+        Row: {
+          codigo_descuento: string | null
+          created_at: string
+          created_by: string | null
+          descripcion: string | null
+          festival_id: string
+          id: string
+          sponsor_nombre: string | null
+          tipo: string
+          titulo: string
+        }
+        Insert: {
+          codigo_descuento?: string | null
+          created_at?: string
+          created_by?: string | null
+          descripcion?: string | null
+          festival_id: string
+          id?: string
+          sponsor_nombre?: string | null
+          tipo: string
+          titulo: string
+        }
+        Update: {
+          codigo_descuento?: string | null
+          created_at?: string
+          created_by?: string | null
+          descripcion?: string | null
+          festival_id?: string
+          id?: string
+          sponsor_nombre?: string | null
+          tipo?: string
+          titulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcements_festival_id_fkey"
+            columns: ["festival_id"]
+            isOneToOne: false
+            referencedRelation: "festivals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_share_votes: {
+        Row: {
+          created_at: string
+          share_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          share_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          share_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_share_votes_share_id_fkey"
+            columns: ["share_id"]
+            isOneToOne: false
+            referencedRelation: "community_share_stats"
+            referencedColumns: ["share_id"]
+          },
+          {
+            foreignKeyName: "community_share_votes_share_id_fkey"
+            columns: ["share_id"]
+            isOneToOne: false
+            referencedRelation: "community_shares"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_share_votes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_shares: {
+        Row: {
+          caption: string | null
+          ciudad: string | null
+          created_at: string
+          id: string
+          song_ids: string[]
+          user_id: string
+        }
+        Insert: {
+          caption?: string | null
+          ciudad?: string | null
+          created_at?: string
+          id?: string
+          song_ids: string[]
+          user_id: string
+        }
+        Update: {
+          caption?: string | null
+          ciudad?: string | null
+          created_at?: string
+          id?: string
+          song_ids?: string[]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_shares_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      festival_comments: {
+        Row: {
+          created_at: string
+          festival_id: string
+          id: string
+          texto: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          festival_id: string
+          id?: string
+          texto: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          festival_id?: string
+          id?: string
+          texto?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "festival_comments_festival_id_fkey"
+            columns: ["festival_id"]
+            isOneToOne: false
+            referencedRelation: "festivals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "festival_comments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      festival_feedback: {
+        Row: {
+          comentario: string | null
+          created_at: string
+          festival_id: string
+          tags: string[]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          comentario?: string | null
+          created_at?: string
+          festival_id: string
+          tags?: string[]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          comentario?: string | null
+          created_at?: string
+          festival_id?: string
+          tags?: string[]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "festival_feedback_festival_id_fkey"
+            columns: ["festival_id"]
+            isOneToOne: false
+            referencedRelation: "festivals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "festival_feedback_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      festival_intent: {
+        Row: {
+          festival_id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          festival_id: string
+          status: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          festival_id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "festival_intent_festival_id_fkey"
+            columns: ["festival_id"]
+            isOneToOne: false
+            referencedRelation: "festivals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "festival_intent_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      festival_lineup: {
+        Row: {
+          artista: string
+          escenario: string | null
+          festival_id: string
+          horario: string | null
+          id: string
+        }
+        Insert: {
+          artista: string
+          escenario?: string | null
+          festival_id: string
+          horario?: string | null
+          id?: string
+        }
+        Update: {
+          artista?: string
+          escenario?: string | null
+          festival_id?: string
+          horario?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "festival_lineup_festival_id_fkey"
+            columns: ["festival_id"]
+            isOneToOne: false
+            referencedRelation: "festivals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      festival_map_pins: {
+        Row: {
+          created_at: string
+          escenario: string
+          festival_id: string
+          id: string
+          x_pct: number
+          y_pct: number
+        }
+        Insert: {
+          created_at?: string
+          escenario: string
+          festival_id: string
+          id?: string
+          x_pct: number
+          y_pct: number
+        }
+        Update: {
+          created_at?: string
+          escenario?: string
+          festival_id?: string
+          id?: string
+          x_pct?: number
+          y_pct?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "festival_map_pins_festival_id_fkey"
+            columns: ["festival_id"]
+            isOneToOne: false
+            referencedRelation: "festivals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      festival_reactions: {
+        Row: {
+          created_at: string
+          festival_id: string
+          reaction: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          festival_id: string
+          reaction: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          festival_id?: string
+          reaction?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "festival_reactions_festival_id_fkey"
+            columns: ["festival_id"]
+            isOneToOne: false
+            referencedRelation: "festivals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "festival_reactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      festival_survey_responses: {
+        Row: {
+          calificacion: string
+          created_at: string
+          festival_id: string
+          updated_at: string
+          user_id: string
+          volveria: string
+        }
+        Insert: {
+          calificacion: string
+          created_at?: string
+          festival_id: string
+          updated_at?: string
+          user_id: string
+          volveria: string
+        }
+        Update: {
+          calificacion?: string
+          created_at?: string
+          festival_id?: string
+          updated_at?: string
+          user_id?: string
+          volveria?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "festival_survey_responses_festival_id_fkey"
+            columns: ["festival_id"]
+            isOneToOne: false
+            referencedRelation: "festivals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "festival_survey_responses_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      festivals: {
+        Row: {
+          ciudad: string
+          created_at: string
+          fecha_fin: string
+          fecha_inicio: string
+          id: string
+          link_boletos: string | null
+          mapa_url: string | null
+          nombre: string
+        }
+        Insert: {
+          ciudad: string
+          created_at?: string
+          fecha_fin: string
+          fecha_inicio: string
+          id?: string
+          link_boletos?: string | null
+          mapa_url?: string | null
+          nombre: string
+        }
+        Update: {
+          ciudad?: string
+          created_at?: string
+          fecha_fin?: string
+          fecha_inicio?: string
+          id?: string
+          link_boletos?: string | null
+          mapa_url?: string | null
+          nombre?: string
+        }
+        Relationships: []
+      }
       mood_logs: {
         Row: {
           fecha: string
@@ -88,62 +547,6 @@ export type Database = {
           },
         ]
       }
-      users: {
-        Row: {
-          ciudad: string | null
-          fecha_registro: string
-          id: string
-          is_admin: boolean
-          nombre: string | null
-        }
-        Insert: {
-          ciudad?: string | null
-          fecha_registro?: string
-          id: string
-          is_admin?: boolean
-          nombre?: string | null
-        }
-        Update: {
-          ciudad?: string | null
-          fecha_registro?: string
-          id?: string
-          is_admin?: boolean
-          nombre?: string | null
-        }
-        Relationships: []
-      }
-      trends: {
-        Row: {
-          fecha: string
-          id: string
-          payload: Json
-          tipo: string
-          user_id: string
-        }
-        Insert: {
-          fecha?: string
-          id?: string
-          payload?: Json
-          tipo: string
-          user_id: string
-        }
-        Update: {
-          fecha?: string
-          id?: string
-          payload?: Json
-          tipo?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "trends_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       songs: {
         Row: {
           artista: string
@@ -171,37 +574,29 @@ export type Database = {
         }
         Relationships: []
       }
-      squads: {
+      sponsors: {
         Row: {
+          contacto: string | null
           created_at: string
           id: string
-          invite_code: string
           nombre: string
-          owner_id: string
+          ofrece: string | null
         }
         Insert: {
+          contacto?: string | null
           created_at?: string
           id?: string
-          invite_code?: string
           nombre: string
-          owner_id: string
+          ofrece?: string | null
         }
         Update: {
+          contacto?: string | null
           created_at?: string
           id?: string
-          invite_code?: string
           nombre?: string
-          owner_id?: string
+          ofrece?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "squads_owner_id_fkey"
-            columns: ["owner_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       squad_members: {
         Row: {
@@ -239,142 +634,6 @@ export type Database = {
           },
         ]
       }
-      festivals: {
-        Row: {
-          ciudad: string
-          created_at: string
-          fecha_fin: string
-          fecha_inicio: string
-          id: string
-          link_boletos: string | null
-          mapa_url: string | null
-          nombre: string
-        }
-        Insert: {
-          ciudad: string
-          created_at?: string
-          fecha_fin: string
-          fecha_inicio: string
-          id?: string
-          link_boletos?: string | null
-          mapa_url?: string | null
-          nombre: string
-        }
-        Update: {
-          ciudad?: string
-          created_at?: string
-          fecha_fin?: string
-          fecha_inicio?: string
-          id?: string
-          link_boletos?: string | null
-          mapa_url?: string | null
-          nombre?: string
-        }
-        Relationships: []
-      }
-      festival_map_pins: {
-        Row: {
-          id: string
-          festival_id: string
-          escenario: string
-          x_pct: number
-          y_pct: number
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          festival_id: string
-          escenario: string
-          x_pct: number
-          y_pct: number
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          festival_id?: string
-          escenario?: string
-          x_pct?: number
-          y_pct?: number
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "festival_map_pins_festival_id_fkey"
-            columns: ["festival_id"]
-            isOneToOne: false
-            referencedRelation: "festivals"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      festival_lineup: {
-        Row: {
-          artista: string
-          escenario: string | null
-          festival_id: string
-          horario: string | null
-          id: string
-        }
-        Insert: {
-          artista: string
-          escenario?: string | null
-          festival_id: string
-          horario?: string | null
-          id?: string
-        }
-        Update: {
-          artista?: string
-          escenario?: string | null
-          festival_id?: string
-          horario?: string | null
-          id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "festival_lineup_festival_id_fkey"
-            columns: ["festival_id"]
-            isOneToOne: false
-            referencedRelation: "festivals"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      festival_intent: {
-        Row: {
-          festival_id: string
-          status: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          festival_id: string
-          status: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          festival_id?: string
-          status?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "festival_intent_festival_id_fkey"
-            columns: ["festival_id"]
-            isOneToOne: false
-            referencedRelation: "festivals"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "festival_intent_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       squad_playlist: {
         Row: {
           added_at: string
@@ -399,6 +658,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "squad_playlist_added_by_fkey"
+            columns: ["added_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "squad_playlist_song_id_fkey"
             columns: ["song_id"]
             isOneToOne: false
@@ -414,30 +680,139 @@ export type Database = {
           },
         ]
       }
-      community_shares: {
+      squads: {
         Row: {
+          created_at: string
           id: string
+          invite_code: string
+          nombre: string
+          owner_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invite_code?: string
+          nombre: string
+          owner_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invite_code?: string
+          nombre?: string
+          owner_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "squads_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trends: {
+        Row: {
+          fecha: string
+          id: string
+          payload: Json
+          tipo: string
           user_id: string
-          song_ids: string[]
+        }
+        Insert: {
+          fecha?: string
+          id?: string
+          payload?: Json
+          tipo: string
+          user_id: string
+        }
+        Update: {
+          fecha?: string
+          id?: string
+          payload?: Json
+          tipo?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trends_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_badges: {
+        Row: {
+          badge_id: string
+          earned_at: string
+          meta: Json
+          user_id: string
+        }
+        Insert: {
+          badge_id: string
+          earned_at?: string
+          meta?: Json
+          user_id: string
+        }
+        Update: {
+          badge_id?: string
+          earned_at?: string
+          meta?: Json
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_badges_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      users: {
+        Row: {
+          ciudad: string | null
+          fecha_registro: string
+          id: string
+          is_admin: boolean
+          nombre: string | null
+        }
+        Insert: {
+          ciudad?: string | null
+          fecha_registro?: string
+          id: string
+          is_admin?: boolean
+          nombre?: string | null
+        }
+        Update: {
+          ciudad?: string | null
+          fecha_registro?: string
+          id?: string
+          is_admin?: boolean
+          nombre?: string | null
+        }
+        Relationships: []
+      }
+    }
+    Views: {
+      // A view over community_shares LEFT JOIN community_share_votes GROUP BY
+      // share id — share_id/user_id/song_ids/vote_count are never actually
+      // null (confirmed against the view definition), but the type generator
+      // can't infer that for a view and marks every column nullable. Narrowed
+      // back to match reality, same as the hand-written version this replaced.
+      community_share_stats: {
+        Row: {
           caption: string | null
           ciudad: string | null
           created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
+          share_id: string
           song_ids: string[]
-          caption?: string | null
-          ciudad?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          song_ids?: string[]
-          caption?: string | null
-          ciudad?: string | null
-          created_at?: string
+          user_id: string
+          vote_count: number
         }
         Relationships: [
           {
@@ -449,309 +824,71 @@ export type Database = {
           },
         ]
       }
-      community_share_votes: {
-        Row: {
-          share_id: string
-          user_id: string
-          created_at: string
-        }
-        Insert: {
-          share_id: string
-          user_id: string
-          created_at?: string
-        }
-        Update: {
-          share_id?: string
-          user_id?: string
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "community_share_votes_share_id_fkey"
-            columns: ["share_id"]
-            isOneToOne: false
-            referencedRelation: "community_shares"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "community_share_votes_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      festival_reactions: {
-        Row: {
-          festival_id: string
-          user_id: string
-          reaction: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          festival_id: string
-          user_id: string
-          reaction: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          festival_id?: string
-          user_id?: string
-          reaction?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "festival_reactions_festival_id_fkey"
-            columns: ["festival_id"]
-            isOneToOne: false
-            referencedRelation: "festivals"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "festival_reactions_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      festival_feedback: {
-        Row: {
-          festival_id: string
-          user_id: string
-          tags: string[]
-          comentario: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          festival_id: string
-          user_id: string
-          tags?: string[]
-          comentario?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          festival_id?: string
-          user_id?: string
-          tags?: string[]
-          comentario?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "festival_feedback_festival_id_fkey"
-            columns: ["festival_id"]
-            isOneToOne: false
-            referencedRelation: "festivals"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "festival_feedback_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      // Actually a view (community_share_stats), modeled here as a read-only
-      // "table" so the existing Tables<T> helper works for it unchanged —
-      // Insert/Update are never used since the app only ever selects from it.
-      community_share_stats: {
-        Row: {
-          share_id: string
-          user_id: string
-          song_ids: string[]
-          caption: string | null
-          ciudad: string | null
-          created_at: string
-          vote_count: number
-        }
-        Insert: {
-          share_id?: string
-          user_id?: string
-          song_ids?: string[]
-          caption?: string | null
-          ciudad?: string | null
-          created_at?: string
-          vote_count?: number
-        }
-        Update: {
-          share_id?: string
-          user_id?: string
-          song_ids?: string[]
-          caption?: string | null
-          ciudad?: string | null
-          created_at?: string
-          vote_count?: number
-        }
-        Relationships: []
-      }
-      festival_comments: {
-        Row: {
-          id: string
-          festival_id: string
-          user_id: string
-          texto: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          festival_id: string
-          user_id: string
-          texto: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          festival_id?: string
-          user_id?: string
-          texto?: string
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "festival_comments_festival_id_fkey"
-            columns: ["festival_id"]
-            isOneToOne: false
-            referencedRelation: "festivals"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "festival_comments_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sponsors: {
-        Row: {
-          id: string
-          nombre: string
-          contacto: string | null
-          ofrece: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          nombre: string
-          contacto?: string | null
-          ofrece?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          nombre?: string
-          contacto?: string | null
-          ofrece?: string | null
-          created_at?: string
-        }
-        Relationships: []
-      }
-      announcements: {
-        Row: {
-          id: string
-          festival_id: string
-          tipo: string
-          titulo: string
-          descripcion: string | null
-          sponsor_nombre: string | null
-          codigo_descuento: string | null
-          created_by: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          festival_id: string
-          tipo: string
-          titulo: string
-          descripcion?: string | null
-          sponsor_nombre?: string | null
-          codigo_descuento?: string | null
-          created_by?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          festival_id?: string
-          tipo?: string
-          titulo?: string
-          descripcion?: string | null
-          sponsor_nombre?: string | null
-          codigo_descuento?: string | null
-          created_by?: string | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "announcements_festival_id_fkey"
-            columns: ["festival_id"]
-            isOneToOne: false
-            referencedRelation: "festivals"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      announcement_interest: {
-        Row: {
-          announcement_id: string
-          user_id: string
-          created_at: string
-        }
-        Insert: {
-          announcement_id: string
-          user_id: string
-          created_at?: string
-        }
-        Update: {
-          announcement_id?: string
-          user_id?: string
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "announcement_interest_announcement_id_fkey"
-            columns: ["announcement_id"]
-            isOneToOne: false
-            referencedRelation: "announcements"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "announcement_interest_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-    }
-    Views: {
-      [_ in never]: never
     }
     Functions: {
+      cosine_similarity: {
+        Args: { v1: number[]; v2: number[] }
+        Returns: number
+      }
       create_squad: {
         Args: { p_nombre: string }
-        Returns: Database["public"]["Tables"]["squads"]["Row"]
+        Returns: {
+          created_at: string
+          id: string
+          invite_code: string
+          nombre: string
+          owner_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "squads"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
-      join_squad: {
-        Args: { p_invite_code: string }
-        Returns: Database["public"]["Tables"]["squads"]["Row"]
-      }
+      evaluate_rare_badges: { Args: { p_user_id: string }; Returns: undefined }
       generate_trend_for_user: {
         Args: { p_user_id: string }
         Returns: undefined
+      }
+      generate_trends_for_all: { Args: never; Returns: undefined }
+      is_squad_member: {
+        Args: { p_squad_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      join_squad: {
+        Args: { p_invite_code: string }
+        Returns: {
+          created_at: string
+          id: string
+          invite_code: string
+          nombre: string
+          owner_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "squads"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      music_vector: {
+        Args: { p_energia: number; p_generos: Json }
+        Returns: number[]
+      }
+      recompute_squad_compat: {
+        Args: { p_squad_id: string }
+        Returns: undefined
+      }
+      squad_comparison: {
+        Args: { p_squad_id: string }
+        Returns: {
+          energia: number
+          festivales_confirmados: number
+          generos_count: number
+          nombre: string
+          user_id: string
+        }[]
       }
     }
     Enums: {
@@ -763,16 +900,128 @@ export type Database = {
   }
 }
 
-type DefaultSchema = Database["public"]
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
 
-export type Tables<T extends keyof DefaultSchema["Tables"]> =
-  DefaultSchema["Tables"][T]["Row"]
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
-export type TablesInsert<T extends keyof DefaultSchema["Tables"]> =
-  DefaultSchema["Tables"][T]["Insert"]
+export type Tables<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+      Row: infer R
+    }
+    ? R
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R
+      }
+      ? R
+      : never
+    : never
 
-export type TablesUpdate<T extends keyof DefaultSchema["Tables"]> =
-  DefaultSchema["Tables"][T]["Update"]
+export type TablesInsert<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Insert: infer I
+    }
+    ? I
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I
+      }
+      ? I
+      : never
+    : never
+
+export type TablesUpdate<
+  DefaultSchemaTableNameOrOptions extends
+    | keyof DefaultSchema["Tables"]
+    | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
+      Update: infer U
+    }
+    ? U
+    : never
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U
+      }
+      ? U
+      : never
+    : never
+
+export type Enums<
+  DefaultSchemaEnumNameOrOptions extends
+    | keyof DefaultSchema["Enums"]
+    | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+    : never) = never,
+> = DefaultSchemaEnumNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never
+
+export type CompositeTypes<
+  PublicCompositeTypeNameOrOptions extends
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
+    schema: keyof DatabaseWithoutInternals
+  }
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+    : never) = never,
+> = PublicCompositeTypeNameOrOptions extends {
+  schema: keyof DatabaseWithoutInternals
+}
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never
+
+export const Constants = {
+  public: {
+    Enums: {},
+  },
+} as const
 
 // App-level unions the DB only enforces via CHECK constraints.
 export type Mood = "fiesta" | "chill" | "electronica"
@@ -781,3 +1030,5 @@ export type TrendTipo = "energia_vs_ciudad" | "dato_arquetipo" | "genero_dominan
 export type FestivalStatus = "voy" | "tal_vez" | "no_voy"
 export type FestivalReactionType = "like" | "dislike"
 export type AnnouncementTipo = "simple" | "rifa" | "descuento"
+export type SurveyCalificacion = "genial" | "bien" | "regular" | "malo"
+export type SurveyVolveria = "si" | "no" | "tal_vez"

@@ -1,15 +1,18 @@
 # Estado del proyecto — Musicaleando
 
-Última actualización: 2026-09-07 (sesión 9, cierre). Este archivo es el punto de partida
+Última actualización: 2026-09-07 (sesión 10, cierre). Este archivo es el punto de partida
 para retomar el trabajo en una sesión nueva sin perder contexto.
 
-**Estado en una línea**: Sprints 1-4 completos (con algunos pendientes de verificación
-física documentados abajo, ninguno bloqueante). **Próximo foco: Sprint 5** — leer el spec
-de nuevo antes de construir nada (ver punto 7 de "Cómo retomar").
+**Estado en una línea**: Sprints 1-4 completos. **Sprint 7 completo** (las 6 features de
+gamificación/retención de bajo esfuerzo — ver sesión 10 abajo), construido directamente
+sobre Sprint 4 sin pasar por Sprint 5/6 porque el usuario pidió priorizar Sprint 7 en esta
+sesión. **Sprint 5 y 6 del spec siguen sin construir** (trends avanzados, energía musical,
+recomendaciones V2, conexión en vivo, rifas + selección de ganador, mapa social, torneo
+grupal, dashboard de patrocinios, moderación) — ver "Pendiente".
 
 Proyecto Supabase: `ijwyykfuyeaahvxmaild` ("Sound Project", org `ljcnanwlkijozacnyhck`).
-Repo: rama `master`, sin remoto configurado todavía. Último commit: `74185d1` (Mapa del
-festival).
+Repo: rama `master`, sin remoto configurado todavía. Último commit antes de esta sesión:
+`55229da` (cierre de sesión 9).
 
 ## Completado y verificado en dispositivo (no solo compilado — probado tocando la app)
 
@@ -785,6 +788,215 @@ está en el spec ni hay fuente de datos para ella.
   chat, como las veces anteriores — debe cambiarla desde Supabase Auth (Authentication →
   Users → clauliz.acosta@gmail.com) antes de compartir acceso al panel.
 
+## Sesión 10 (2026-09-07): Sprint 7 completo (gamificación y retención de bajo esfuerzo)
+
+El usuario pidió saltar directo a Sprint 7 del spec (seis features chicas de
+gamificación/retención) en vez de continuar con Sprint 5, dando el mismo
+`musicaleando-spec.html` como Artifact publicado (se volvió a pedir el link al usuario al
+empezar la sesión, siguiendo la práctica de sesiones anteriores — el archivo no persiste en
+el filesystem entre sesiones). El spec confirma que Sprint 7 no tiene ficha propia detallada
+(solo el chip list del Roadmap, que coincide exactamente con las 6 features del prompt) y
+que "Backlog v2" (seguridad/ubicación en vivo, recap Wrapped, álbum de conciertos, match por
+historial compartido) sigue fuera de alcance — no se tocó nada de eso esta sesión.
+
+Antes de construir se revisó el código y el esquema real de la base de datos (`list_tables`
+vía MCP de Supabase) para no reconstruir nada y para descubrir una limitación existente
+importante: **`music_profile` solo tiene policy de `select` para la fila propia
+(`music_profile_select_own`)** — ningún usuario puede leer el `music_profile` de un
+squadmate directamente. Esto ya afectaba código existente:
+`useSquadStore.fetchMySquads` intenta leer `music_profile` de todos los miembros del squad
+para mostrar arquetipo/géneros/energía de cada uno, pero para cualquiera que no sea el
+usuario actual esa query siempre devolvía `[]` por RLS — el código ya tenía un fallback
+silencioso (`arquetipo: null, generos: [], energia: 0.5`) que ocultaba el problema. No se
+tocó esa limitación existente directamente (no era parte del pedido), pero **la
+comparación de squad nueva (feature 5) la hereda** si se implementa igual — se resolvió con
+una RPC nueva en vez de repetir el patrón roto (ver abajo).
+
+### 1. Insignia de miembro fundador — completado y verificado
+
+**Corte elegido: primeros 500 usuarios registrados por `fecha_registro`** (no "primeros 30
+días desde lanzamiento"). Razón: no existe ningún timestamp de "lanzamiento" en el esquema
+— fijar uno ahora sería arbitrario y dejaría de tener sentido si los usuarios reales
+empiezan a registrarse después de lo esperado. Un corte por conteo se mantiene igual de
+significativo el día 1 que el día en que la app realmente despegue.
+
+- Migración `sprint7_founder_badge`: tabla nueva `user_badges` (`user_id`, `badge_id`,
+  `earned_at`, `meta jsonb`), función `award_founder_badge()` (`SECURITY DEFINER`) + trigger
+  `AFTER INSERT ON users` que calcula el rank por `fecha_registro`/`id` y otorga `'founder'`
+  si `rank <= 500`. Backfill incluido para los 6 usuarios reales ya existentes (todos
+  calificaron, esperado con tan poco volumen).
+- **Deliberadamente sin policy de `insert`/`update`/`delete` en `user_badges` para
+  `anon`/`authenticated`** — solo `select` de la fila propia. Si existiera un insert propio,
+  cualquier usuario podría otorgarse `'founder'` desde el cliente, lo cual arruina el punto
+  de una insignia de exclusividad. Todas las escrituras pasan por funciones
+  `SECURITY DEFINER` (que bypasean RLS por diseño), nunca por el cliente directo.
+- `get_advisors` marcó `award_founder_badge`/`evaluate_rare_badges`/`trg_evaluate_rare_badges`
+  como invocables directamente vía `/rpc/...` (mismo tipo de warning que ya tenían
+  `create_squad`/`join_squad`/`is_squad_member` de sesiones anteriores) — se les hizo
+  `REVOKE EXECUTE FROM anon, authenticated` porque no tienen ningún uso legítimo llamadas
+  directamente (solo desde su trigger); los triggers siguen funcionando igual porque corren
+  con los privilegios del dueño de la función, no del rol que dispara el evento.
+- Se muestra en `ProfileScreen` como chip junto con las insignias raras (ver abajo).
+- **Verificado con cuenta anónima real de prueba** (script Node, mismo patrón de sesión 5):
+  usuario nuevo obtuvo `founder` automáticamente al registrarse (rank 7, sigue calificando
+  con tan poco volumen); cuenta y fila de badge borradas al terminar, conteos de `users`
+  antes/después idénticos (6).
+
+### 2. Insignias por combinaciones raras — completado y verificado
+
+**Curadas a mano, no calculadas estadísticamente** — con 6 usuarios reales, "raro en esta
+base de usuarios" no significa nada todavía; un cálculo de rareza real se puede construir
+más adelante cuando haya volumen. Se documentó explícitamente como decisión v1 en el código
+y aquí, tal como pedía el prompt.
+
+- 6 combinaciones fijas en la migración `sprint7_rare_combo_badges` (función
+  `evaluate_rare_badges`, trigger `AFTER INSERT OR UPDATE OF generos, guilty_pleasures,
+  flavor ON music_profile`), cada una cruzando género + década (`flavor->>'era'`) + guilty
+  pleasure: metal+80s+boyband, jazz+ahora+reggaetón viejo, lofi+2000s+anime,
+  latin+80s+metal desde los 15, indie+90s+pop2010, rock+ahora+anime. Metadata de
+  display (label/emoji/descripción) espejada en [src/lib/badges.ts](src/lib/badges.ts) —
+  el código SQL es la única fuente de verdad de *cuándo* se otorga, TS solo decide *cómo* se
+  ve.
+- Backfill corrido sobre los 4 `music_profile` reales existentes: ninguno matcheó ninguna
+  combinación (esperado — son combinaciones deliberadamente poco comunes).
+- **Verificado con cuenta de prueba real**: se le asignó a un usuario temporal un perfil que
+  matchea `rock+ahora+anime` → apareció `rare_rock_anime` en `user_badges` en el mismo
+  request (confirma que el trigger dispara en `INSERT`, no solo en `UPDATE`). Cuenta y datos
+  borrados al terminar.
+
+### 3. Sistema de niveles + tarjeta compartible — completado y verificado
+
+Niveles: Iniciado (0) → Habitual (1+) → Veterano (3+) → Leyenda del mosh (5+) → Alma de
+festival (8+), según cantidad de festivales con `festival_intent.status = 'voy'` — la clave
+primaria de esa tabla ya es `(user_id, festival_id)`, así que un conteo de filas ya es un
+conteo de festivales *distintos*, no hace falta una dimensión de "diversidad" aparte.
+Umbrales son un criterio propio (documentado como tal en
+[src/lib/levels.ts](src/lib/levels.ts)), no vienen del spec — con solo 1 festival real
+cargado hoy, la mayoría de usuarios quedará en Iniciado/Habitual por ahora, esperado.
+
+- [src/lib/levels.ts](src/lib/levels.ts): definiciones + `levelForFestivalCount`/`nextLevel`.
+- **Reutiliza `ArchetypeCard` sin construir un componente nuevo** (tal como pedía el
+  prompt) — mismo patrón de `id: string` genérico que ya se relajó para el campeón del
+  Torneo Sonoro en la sesión 6. `ProfileScreen` arma una tarjeta con label/emoji/
+  descripción/gradiente del nivel actual, flavor con el conteo de festivales y el siguiente
+  nivel, y un botón "Compartir mi nivel" con el mismo flujo `captureRef` +
+  `expo-sharing` copiado de `RevealScreen`/`TorneoScreen` (ninguna lógica de captura nueva).
+- Nuevo store [useAchievementsStore.ts](src/store/useAchievementsStore.ts): trae
+  `user_badges` propios + cuenta de `festival_intent` propios con `status='voy'`
+  (`count: 'exact', head: true` — no trae filas, solo el número), calcula el nivel en
+  cliente. Usado por `ProfileScreen` (insignias + nivel) y `HomeScreen` (conteo para el reto
+  semanal, ver feature 6).
+- **Verificado con cuenta de prueba real**: usuario con 1 festival confirmado (`status='voy'`
+  sobre Corona Capital 2026) devolvió `festivales_confirmados: 1` desde la cuenta de logros;
+  con el umbral de Habitual en 1, ese usuario cae en Habitual — coherente con
+  `levelForFestivalCount`. `tsc` limpio para el componente compartido con el nuevo tipo de
+  `archetype` (nivel en vez de arquetipo/campeón).
+- **No verificado visualmente en emulador** (ver "Problemas de entorno" de esta sesión) —
+  verificado por lectura de código + los mismos scripts de prueba por REST que confirmaron
+  el dato subyacente (`festivales_confirmados`).
+
+### 4. Encuestas cortas post-festival — completado y verificado (backend), pendiente de fecha real para ver el trigger en vivo
+
+Dos preguntas, ambas de tap (nada de texto libre, como pedía el prompt): "¿Qué tal estuvo
+[festival]?" (genial/bien/regular/malo) y, tras responder la primera, "¿Volverías el
+próximo año?" (sí/no/tal vez). Se dispara solo cuando `festival.fecha_fin` ya pasó **y** el
+usuario confirmó `status='voy'` **y** todavía no respondió.
+
+- Migración `sprint7_festival_survey`: tabla `festival_survey_responses`
+  (`festival_id`, `user_id`, `calificacion` con `check`, `volveria` con `check`,
+  `created_at`, `updated_at`), RLS select/insert/update propio (permite reintentar/corregir
+  la respuesta, no es de una sola vez).
+  [useFestivalStore.ts](src/store/useFestivalStore.ts): `fetch()` ahora también trae
+  `festival_survey_responses` propios y calcula `survey.due` por festival; nueva acción
+  `submitSurvey`. UI en
+  [FestivalHubScreen.tsx](src/screens/main/FestivalHubScreen.tsx): tarjeta que aparece
+  automáticamente bajo el festival cuando `survey.due` es verdadero, con las dos preguntas
+  en dos pasos (tap → tap), sin campo de texto.
+- **Corona Capital 2026 (el único festival real cargado) todavía no ha pasado**
+  (`fecha_fin` 2026-11-22, hoy es 2026-09-07) — por diseño, la encuesta nunca aparece para
+  ese festival en la app real todavía; es el comportamiento correcto, no un bug. Se
+  **verificó el mecanismo completo por REST** con una cuenta de prueba real: insertar
+  respuesta, reintentar (upsert cambia `calificacion`/`volveria` sin crear una segunda fila,
+  gracias al PK compuesto), y confirmar que otro usuario no puede leer la respuesta ajena
+  (`select` devuelve `[]` por RLS). La lógica de "cuándo aparece" (`fecha_fin < hoy`) es una
+  comparación de fechas pura en cliente — se revisó por código, no se pudo forzar una fecha
+  pasada real en la UI sin mover `fecha_fin` de un festival real, así que queda como
+  pendiente de confirmación visual el día en que exista un festival real ya concluido (o si
+  se decide mover `fecha_fin` de un festival de prueba temporalmente en una sesión futura).
+
+### 5. Comparación dentro del squad — completado y verificado
+
+Muestra, para cada miembro del squad, su nivel (mismo sistema de la feature 3), festivales
+confirmados y energía — todo de datos que ya existían (`music_profile.energia`,
+`festival_intent`), ninguna métrica nueva inventada, tal como pedía el prompt.
+
+- **No se reusó el patrón de `useSquadStore.fetchMySquads`** (que intenta leer
+  `music_profile` de otros usuarios directo desde el cliente) porque, como se documentó
+  arriba, esa lectura ya falla silenciosamente por RLS (`music_profile_select_own`) para
+  cualquiera que no sea el usuario actual. En vez de ensanchar la policy de `music_profile`
+  (más superficie expuesta, afecta cualquier pantalla que toque perfiles ajenos), se agregó
+  una RPC angosta y scopeada: `squad_comparison(p_squad_id)` (`SECURITY DEFINER`, migración
+  `sprint7_squad_comparison_rpc`), que verifica `is_squad_member()` (la misma función ya
+  usada para `squad_members`/`squad_playlist`, sin reinventar el mecanismo de autorización)
+  y devuelve `user_id`, `nombre`, `energia`, `generos_count`, `festivales_confirmados` para
+  cada miembro del squad pedido — nada más.
+- [useSquadStore.ts](src/store/useSquadStore.ts): estado nuevo `comparisonBySquad` +
+  acción `fetchComparison(squadId)`. [SquadDetailScreen.tsx](src/screens/main/SquadDetailScreen.tsx):
+  sección nueva "Comparación del squad" (ordenada por festivales confirmados desc.),
+  reutilizando los estilos de fila de miembro ya existentes (`memberRow`/`memberEmoji`/etc.)
+  en vez de crear estilos nuevos.
+- **Verificado con dos cuentas de prueba reales formando su propio squad aislado** (para no
+  tocar el squad real "Los Vi"): A confirmó 1 festival real (Corona Capital) y tiene 2
+  géneros/energía 0.8, B sin nada — `squad_comparison` devolvió ambas filas correctas tanto
+  llamado por A como por B (ambos miembros pueden verla). **Confirmado que un no-miembro
+  (cuenta C) recibe el error esperado** (`"No eres miembro de este squad"`) en vez de datos.
+  Squad y las 3 cuentas de prueba borradas al terminar — conteos de `squads`/`squad_members`
+  antes/después idénticos (2/3).
+
+### 6. Reto semanal simple — completado y verificado
+
+Sin sistema de puntos ni tabla nueva — computado enteramente de datos que ya existen
+(`festival_intent`, `community_share_votes`, `community_shares`), tal como pedía el prompt
+("no necesita sistema de recompensas complejo").
+
+- [src/lib/weeklyChallenge.ts](src/lib/weeklyChallenge.ts): si el usuario tiene 0 festivales
+  confirmados en total, el reto siempre es "Confirma tu primer festival" (la conversión más
+  valiosa, independiente de qué semana sea); si ya tiene al menos 1, rota semana por medio
+  entre "Vota en 3 trends esta semana" y "Comparte una canción esta semana" (ambos ejemplos
+  literales del prompt), usando un número de semana simple para la rotación (no necesita ser
+  ISO-preciso, solo consistente).
+  [HomeScreen.tsx](src/screens/main/HomeScreen.tsx): nueva tarjeta con barra de progreso
+  simple (`progress`/`target`), sin componente reusado porque no existía ningún patrón de
+  "barra de progreso" previo en la app.
+- **Verificado por código + datos reales**: con 0 votos/shares esta semana y 0 festivales
+  confirmados en la cuenta real usada para las pruebas anteriores, el reto calculado es
+  "Confirma tu primer festival" con progreso 0/1 — coherente con la regla. No se pudo
+  confirmar visualmente el conteo de votos/shares subiendo la barra en vivo (bloqueado por
+  el mismo problema de emulador de esta sesión, ver abajo), pero la query en sí
+  (`community_share_votes`/`community_shares` filtrados por `user_id` y `created_at >=
+  inicio de semana`) usa el mismo patrón ya validado en sesiones anteriores para estas
+  tablas (RLS select-pública, confirmado en sesión 8).
+
+### Problemas de entorno (sesión 10)
+
+**No se intentó verificación visual en emulador esta sesión.** Al revisar el entorno,
+`tasklist` mostró un `emulator.exe`/`qemu-system-x86_64.exe` ya corriendo junto con varios
+procesos `node.exe` — es decir, **otra sesión de Claude Code tenía su propio servidor de
+desarrollo activo en este mismo proyecto** (confirmado también por un aviso del entorno al
+editar archivos: "Another chat's dev server is running in this folder"). Conectarse a ese
+emulador/Metro desde esta sesión habría arriesgado interferir con el trabajo de la otra
+sesión (bundles a medio cargar, estado de navegación inesperado) sin ningún beneficio real
+— y las herramientas de navegador de esta sesión de todas formas no llegan a una app nativa
+Android, solo a páginas web/el panel admin. Se optó por verificar todo lo posible por
+REST/SQL con cuentas de prueba reales (ver cada feature arriba) y documentar como pendiente
+la confirmación visual, siguiendo la misma regla que sesiones anteriores ya dejaron escrita
+para cuando el emulador no es una opción confiable.
+
+**Regla para la próxima sesión**: antes de arrancar un emulador o Metro propio, correr
+`tasklist | grep -i "emulator\|qemu"` (o el equivalente) para confirmar que no hay ya una
+sesión ajena usándolo — si la hay, verificar por REST/SQL en vez de competir por el mismo
+recurso.
+
 ## Pendiente
 
 - No hay UI para editar nombre/ciudad/fechas de un festival ya creado desde el panel (solo
@@ -857,6 +1069,27 @@ está en el spec ni hay fuente de datos para ella.
   explícitamente Sprint 5 según el spec ("Rifas + selección de ganador") — el panel admin
   de esta sesión solo publica/borra anuncios y muestra el conteo crudo de interesados, sin
   UI para elegir ganador ni notificación push automática.
+- **Sprint 5 y Sprint 6 del spec siguen sin construir** (se saltaron a propósito para hacer
+  Sprint 7 primero, a pedido del usuario): trends avanzados, energía musical, recomendaciones
+  V2 (colaborativo), conexión en vivo Spotify/Apple Music (beta cerrada), rifas + selección
+  de ganador, mapa social, Torneo Sonoro grupal (squads), dashboard de patrocinios,
+  moderación de comentarios reportados.
+- **Sprint 7 — completo** (insignia fundador, insignias por combinación rara, niveles +
+  tarjeta compartible, encuestas post-festival, comparación de squad, reto semanal). Ver
+  sesión 10 para detalle y verificación de cada una. Dos puntos quedan atados a datos que
+  todavía no existen, no a código faltante:
+  - La encuesta post-festival no se ha visto disparar en la app real porque el único
+    festival real cargado (Corona Capital 2026) todavía no ha pasado — el mecanismo está
+    verificado por REST, falta la confirmación visual el día en que un festival real
+    concluya (o si se mueve `fecha_fin` de un festival de prueba temporalmente).
+  - "Compañero ideal" (Sprint 3, sigue en pausa) y "Compañero ideal"/comparación de squad de
+    Sprint 7 son features distintas — no confundirlas: la de Sprint 7 (festivales
+    confirmados/energía por miembro) sí se construyó esta sesión, "Compañero ideal" (sugerir
+    el usuario con mayor compat_score) sigue sin definir.
+  - Ninguna de las 6 se verificó visualmente en emulador esta sesión (otra sesión de Claude
+    Code ya tenía el emulador/Metro corriendo — ver "Problemas de entorno" de la sesión 10).
+    Todo lo demás (DB, RLS, triggers, RPCs) se verificó con cuentas de prueba reales por
+    REST, igual que sesiones 8/9.
 
 ## Decisiones técnicas tomadas en el camino (no estaban en el prompt original)
 
@@ -1014,16 +1247,21 @@ está en el spec ni hay fuente de datos para ella.
    mismo patrón de despliegue/secretos que las anteriores. Ninguna escribe en la base de
    datos (puro cálculo sobre datos de Spotify), verificadas por curl directo, no por REST
    con sesión de usuario.
-7. **Sprint 4 está completo** (las 5 features del chip list: Festival generado por gustos,
-   Mapa del festival, Recomendaciones V1, Comentarios por festival, Anuncios y promociones)
-   — commit `74185d1` (Mapa del festival) y el commit anterior de la sesión 9 con el resto.
-   **Siguiente foco: Sprint 5.** El detalle exacto del spec para Sprint 5 **no está guardado
-   en este repo ni en el sistema de archivos** — se leyó desde un Artifact publicado que el
-   usuario compartió por link en el chat de la sesión 9 (ver nota al inicio de esa sección),
-   y ese contenido no persiste entre sesiones. **Antes de construir nada de Sprint 5, pedirle
-   al usuario el link del Artifact del spec de nuevo (o releerlo si ya está accesible) y
-   confirmar el alcance exacto** — no asumir a partir de lo que se infiere abajo. Lo único
-   que se sabe con certeza de sesiones anteriores (mencionado de pasada, no es el spec
+7. **Sprint 4 y Sprint 7 están completos.** Sprint 4 (commit `74185d1` y el anterior de la
+   sesión 9): Festival generado por gustos, Mapa del festival, Recomendaciones V1,
+   Comentarios por festival, Anuncios y promociones. Sprint 7 (sesión 10, commit de cierre
+   de esa sesión): insignia fundador, insignias por combinación rara, niveles + tarjeta
+   compartible, encuestas post-festival, comparación de squad, reto semanal — ver esa
+   sección para detalle completo. **Sprint 5 y 6 del spec se saltaron a propósito** (el
+   usuario pidió priorizar Sprint 7) y siguen sin construir.
+   **Siguiente foco: a decidir con el usuario — probablemente Sprint 5, o cerrar los
+   pendientes de verificación visual que se fueron acumulando (ver "Pendiente").** El
+   detalle exacto del spec **no está guardado en este repo ni en el sistema de archivos** —
+   se ha leído dos veces (sesiones 9 y 10) desde un Artifact publicado que el usuario
+   comparte por link en el chat, y ese contenido no persiste entre sesiones. **Antes de
+   construir nada de un sprint nuevo, pedirle al usuario el link del Artifact del spec de
+   nuevo y confirmar el alcance exacto** — no asumir a partir de lo que se infiere abajo. Lo
+   único que se sabe con certeza de sesiones anteriores (mencionado de pasada, no es el spec
    completo):
    - **Selección de ganador de rifa**: el panel admin de Sprint 4 (`/festivals/[id]`, sección
      de Anuncios) ya publica/borra anuncios tipo `rifa` y muestra el conteo crudo de
@@ -1065,3 +1303,19 @@ está en el spec ni hay fuente de datos para ella.
    script Node con la contraseña en texto plano — el "auto mode classifier" del entorno
    bloquea ese patrón (ver "Problemas de entorno" sesión 9); un script con sesión anónima
    (`signInAnonymously()`, sin contraseña) sí funciona para verificar RLS de lectura pública.
+10. **Sprint 7 (sesión 10)**: tablas/funciones nuevas — `user_badges` (RLS: solo `select`
+    propio, todo `insert` pasa por triggers `SECURITY DEFINER`, nunca por el cliente),
+    `festival_survey_responses` (RLS select/insert/update propio), función/RPC
+    `squad_comparison(p_squad_id)`, funciones `award_founder_badge()`/`evaluate_rare_badges()`
+    (triggers en `users`/`music_profile`, con `EXECUTE` revocado para `anon`/`authenticated`
+    — solo se disparan vía trigger). Metadata de insignias/niveles en
+    [src/lib/badges.ts](src/lib/badges.ts) y [src/lib/levels.ts](src/lib/levels.ts); reto
+    semanal calculado en cliente sin tabla nueva en
+    [src/lib/weeklyChallenge.ts](src/lib/weeklyChallenge.ts). Antes de tocar cualquiera de
+    estas tablas, revisar la sección de sesión 10 completa — documenta por qué se optó por
+    una RPC en vez de ensanchar RLS de `music_profile` (ver el hallazgo de esa limitación al
+    inicio de la sección).
+11. Antes de arrancar el emulador o Metro, correr algo como
+    `tasklist | grep -i "emulator\|qemu"` (Windows) para confirmar que no hay ya una sesión
+    de Claude Code distinta usándolo — la sesión 10 encontró exactamente eso y evitó
+    interferir verificando por REST/SQL en su lugar.

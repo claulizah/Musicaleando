@@ -1,6 +1,12 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
-import { FestivalReactionType, FestivalStatus, Tables } from '../types/database';
+import {
+  FestivalReactionType,
+  FestivalStatus,
+  SurveyCalificacion,
+  SurveyVolveria,
+  Tables,
+} from '../types/database';
 
 export type FestivalReactionSummary = {
   likes: number;
@@ -17,6 +23,14 @@ export type AnnouncementWithInterest = Tables<'announcements'> & {
   mineInterested: boolean;
 };
 
+export type FestivalSurveyStatus = {
+  mine: Tables<'festival_survey_responses'> | null;
+  // Survey is only worth showing once the festival is actually over and the
+  // user confirmed they went — no point asking "¿qué tal estuvo?" for a
+  // festival someone marked "tal vez" or that hasn't happened yet.
+  due: boolean;
+};
+
 export type FestivalWithIntent = {
   festival: Tables<'festivals'>;
   myStatus: FestivalStatus | null;
@@ -27,6 +41,7 @@ export type FestivalWithIntent = {
   comments: Tables<'festival_comments'>[];
   announcements: AnnouncementWithInterest[];
   mapPins: Tables<'festival_map_pins'>[];
+  survey: FestivalSurveyStatus;
 };
 
 type Status = 'idle' | 'loading' | 'ready' | 'error';
@@ -47,6 +62,12 @@ type FestivalState = {
   postComment: (userId: string, festivalId: string, texto: string) => Promise<void>;
   deleteComment: (festivalId: string, commentId: string) => Promise<void>;
   toggleInterest: (userId: string, festivalId: string, announcementId: string) => Promise<void>;
+  submitSurvey: (
+    userId: string,
+    festivalId: string,
+    calificacion: SurveyCalificacion,
+    volveria: SurveyVolveria,
+  ) => Promise<void>;
 };
 
 export const useFestivalStore = create<FestivalState>((set, get) => ({
@@ -159,6 +180,19 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
       return;
     }
 
+    const { data: surveyRows, error: surveyErr } = await supabase
+      .from('festival_survey_responses')
+      .select('*')
+      .in('festival_id', festivalIds)
+      .eq('user_id', userId);
+
+    if (surveyErr) {
+      set({ status: 'error', error: surveyErr.message });
+      return;
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+
     const festivals: FestivalWithIntent[] = (festivalRows ?? []).map((festival) => {
       const rowsForFestival = (intentRows ?? []).filter((i) => i.festival_id === festival.id);
       const mine = rowsForFestival.find((i) => i.user_id === userId);
@@ -191,9 +225,13 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
 
       const mapPins = (mapPinRows ?? []).filter((p) => p.festival_id === festival.id);
 
+      const myStatus = (mine?.status as FestivalStatus) ?? null;
+      const mySurvey = (surveyRows ?? []).find((s) => s.festival_id === festival.id) ?? null;
+      const surveyDue = myStatus === 'voy' && festival.fecha_fin < today && !mySurvey;
+
       return {
         festival,
-        myStatus: (mine?.status as FestivalStatus) ?? null,
+        myStatus,
         squadGoingCount,
         lineup,
         reactions,
@@ -201,6 +239,7 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
         comments,
         announcements,
         mapPins,
+        survey: { mine: mySurvey, due: surveyDue },
       };
     });
 
@@ -366,5 +405,30 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
     if (error) {
       set({ festivals: previous, status: 'error', error: error.message });
     }
+  },
+
+  submitSurvey: async (userId, festivalId, calificacion, volveria) => {
+    const { data, error } = await supabase
+      .from('festival_survey_responses')
+      .upsert(
+        {
+          festival_id: festivalId,
+          user_id: userId,
+          calificacion,
+          volveria,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'festival_id,user_id' },
+      )
+      .select('*')
+      .single();
+
+    if (error) throw error;
+
+    set({
+      festivals: get().festivals.map((f) =>
+        f.festival.id === festivalId ? { ...f, survey: { mine: data, due: false } } : f,
+      ),
+    });
   },
 }));

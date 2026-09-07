@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Screen } from '../../components/Screen';
@@ -13,9 +13,12 @@ import { useProfileStore, readTorneoCampeon } from '../../store/useProfileStore'
 import { useTrendStore } from '../../store/useTrendStore';
 import { usePlaylistStore } from '../../store/usePlaylistStore';
 import { useRecommendationsStore } from '../../store/useRecommendationsStore';
+import { useAchievementsStore } from '../../store/useAchievementsStore';
 import { ARCHETYPES } from '../../lib/archetypes';
 import { ARCHETYPE_IMAGES } from '../../lib/images';
 import { formatTrend } from '../../lib/trends';
+import { supabase } from '../../lib/supabase';
+import { currentWeeklyChallenge, startOfWeekIso, WeeklyChallenge } from '../../lib/weeklyChallenge';
 import { colors, radii, spacing, type } from '../../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
@@ -34,13 +37,43 @@ export function HomeScreen({ navigation }: Props) {
   const fetchPlaylist = usePlaylistStore((s) => s.fetch);
   const recommended = useRecommendationsStore((s) => s.artists);
   const fetchRecommended = useRecommendationsStore((s) => s.fetch);
+  const festivalesConfirmados = useAchievementsStore((s) => s.festivalesConfirmados);
+  const fetchAchievements = useAchievementsStore((s) => s.fetch);
+  const [challenge, setChallenge] = useState<WeeklyChallenge | null>(null);
 
   useEffect(() => {
     if (!userId) return;
     fetchLatestMood(userId);
     if (profileStatus === 'idle') fetchProfile(userId);
+    fetchAchievements(userId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+    (async () => {
+      const sinceIso = startOfWeekIso();
+      const [{ count: votesThisWeek }, { count: sharesThisWeek }] = await Promise.all([
+        supabase
+          .from('community_share_votes')
+          .select('share_id', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .gte('created_at', sinceIso),
+        supabase
+          .from('community_shares')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId)
+          .gte('created_at', sinceIso),
+      ]);
+      setChallenge(
+        currentWeeklyChallenge({
+          festivalesConfirmadosTotal: festivalesConfirmados,
+          votesThisWeek: votesThisWeek ?? 0,
+          sharesThisWeek: sharesThisWeek ?? 0,
+        }),
+      );
+    })();
+  }, [userId, festivalesConfirmados]);
 
   // profile.arquetipo can be a stale id from before an archetype-engine change
   // (or a refine in progress) — treat "no matching archetype" as "no profile yet",
@@ -111,6 +144,26 @@ export function HomeScreen({ navigation }: Props) {
             <Text style={styles.profileHint}>Completa tu perfil musical →</Text>
           )}
         </Pressable>
+
+        {challenge && (
+          <View style={styles.challengeCard}>
+            <Text style={styles.challengeTitle}>
+              {challenge.emoji} {challenge.label}
+            </Text>
+            <Text style={styles.challengeDesc}>{challenge.description}</Text>
+            <View style={styles.challengeBarTrack}>
+              <View
+                style={[
+                  styles.challengeBarFill,
+                  { width: `${Math.min(100, (challenge.progress / challenge.target) * 100)}%` },
+                ]}
+              />
+            </View>
+            <Text style={styles.challengeProgress}>
+              {challenge.progress} / {challenge.target}
+            </Text>
+          </View>
+        )}
 
         {trend && <TrendCard trend={formatTrend(trend)} />}
         {songs.length > 0 && <PlaylistCard songs={songs} />}
@@ -201,5 +254,36 @@ const styles = StyleSheet.create({
   profileHint: {
     ...type.body,
     color: colors.textSecondary,
+  },
+  challengeCard: {
+    gap: spacing.xs,
+    backgroundColor: colors.bgElevated,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+  },
+  challengeTitle: {
+    ...type.bodyLg,
+    color: colors.textPrimary,
+  },
+  challengeDesc: {
+    ...type.body,
+    color: colors.textSecondary,
+  },
+  challengeBarTrack: {
+    height: 8,
+    borderRadius: radii.pill,
+    backgroundColor: colors.bg,
+    overflow: 'hidden',
+  },
+  challengeBarFill: {
+    height: '100%',
+    borderRadius: radii.pill,
+    backgroundColor: colors.accentPrimary,
+  },
+  challengeProgress: {
+    ...type.caption,
+    color: colors.textMuted,
   },
 });

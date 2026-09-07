@@ -14,6 +14,7 @@ import { supabase } from '../../lib/supabase';
 import { Tables } from '../../types/database';
 import { ARCHETYPES } from '../../lib/archetypes';
 import { compatScore } from '../../lib/compat';
+import { levelForFestivalCount } from '../../lib/levels';
 import { colors, radii, spacing, type } from '../../theme';
 
 type Song = Tables<'songs'>;
@@ -27,6 +28,9 @@ export function SquadDetailScreen({ route, navigation }: Props) {
   const squads = useSquadStore((s) => s.squads);
   const fetchMySquads = useSquadStore((s) => s.fetchMySquads);
   const leaveSquad = useSquadStore((s) => s.leaveSquad);
+  const comparisonBySquad = useSquadStore((s) => s.comparisonBySquad);
+  const fetchComparison = useSquadStore((s) => s.fetchComparison);
+  const comparison = comparisonBySquad[squadId] ?? [];
 
   const tracksBySquad = useSquadPlaylistStore((s) => s.tracksBySquad);
   const fetchPlaylist = useSquadPlaylistStore((s) => s.fetch);
@@ -47,6 +51,7 @@ export function SquadDetailScreen({ route, navigation }: Props) {
 
   useEffect(() => {
     fetchPlaylist(squadId);
+    fetchComparison(squadId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [squadId]);
 
@@ -208,6 +213,34 @@ export function SquadDetailScreen({ route, navigation }: Props) {
             );
           })}
         </View>
+
+        {comparison.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Comparación del squad</Text>
+            {comparison
+              .slice()
+              .sort((a, b) => b.festivales_confirmados - a.festivales_confirmados)
+              .map((row) => {
+                const level = levelForFestivalCount(row.festivales_confirmados);
+                const isMe = row.user_id === userId;
+                return (
+                  <View key={row.user_id} style={styles.memberRow}>
+                    <Text style={styles.memberEmoji}>{level.emoji}</Text>
+                    <View style={styles.memberTextWrap}>
+                      <Text style={styles.memberLabel}>
+                        {row.nombre ?? 'Sin nombre'} {isMe ? '(tú)' : ''}
+                      </Text>
+                      <Text style={styles.memberMeta}>
+                        {level.label} · {row.festivales_confirmados}{' '}
+                        {row.festivales_confirmados === 1 ? 'festival confirmado' : 'festivales confirmados'} ·
+                        energía {Math.round(row.energia * 100)}%
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+          </View>
+        )}
 
         <View style={styles.section}>
           <View style={styles.playlistHeader}>
