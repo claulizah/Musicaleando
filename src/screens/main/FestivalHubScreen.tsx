@@ -4,9 +4,12 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Screen } from '../../components/Screen';
 import { RootStackParamList } from '../../navigation/types';
 import { useSessionStore } from '../../store/useSessionStore';
+import { useProfileStore } from '../../store/useProfileStore';
 import { useFestivalStore, FestivalWithIntent } from '../../store/useFestivalStore';
 import { FestivalReactionType, FestivalStatus } from '../../types/database';
 import { FEEDBACK_TAGS } from '../../lib/festivalFeedback';
+import { fetchFestivalPersonalization, FestivalGenreMatch } from '../../lib/spotify';
+import { GENEROS } from '../../lib/archetypes';
 import { colors, radii, spacing, type } from '../../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Festivals'>;
@@ -25,6 +28,7 @@ function formatRange(inicio: string, fin: string): string {
 
 export function FestivalHubScreen({ navigation }: Props) {
   const userId = useSessionStore((s) => s.userId);
+  const generos = useProfileStore((s) => (s.profile?.generos as string[] | undefined) ?? []);
   const festivals = useFestivalStore((s) => s.festivals);
   const status = useFestivalStore((s) => s.status);
   const error = useFestivalStore((s) => s.error);
@@ -81,6 +85,7 @@ export function FestivalHubScreen({ navigation }: Props) {
             onToggleInterest={(announcementId) =>
               userId ? toggleInterest(userId, entry.festival.id, announcementId) : Promise.resolve()
             }
+            generos={generos}
           />
         ))}
       </ScrollView>
@@ -97,6 +102,7 @@ function FestivalCard({
   onPostComment,
   onDeleteComment,
   onToggleInterest,
+  generos,
 }: {
   entry: FestivalWithIntent;
   onSetStatus: (status: FestivalStatus) => void;
@@ -106,6 +112,7 @@ function FestivalCard({
   onPostComment: (texto: string) => Promise<void>;
   onDeleteComment: (commentId: string) => void;
   onToggleInterest: (announcementId: string) => Promise<void>;
+  generos: string[];
 }) {
   const { festival, myStatus, squadGoingCount, lineup, reactions, feedback, comments, announcements } = entry;
   const [showLineup, setShowLineup] = useState(false);
@@ -116,6 +123,24 @@ function FestivalCard({
   const [savingFeedback, setSavingFeedback] = useState(false);
   const [commentDraft, setCommentDraft] = useState('');
   const [postingComment, setPostingComment] = useState(false);
+  const [personalized, setPersonalized] = useState<FestivalGenreMatch[] | null>(null);
+  const [loadingPersonalized, setLoadingPersonalized] = useState(false);
+
+  const handlePersonalize = async () => {
+    if (generos.length === 0 || lineup.length === 0) return;
+    setLoadingPersonalized(true);
+    try {
+      const { matches } = await fetchFestivalPersonalization(
+        generos,
+        lineup.map((l) => l.artista),
+      );
+      setPersonalized(matches);
+    } catch (err) {
+      Alert.alert('No se pudo generar', err instanceof Error ? err.message : 'Intenta de nuevo.');
+    } finally {
+      setLoadingPersonalized(false);
+    }
+  };
 
   const toggleTag = (tagId: string) => {
     setSelectedTags((prev) =>
@@ -183,6 +208,36 @@ function FestivalCard({
               : ''}
           </Text>
         ))}
+
+      {lineup.length > 0 && generos.length > 0 && (
+        <View style={styles.personalizeWrap}>
+          {personalized === null ? (
+            <Pressable
+              style={styles.personalizeButton}
+              onPress={handlePersonalize}
+              disabled={loadingPersonalized}
+            >
+              <Text style={styles.personalizeButtonText}>
+                {loadingPersonalized ? 'Buscando en tu gusto...' : '✨ Tu festival, a tu medida'}
+              </Text>
+            </Pressable>
+          ) : personalized.length === 0 ? (
+            <Text style={styles.hint}>No encontramos coincidencias claras con tu gusto esta vez.</Text>
+          ) : (
+            <View style={styles.personalizeCard}>
+              <Text style={styles.personalizeTitle}>No te lo pierdas</Text>
+              {personalized.map((m) => {
+                const genero = GENEROS.find((g) => g.id === m.generoId);
+                return (
+                  <Text key={m.artista} style={styles.personalizeRow}>
+                    🎯 {m.artista}{genero ? ` · ${genero.label}` : ''}
+                  </Text>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      )}
 
       <View style={styles.statusRow}>
         {STATUS_OPTIONS.map((option) => {
@@ -626,5 +681,36 @@ const styles = StyleSheet.create({
   removeLink: {
     ...type.caption,
     color: colors.textMuted,
+  },
+  personalizeWrap: {
+    marginTop: spacing.xs,
+  },
+  personalizeButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.accentSecondary,
+  },
+  personalizeButtonText: {
+    ...type.label,
+    color: colors.accentSecondary,
+  },
+  personalizeCard: {
+    backgroundColor: colors.accentPrimaryMuted,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.accentPrimary,
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  personalizeTitle: {
+    ...type.label,
+    color: colors.accentPrimary,
+  },
+  personalizeRow: {
+    ...type.body,
+    color: colors.textPrimary,
   },
 });

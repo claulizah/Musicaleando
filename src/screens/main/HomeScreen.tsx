@@ -5,12 +5,14 @@ import { Screen } from '../../components/Screen';
 import { MoodSelector } from '../../components/MoodSelector';
 import { TrendCard } from '../../components/TrendCard';
 import { PlaylistCard } from '../../components/PlaylistCard';
+import { RecommendedArtistCard } from '../../components/RecommendedArtistCard';
 import { RootStackParamList } from '../../navigation/types';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useMoodStore } from '../../store/useMoodStore';
-import { useProfileStore } from '../../store/useProfileStore';
+import { useProfileStore, readTorneoCampeon } from '../../store/useProfileStore';
 import { useTrendStore } from '../../store/useTrendStore';
 import { usePlaylistStore } from '../../store/usePlaylistStore';
+import { useRecommendationsStore } from '../../store/useRecommendationsStore';
 import { ARCHETYPES } from '../../lib/archetypes';
 import { ARCHETYPE_IMAGES } from '../../lib/images';
 import { formatTrend } from '../../lib/trends';
@@ -30,6 +32,8 @@ export function HomeScreen({ navigation }: Props) {
   const fetchTrend = useTrendStore((s) => s.fetch);
   const songs = usePlaylistStore((s) => s.songs);
   const fetchPlaylist = usePlaylistStore((s) => s.fetch);
+  const recommended = useRecommendationsStore((s) => s.artists);
+  const fetchRecommended = useRecommendationsStore((s) => s.fetch);
 
   useEffect(() => {
     if (!userId) return;
@@ -48,8 +52,10 @@ export function HomeScreen({ navigation }: Props) {
     if (!userId || !archetype || !profile) return;
     fetchTrend(userId);
     fetchPlaylist(profile.generos as string[], today ?? 'fiesta');
+    const champion = readTorneoCampeon((profile.flavor as Record<string, unknown>) ?? {});
+    fetchRecommended((profile.generos as string[]) ?? [], champion?.generoId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, archetype, today]);
+  }, [userId, archetype, profile?.generos, profile?.flavor]);
 
   return (
     <Screen>
@@ -108,6 +114,7 @@ export function HomeScreen({ navigation }: Props) {
 
         {trend && <TrendCard trend={formatTrend(trend)} />}
         {songs.length > 0 && <PlaylistCard songs={songs} />}
+        <RecommendedArtistCard artists={recommended} />
       </ScrollView>
     </Screen>
   );

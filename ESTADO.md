@@ -664,6 +664,58 @@ select público para poder contarlo, insert/delete propio). RLS de `announcement
   eran datos reales del proyecto (a diferencia de Corona Capital, que si es real), así que
   no debían quedar como si lo fueran.
 
+### Recomendaciones V1 (motor propio) + Festival generado por gustos — completado y verificado (misma sesión, continuación)
+
+Dos Edge Functions nuevas, siguiendo las decisiones de diseño ya acordadas más arriba en
+esta misma sesión (reusar el índice inverso por género en vez de `genres`/`popularity` de
+Spotify, que no están disponibles en este tier):
+
+- **`recommend-artists`** ([supabase/functions/recommend-artists/index.ts](supabase/functions/recommend-artists/index.ts)):
+  dado `generos` + `championGenreId` (opcional, del Torneo Sonoro), arma el mismo pool de
+  candidatos por género que Torneo Sonoro (`genre:"X"` Search), les da un score (2 si el
+  género coincide con el del campeón, 1 si no) y devuelve el top N ordenado. **No es una
+  similitud coseno literal** — se documentó explícitamente en el código y aquí por qué: no
+  hay `genres`/`popularity` por artista disponibles para comparar contra un vector
+  multidimensional real; es la aproximación más honesta posible con los datos que Spotify sí
+  entrega a este tier. `energia`/`arquetipo` del spec no se usan para puntuar artistas
+  individuales (no existe ninguna fuente de "energía por artista" alcanzable — Audio
+  Features/Analysis está bloqueado por Spotify desde nov. 2024, el propio spec lo menciona).
+  Consumido desde [useRecommendationsStore.ts](src/store/useRecommendationsStore.ts) y
+  mostrado en Home con la tarjeta nueva
+  [RecommendedArtistCard.tsx](src/components/RecommendedArtistCard.tsx) ("Artista
+  recomendado", tal como aparece en el flujo de Home del spec) — un artista destacado con la
+  razón ("porque te gusta X" / "porque tu campeón también es X") y hasta 4 más en fila.
+- **`personalize-festival`** ([supabase/functions/personalize-festival/index.ts](supabase/functions/personalize-festival/index.ts)):
+  "Festival generado por tus gustos" — el spec no tiene una sección propia para esta feature
+  (a diferencia de Torneo Sonoro, que sí tenía su "Fase 2"), así que se interpretó como la
+  misma engine V1 aplicada al line-up **real** de un festival ya cargado
+  (`festival_lineup.artista`) en vez de descubrir artistas nuevos: arma el mismo índice
+  inverso por género que usa el import, y matchea los nombres reales del line-up contra ese
+  índice (match exacto de nombre, no difuso — mismo límite de recall ya documentado para el
+  import). En [FestivalHubScreen.tsx](src/screens/main/FestivalHubScreen.tsx), cada tarjeta
+  de festival con line-up ahora tiene un botón "✨ Tu festival, a tu medida" que llama esto
+  bajo demanda (no automático al cargar, para no disparar una llamada a Spotify por cada
+  festival visible sin que el usuario la pida) y muestra "🎯 Artista · Género" para cada
+  coincidencia bajo "No te lo pierdas".
+- `readTorneoCampeon` se movió de [ProfileScreen.tsx](src/screens/main/ProfileScreen.tsx) a
+  [useProfileStore.ts](src/store/useProfileStore.ts) (exportado) para reusarlo también en
+  Home sin duplicar la lógica de leer el campeón desde `flavor`.
+- **Verificado por curl directo contra ambas funciones** (no por REST con sesión de usuario,
+  porque ninguna de las dos escribe en la base de datos — son puro cálculo/lectura de
+  Spotify, así que no hay RLS ni estado que verificar más allá de la respuesta): 
+  `recommend-artists` con `generos: [electronica, indie]` y `championGenreId: indie` devolvió
+  6 artistas, todos con `generoId: indie` y `matchedChampion: true` (el boost de score
+  funcionando: como el pool de indie por sí solo ya llena el límite de 6, ningún resultado de
+  electronica entra); `personalize-festival` contra el line-up real de 16 artistas de Corona
+  Capital 2026 encontró 1 coincidencia ("Gorillaz" → electronica) — bajo pero esperado y
+  consistente con la limitación de recall ya documentada (solo hay 10 artistas muestreados
+  por género de los cientos que existen).
+- **No se pudo verificar visualmente en el emulador** — mismo loop de ANR de esta sesión (ver
+  "Problemas de entorno"), reintentado dos veces sin éxito tras la pausa documentada más
+  arriba y descartado por tiempo, siguiendo la propia regla que se dejó escrita para la
+  próxima sesión ("no repetir el ciclo más de una o dos veces"). El `tsc` del proyecto
+  completo pasa limpio.
+
 ## Pendiente
 
 - No hay UI para editar nombre/ciudad/fechas de un festival ya creado desde el panel (solo
@@ -714,19 +766,23 @@ select público para poder contarlo, insert/delete propio). RLS de `announcement
   representa géneros que le gustan al usuario, pero vale la pena tenerlo presente si se
   agregan más features que dependan de "el campeón actual" (hoy `flavor.torneo_campeon`
   siempre guarda solo el último).
-- **Sprint 4 — sigue pendiente (decisiones ya tomadas con el usuario en sesión 9, ver esa
-  sección — no hace falta volver a preguntar, solo construir)**:
-  - Recomendaciones V1 (motor propio): reusar el índice inverso por género de Torneo
-    Sonoro/Import en vez de `genres`/`popularity` de Spotify (no disponibles en este tier).
-  - Festival generado por gustos: aplicar esa misma engine V1 al line-up real de un
-    festival (`festival_lineup.artista`) para un mini-itinerario personalizado —
-    interpretación no confirmada explícitamente con el usuario, revisar si al construir
-    aparece una lectura distinta.
-  - Mapa del festival: imagen subida por el admin + pines por escenario (x/y en %, no
+- **Sprint 4 — sigue pendiente**:
+  - **Mapa del festival**: única feature de Sprint 4 sin construir. Diseño ya acordado con
+    el usuario (sesión 9): imagen subida por el admin + pines por escenario (x/y en %, no
     GPS). Requiere crear un bucket de Supabase Storage (no se ha usado en este proyecto
-    todavía) y agregar subida de imágenes al panel admin.
-  - Comentarios por festival y Anuncios y promociones **sí quedaron completos** esta
-    sesión — ver más arriba.
+    todavía) y agregar subida de imágenes al panel admin — no hace falta volver a
+    preguntar, solo construir.
+  - Comentarios por festival, Anuncios y promociones, Recomendaciones V1 y Festival
+    generado por gustos **quedaron completos** esta sesión — ver secciones arriba. La
+    interpretación de "Festival generado por gustos" (aplicar la engine V1 al line-up real
+    de un festival) no se confirmó explícitamente con el usuario porque se desprendía
+    directamente de V1 + Festival Hub sin alternativas razonables — si en el uso real
+    resulta ser otra cosa, ajustar.
+  - Ninguna de las dos features nuevas de esta sesión (Recomendaciones/Festival
+    personalizado) se verificó visualmente en el emulador — bloqueado por el mismo loop de
+    ANR de toda la sesión. Sí se verificó el backend completo por curl directo (no
+    escriben en la base de datos, así que no hay RLS que verificar más allá de la
+    respuesta).
 - **Sprint 4 — dashboard de interés agregado y selección de ganador de rifa** son
   explícitamente Sprint 5 según el spec ("Rifas + selección de ganador") — el panel admin
   de esta sesión solo publica/borra anuncios y muestra el conteo crudo de interesados, sin
@@ -863,11 +919,19 @@ select público para poder contarlo, insert/delete propio). RLS de `announcement
 5. Sponsors/Announcements: tablas `sponsors`/`announcements`/`announcement_interest` y
    panel admin en `/sponsors` y dentro de `/festivals/[id]` — ver sesión 9. Selección de
    ganador de rifa y dashboard de interés agregado quedan para Sprint 5 a propósito.
-6. Siguiente foco sugerido: Sprint 4 — Recomendaciones V1 (motor propio) y Festival
-   generado por gustos (mismo engine, aplicado al line-up real de un festival), después
-   Mapa del festival (necesita un bucket nuevo de Supabase Storage + subida de imágenes en
-   el admin panel, que no existe todavía). Las decisiones de diseño de las tres ya están
-   tomadas con el usuario (sesión 9) — no hace falta volver a preguntar, solo construir.
+6. Edge Functions `recommend-artists` y `personalize-festival` (Recomendaciones V1 /
+   Festival generado por gustos) — código en
+   [supabase/functions/recommend-artists/index.ts](supabase/functions/recommend-artists/index.ts)
+   y [supabase/functions/personalize-festival/index.ts](supabase/functions/personalize-festival/index.ts),
+   mismo patrón de despliegue/secretos que las anteriores. Ninguna escribe en la base de
+   datos (puro cálculo sobre datos de Spotify), verificadas por curl directo, no por REST
+   con sesión de usuario.
+7. Siguiente foco sugerido: **Mapa del festival**, única feature de Sprint 4 que falta.
+   Diseño ya acordado con el usuario (sesión 9): el admin sube una imagen del recinto +
+   coloca pines por escenario (x/y en %); en la app, tocar un pin muestra el line-up de ese
+   escenario. Necesita crear un bucket de Supabase Storage nuevo (no usado en este proyecto
+   todavía) y agregar subida de imágenes al panel admin — no hace falta volver a preguntar,
+   solo construir. Con eso, Sprint 4 queda completo.
    - **Compañero ideal sigue sin definir**: no avanzar en código hasta que el usuario
      confirme o corrija la interpretación propuesta en la sesión 8.
    - **Van dos sesiones seguidas (8 y 9) sin poder probar en físico**: el camino de archivo
@@ -875,6 +939,9 @@ select público para poder contarlo, insert/delete propio). RLS de `announcement
      verificación visual — solo revisión de código + (desde sesión 9) verificación por REST
      del resto del mecanismo de comentarios. Si hay un teléfono físico disponible en algún
      momento, priorizar probar ahí antes que seguir peleando con el emulador.
+   - Tampoco se pudo verificar visualmente Recomendaciones V1/Festival generado por gustos
+     esta sesión, por el mismo motivo — backend ya confirmado por curl, falta la UI en
+     dispositivo.
    - Si se agrega una pantalla de "editar mi perfil" en algún momento (nombre/ciudad), eso
      desbloquea probar "Mi ciudad" en Trends comunitarios con datos reales.
 7. Si el emulador vuelve a entrar en el loop de ANR documentado en "Problemas de entorno"

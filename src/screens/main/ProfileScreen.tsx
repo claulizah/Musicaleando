@@ -7,24 +7,13 @@ import { Screen } from '../../components/Screen';
 import { ArchetypeCard } from '../../components/ArchetypeCard';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { RootStackParamList } from '../../navigation/types';
-import { useProfileStore, TorneoCampeon } from '../../store/useProfileStore';
+import { useProfileStore, readTorneoCampeon } from '../../store/useProfileStore';
 import { useQuizStore } from '../../store/useQuizStore';
 import { useSessionStore } from '../../store/useSessionStore';
 import { ARCHETYPES, GENEROS, GUILTY_PLEASURES, SocialAxis, buildFlavorLine } from '../../lib/archetypes';
 import { ARCHETYPE_IMAGES } from '../../lib/images';
 import { parseListeningHistory, topArtists, fetchImportGenres } from '../../lib/musicImport';
 import { colors, radii, spacing, type } from '../../theme';
-
-// Older test data (before the tournament switched from genres to real
-// artists) stored torneo_campeon as a plain genre id string — treat that
-// shape as "no champion" instead of crashing on the new object fields.
-function readTorneoCampeon(flavor: Record<string, unknown>): TorneoCampeon | undefined {
-  const raw = flavor.torneo_campeon;
-  if (raw && typeof raw === 'object' && 'artistName' in raw) {
-    return raw as TorneoCampeon;
-  }
-  return undefined;
-}
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 

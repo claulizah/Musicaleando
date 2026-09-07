@@ -15,6 +15,17 @@ export type TorneoCampeon = {
   artistImageUrl?: string;
 };
 
+// Older test data (before Torneo Sonoro switched from genres to real
+// artists, session 6) stored torneo_campeon as a plain genre id string —
+// treat that shape as "no champion" instead of crashing on the new fields.
+export function readTorneoCampeon(flavor: Record<string, unknown>): TorneoCampeon | undefined {
+  const raw = flavor.torneo_campeon;
+  if (raw && typeof raw === 'object' && 'artistName' in raw) {
+    return raw as TorneoCampeon;
+  }
+  return undefined;
+}
+
 type ProfileState = {
   profile: MusicProfile | null;
   status: Status;
