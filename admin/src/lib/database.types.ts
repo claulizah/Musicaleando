@@ -22,11 +22,13 @@ export type Database = {
           fecha_inicio: string;
           fecha_fin: string;
           link_boletos: string | null;
+          mapa_url: string | null;
           created_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['festivals']['Row'], 'id' | 'created_at'> & {
+        Insert: Omit<Database['public']['Tables']['festivals']['Row'], 'id' | 'created_at' | 'mapa_url'> & {
           id?: string;
           created_at?: string;
+          mapa_url?: string | null;
         };
         Update: Partial<Database['public']['Tables']['festivals']['Row']>;
         Relationships: [];
@@ -67,6 +69,30 @@ export type Database = {
         };
         Update: Partial<Database['public']['Tables']['sponsors']['Row']>;
         Relationships: [];
+      };
+      festival_map_pins: {
+        Row: {
+          id: string;
+          festival_id: string;
+          escenario: string;
+          x_pct: number;
+          y_pct: number;
+          created_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['festival_map_pins']['Row'], 'id' | 'created_at'> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['festival_map_pins']['Row']>;
+        Relationships: [
+          {
+            foreignKeyName: 'festival_map_pins_festival_id_fkey';
+            columns: ['festival_id'];
+            isOneToOne: false;
+            referencedRelation: 'festivals';
+            referencedColumns: ['id'];
+          },
+        ];
       };
       announcements: {
         Row: {

@@ -247,6 +247,7 @@ export type Database = {
           fecha_inicio: string
           id: string
           link_boletos: string | null
+          mapa_url: string | null
           nombre: string
         }
         Insert: {
@@ -256,6 +257,7 @@ export type Database = {
           fecha_inicio: string
           id?: string
           link_boletos?: string | null
+          mapa_url?: string | null
           nombre: string
         }
         Update: {
@@ -265,9 +267,45 @@ export type Database = {
           fecha_inicio?: string
           id?: string
           link_boletos?: string | null
+          mapa_url?: string | null
           nombre?: string
         }
         Relationships: []
+      }
+      festival_map_pins: {
+        Row: {
+          id: string
+          festival_id: string
+          escenario: string
+          x_pct: number
+          y_pct: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          festival_id: string
+          escenario: string
+          x_pct: number
+          y_pct: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          festival_id?: string
+          escenario?: string
+          x_pct?: number
+          y_pct?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "festival_map_pins_festival_id_fkey"
+            columns: ["festival_id"]
+            isOneToOne: false
+            referencedRelation: "festivals"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       festival_lineup: {
         Row: {

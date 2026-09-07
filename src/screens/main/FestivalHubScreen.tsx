@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Screen } from '../../components/Screen';
 import { RootStackParamList } from '../../navigation/types';
@@ -114,8 +114,11 @@ function FestivalCard({
   onToggleInterest: (announcementId: string) => Promise<void>;
   generos: string[];
 }) {
-  const { festival, myStatus, squadGoingCount, lineup, reactions, feedback, comments, announcements } = entry;
+  const { festival, myStatus, squadGoingCount, lineup, reactions, feedback, comments, announcements, mapPins } =
+    entry;
   const [showLineup, setShowLineup] = useState(false);
+  const [showMap, setShowMap] = useState(false);
+  const [selectedEscenario, setSelectedEscenario] = useState<string | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>(feedback.mine?.tags ?? []);
@@ -208,6 +211,46 @@ function FestivalCard({
               : ''}
           </Text>
         ))}
+
+      {festival.mapa_url && (
+        <View>
+          <Pressable onPress={() => setShowMap((v) => !v)}>
+            <Text style={styles.lineupToggle}>{showMap ? '▾' : '▸'} Mapa del festival</Text>
+          </Pressable>
+          {showMap && (
+            <View style={styles.mapWrap}>
+              <Image source={{ uri: festival.mapa_url }} style={styles.mapImage} resizeMode="contain" />
+              {mapPins.map((pin) => (
+                <Pressable
+                  key={pin.id}
+                  style={[
+                    styles.mapPin,
+                    { left: `${pin.x_pct}%` as const, top: `${pin.y_pct}%` as const },
+                  ]}
+                  onPress={() => setSelectedEscenario(pin.escenario)}
+                >
+                  <Text style={styles.mapPinText}>📍</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          {showMap && selectedEscenario && (
+            <View style={styles.stageCard}>
+              <Text style={styles.stageTitle}>{selectedEscenario}</Text>
+              {lineup
+                .filter((l) => l.escenario === selectedEscenario)
+                .map((l) => (
+                  <Text key={l.id} style={styles.lineupRow}>
+                    {l.artista}
+                  </Text>
+                ))}
+              {lineup.filter((l) => l.escenario === selectedEscenario).length === 0 && (
+                <Text style={styles.hint}>No hay artistas cargados para este escenario.</Text>
+              )}
+            </View>
+          )}
+        </View>
+      )}
 
       {lineup.length > 0 && generos.length > 0 && (
         <View style={styles.personalizeWrap}>
@@ -681,6 +724,39 @@ const styles = StyleSheet.create({
   removeLink: {
     ...type.caption,
     color: colors.textMuted,
+  },
+  mapWrap: {
+    marginTop: spacing.xs,
+    position: 'relative',
+    width: '100%',
+    height: 220,
+    borderRadius: radii.md,
+    overflow: 'hidden',
+    backgroundColor: colors.bg,
+  },
+  mapImage: {
+    width: '100%',
+    height: '100%',
+  },
+  mapPin: {
+    position: 'absolute',
+    transform: [{ translateX: -12 }, { translateY: -12 }],
+  },
+  mapPinText: {
+    fontSize: 22,
+  },
+  stageCard: {
+    marginTop: spacing.xs,
+    backgroundColor: colors.bg,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  stageTitle: {
+    ...type.bodyLg,
+    color: colors.textPrimary,
   },
   personalizeWrap: {
     marginTop: spacing.xs,

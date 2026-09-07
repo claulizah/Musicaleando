@@ -26,6 +26,7 @@ export type FestivalWithIntent = {
   feedback: FestivalFeedbackSummary;
   comments: Tables<'festival_comments'>[];
   announcements: AnnouncementWithInterest[];
+  mapPins: Tables<'festival_map_pins'>[];
 };
 
 type Status = 'idle' | 'loading' | 'ready' | 'error';
@@ -148,6 +149,16 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
       return;
     }
 
+    const { data: mapPinRows, error: mapPinErr } = await supabase
+      .from('festival_map_pins')
+      .select('*')
+      .in('festival_id', festivalIds);
+
+    if (mapPinErr) {
+      set({ status: 'error', error: mapPinErr.message });
+      return;
+    }
+
     const festivals: FestivalWithIntent[] = (festivalRows ?? []).map((festival) => {
       const rowsForFestival = (intentRows ?? []).filter((i) => i.festival_id === festival.id);
       const mine = rowsForFestival.find((i) => i.user_id === userId);
@@ -178,6 +189,8 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
           };
         });
 
+      const mapPins = (mapPinRows ?? []).filter((p) => p.festival_id === festival.id);
+
       return {
         festival,
         myStatus: (mine?.status as FestivalStatus) ?? null,
@@ -187,6 +200,7 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
         feedback: { mine: myFeedback },
         comments,
         announcements,
+        mapPins,
       };
     });
 

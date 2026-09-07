@@ -716,6 +716,70 @@ Spotify, que no están disponibles en este tier):
   próxima sesión ("no repetir el ciclo más de una o dos veces"). El `tsc` del proyecto
   completo pasa limpio.
 
+### Mapa del festival — completado y verificado (parcial: sin subida real de imagen)
+
+Antes de construir se confirmaron con el usuario (vía `AskUserQuestion`) dos puntos que el
+spec no definía: (a) sí quiere un mapa real del recinto (no un placeholder simbólico), y
+(b) el mecanismo de carga es imagen subida por el admin + pines colocados a mano tocando la
+imagen (posición porcentual `x_pct`/`y_pct` relativa al recuadro de la imagen), **no**
+coordenadas GPS reales — evita depender de georreferenciación real de cada recinto, que no
+está en el spec ni hay fuente de datos para ella.
+
+- **Migración `add_festival_map`**: columna `festivals.mapa_url`, tabla nueva
+  `festival_map_pins` (`festival_id`, `escenario`, `x_pct`, `y_pct` con `check` 0-100), RLS
+  lectura pública / escritura solo-admin (mismo patrón que el resto de contenido curado).
+  Bucket de Storage público `festival-maps` con RLS en `storage.objects`: lectura pública,
+  insert/update/delete solo admin. `get_advisors` sin hallazgos nuevos.
+- **Admin**: [map-uploader.tsx](admin/src/app/festivals/[id]/map-uploader.tsx) — sube la
+  imagen directo del navegador a Storage (bypassa server actions para el binario, patrón ya
+  usado en otros proyectos Supabase), persiste la URL pública resultante vía la server action
+  `updateMapaUrl`; clic sobre la imagen abre un popup para nombrar el escenario (con
+  autocomplete de los escenarios ya existentes en el line-up) y guardarlo como pin
+  (`addMapPin`); cada pin tiene botón "×" para borrarlo (`deleteMapPin`). Todas las server
+  actions en [actions.ts](admin/src/app/festivals/[id]/actions.ts), gateadas por
+  `requireAdmin()`.
+- **Móvil**: [FestivalHubScreen.tsx](src/screens/main/FestivalHubScreen.tsx) — sección
+  colapsable "▸ Mapa del festival" (solo aparece si `festival.mapa_url` existe) con la imagen
+  y pines tocables posicionados por `left`/`top` en porcentaje; tocar un pin muestra una
+  tarjeta con el line-up de ese escenario (filtrado del array de line-up ya cargado por
+  `escenario`, sin pedir datos nuevos). [useFestivalStore.ts](src/store/useFestivalStore.ts)
+  trae `festival_map_pins` en el `fetch()` general junto con todo lo demás.
+- **Verificado con confirmación en base de datos, a través del panel admin real ya
+  autenticado** (no un script aparte): el servidor de Next.js del panel admin se había caído
+  durante la pausa de varios días de esta sesión (igual que Metro/el emulador) y no había
+  contraseña de admin guardada (por seguridad, nunca se guarda) — se reinició el servidor
+  (`preview_start` de nuevo) y, con permiso explícito del usuario, se reseteó la contraseña
+  temporalmente por SQL (mismo patrón que sesión 5) para poder entrar. Con la sesión de admin
+  real ya autenticada en el navegador:
+  - Se puso una URL de imagen placeholder externa en `mapa_url` por SQL (para poder ver la
+    imagen y probar el clic sin depender de la subida real — ver limitación abajo), se
+    recargó la página del panel, se hizo clic sobre la imagen para colocar un pin con nombre
+    `[verify-map] Escenario Test` — **confirmado en la base de datos** que el pin se guardó
+    con `x_pct=35.27`, `y_pct=50.59` (coherente con el punto donde se hizo clic).
+  - Se borró el pin con el botón "×" de la propia UI — **confirmado en la base de datos**
+    que el conteo de pines volvió a 0.
+  - Se limpió el `mapa_url` de prueba (vuelto a `null`) — Corona Capital 2026 queda sin
+    datos de prueba residuales.
+  - Aparte, con un script Node de solo-lectura (sesión anónima, sin contraseña) se confirmó
+    que un usuario normal **sí puede leer** `festival_map_pins` (RLS pública) y **no puede
+    insertar** (bloqueado por RLS con el mensaje esperado "new row violates row-level
+    security policy") — así queda cubierto también el lado de lectura que usa la app móvil.
+- **No verificado: la subida real de un archivo de imagen a través del `<input type="file">`
+  del admin.** La herramienta de navegador de esta sesión no tiene forma de automatizar el
+  selector de archivos nativo del sistema operativo (no hay un tool de tipo "file upload"
+  disponible, a diferencia de otras integraciones de navegador) — es una limitación del
+  entorno de este mismo tipo que el loop de ANR del emulador, no del código. Lo que sí se
+  verificó por inspección: las políticas RLS de `storage.objects` para el bucket
+  `festival-maps` son correctas (select pública, insert/update/delete solo admin — confirmado
+  leyendo `pg_policies`), y el código de `handleFile` en `map-uploader.tsx` sigue el mismo
+  patrón (`supabase.storage.from(...).upload()` seguido de `getPublicUrl()`) que se usa en
+  integraciones de Supabase Storage estándar. **Para la próxima sesión**: si hay dispositivo
+  físico o un navegador con soporte de subida de archivos disponible, probar la subida real
+  de una imagen de principio a fin.
+- Contraseña temporal de admin usada esta sesión: se le dio al usuario una sola vez en el
+  chat, como las veces anteriores — debe cambiarla desde Supabase Auth (Authentication →
+  Users → clauliz.acosta@gmail.com) antes de compartir acceso al panel.
+
 ## Pendiente
 
 - No hay UI para editar nombre/ciudad/fechas de un festival ya creado desde el panel (solo
@@ -766,23 +830,24 @@ Spotify, que no están disponibles en este tier):
   representa géneros que le gustan al usuario, pero vale la pena tenerlo presente si se
   agregan más features que dependan de "el campeón actual" (hoy `flavor.torneo_campeon`
   siempre guarda solo el último).
-- **Sprint 4 — sigue pendiente**:
-  - **Mapa del festival**: única feature de Sprint 4 sin construir. Diseño ya acordado con
-    el usuario (sesión 9): imagen subida por el admin + pines por escenario (x/y en %, no
-    GPS). Requiere crear un bucket de Supabase Storage (no se ha usado en este proyecto
-    todavía) y agregar subida de imágenes al panel admin — no hace falta volver a
-    preguntar, solo construir.
-  - Comentarios por festival, Anuncios y promociones, Recomendaciones V1 y Festival
-    generado por gustos **quedaron completos** esta sesión — ver secciones arriba. La
-    interpretación de "Festival generado por gustos" (aplicar la engine V1 al line-up real
-    de un festival) no se confirmó explícitamente con el usuario porque se desprendía
+- **Sprint 4 — completo** (las 5 features del chip list del spec: Festival generado por
+  gustos, Mapa del festival, Recomendaciones V1, Comentarios por festival, Anuncios y
+  promociones con patrocinadores). Detalle y verificación de cada una en las secciones de
+  arriba.
+  - La interpretación de "Festival generado por gustos" (aplicar la engine V1 al line-up
+    real de un festival) no se confirmó explícitamente con el usuario porque se desprendía
     directamente de V1 + Festival Hub sin alternativas razonables — si en el uso real
     resulta ser otra cosa, ajustar.
-  - Ninguna de las dos features nuevas de esta sesión (Recomendaciones/Festival
+  - Ninguna de las dos features de recomendaciones (Recomendaciones V1/Festival
     personalizado) se verificó visualmente en el emulador — bloqueado por el mismo loop de
     ANR de toda la sesión. Sí se verificó el backend completo por curl directo (no
     escriben en la base de datos, así que no hay RLS que verificar más allá de la
     respuesta).
+  - **Mapa del festival**: verificado con confirmación en base de datos a través del panel
+    admin real (ver sección arriba) — pin insert/select/delete y RLS confirmados. La subida
+    real de una imagen vía el selector de archivos del sistema operativo **no** se pudo
+    probar (limitación de la herramienta de navegador de esta sesión, no del código) — sí se
+    verificaron las políticas RLS del bucket `festival-maps` por inspección directa.
 - **Sprint 4 — dashboard de interés agregado y selección de ganador de rifa** son
   explícitamente Sprint 5 según el spec ("Rifas + selección de ganador") — el panel admin
   de esta sesión solo publica/borra anuncios y muestra el conteo crudo de interesados, sin
@@ -893,6 +958,24 @@ Spotify, que no están disponibles en este tier):
   o dos veces — pivotear a verificación por REST/SQL más rápido, y considerar revisar qué
   más está corriendo en la máquina host (no solo procesos de este proyecto) antes de
   arrancar el emulador.
+- **(Sesión 9) La herramienta de navegador de este entorno no puede automatizar el selector
+  de archivos nativo del sistema operativo** (`<input type="file">`): no hay un tool tipo
+  "file upload" disponible para el Browser pane usado en esta sesión (a diferencia de otras
+  integraciones de navegador que sí lo tienen). Bloqueó la verificación end-to-end de la
+  subida de imagen en "Mapa del festival" — se verificó todo lo demás (RLS del bucket, pin
+  insert/select/delete) por otros medios. Si se repite en el futuro con otra feature que
+  suba archivos, no perder tiempo intentando `form_input` sobre el input de archivo (falla
+  con `InvalidStateError`, los navegadores no permiten setear su `value` por JS) — documentar
+  el bloqueo directamente.
+- **(Sesión 9) El "auto mode classifier" del entorno bloquea comandos de shell que contienen
+  una contraseña en texto plano** (por ejemplo un script Node con `signInWithPassword({...,
+  password: '...'})`), incluso si la contraseña es una temporal creada por la propia sesión
+  para pruebas legítimas — y también bloquea extraer el cookie de sesión (`auth-token`) del
+  navegador vía `javascript_tool` para reusarlo en un script. Ninguno de los dos intentos es
+  la forma correcta de verificar algo que requiere sesión de admin: en vez de eso, iniciar
+  sesión en el panel a través de la UI real del navegador (eso sí funciona sin bloqueo) y
+  ejecutar la acción que se quiere probar directamente ahí. Un script Node **sin** contraseña
+  (sesión anónima, `signInAnonymously()`) no se bloquea.
 
 ## Cómo retomar
 

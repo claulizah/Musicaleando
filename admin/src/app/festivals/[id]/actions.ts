@@ -127,3 +127,59 @@ export async function deleteAnnouncement(
   revalidatePath(`/festivals/${festivalId}`);
   return {};
 }
+
+// The image itself is uploaded client-side straight to Storage (see
+// map-uploader.tsx) — this action only persists the resulting public URL,
+// so it stays consistent with every other write in this app going through
+// requireAdmin() + a server action.
+export async function updateMapaUrl(festivalId: string, mapaUrl: string): Promise<{ error?: string }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) return { error: 'No autorizado.' };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from('festivals').update({ mapa_url: mapaUrl }).eq('id', festivalId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/festivals/${festivalId}`);
+  return {};
+}
+
+export async function addMapPin(
+  festivalId: string,
+  escenario: string,
+  xPct: number,
+  yPct: number,
+): Promise<{ error?: string }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) return { error: 'No autorizado.' };
+
+  const trimmed = escenario.trim();
+  if (!trimmed) return { error: 'El pin necesita un nombre de escenario.' };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from('festival_map_pins').insert({
+    festival_id: festivalId,
+    escenario: trimmed,
+    x_pct: Math.round(xPct * 100) / 100,
+    y_pct: Math.round(yPct * 100) / 100,
+  });
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/festivals/${festivalId}`);
+  return {};
+}
+
+export async function deleteMapPin(festivalId: string, pinId: string): Promise<{ error?: string }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) return { error: 'No autorizado.' };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from('festival_map_pins').delete().eq('id', pinId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/festivals/${festivalId}`);
+  return {};
+}

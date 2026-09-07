@@ -6,6 +6,7 @@ import { LinkBoletosForm } from './link-boletos-form';
 import { DeleteLineupRowButton } from './delete-lineup-row-button';
 import { AnnouncementForm } from './announcement-form';
 import { DeleteAnnouncementButton } from './delete-announcement-button';
+import { MapUploader } from './map-uploader';
 
 const TIPO_LABEL: Record<string, string> = {
   simple: '📣 Anuncio',
@@ -32,7 +33,7 @@ export default async function FestivalDetailPage({
 
   const { data: festival } = await supabase
     .from('festivals')
-    .select('id, nombre, ciudad, fecha_inicio, fecha_fin, link_boletos')
+    .select('id, nombre, ciudad, fecha_inicio, fecha_fin, link_boletos, mapa_url')
     .eq('id', id)
     .maybeSingle();
 
@@ -58,6 +59,14 @@ export default async function FestivalDetailPage({
     : { data: [] as { announcement_id: string }[] };
 
   const { data: sponsors } = await supabase.from('sponsors').select('nombre').order('nombre');
+
+  const { data: mapPins } = await supabase
+    .from('festival_map_pins')
+    .select('id, escenario, x_pct, y_pct')
+    .eq('festival_id', id)
+    .order('created_at');
+
+  const escenarios = [...new Set((lineup ?? []).map((l) => l.escenario).filter((e): e is string => !!e))];
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
@@ -137,6 +146,16 @@ export default async function FestivalDetailPage({
         </ul>
 
         <AnnouncementForm festivalId={festival.id} sponsorNames={(sponsors ?? []).map((s) => s.nombre)} />
+      </section>
+
+      <section className="mt-8">
+        <h2 className="mb-2 font-medium">Mapa del festival</h2>
+        <MapUploader
+          festivalId={festival.id}
+          mapaUrl={festival.mapa_url}
+          pins={mapPins ?? []}
+          escenarios={escenarios}
+        />
       </section>
     </main>
   );
