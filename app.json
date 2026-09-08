@@ -41,7 +41,8 @@
         {
           "photosPermission": "Musicaleando necesita acceso a tus fotos para agregarlas a tu álbum de conciertos."
         }
-      ]
+      ],
+      "@sentry/react-native"
     ]
   }
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import * as Sentry from '@sentry/react-native';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -47,7 +48,7 @@ const navTheme: Theme = {
   },
 };
 
-export default function App() {
+function App() {
   const [fontsLoaded] = useFonts(fontsToLoad);
   const [minTimeElapsed, setMinTimeElapsed] = useState(false);
 
@@ -128,3 +129,5 @@ export default function App() {
     </GestureHandlerRootView>
   );
 }
+
+export default Sentry.wrap(App);

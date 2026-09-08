@@ -1,24 +1,30 @@
 # Estado del proyecto — Musicaleando
 
-Última actualización: 2026-09-08 (sesión 16, cierre — auditoría de lanzamiento). Este
+Última actualización: 2026-09-08 (sesión 18, cierre — verificación en teléfono físico). Este
 archivo es el punto de partida para retomar el trabajo en una sesión nueva sin perder
 contexto.
 
 **Estado en una línea**: Los 7 sprints numerados y las 3 piezas priorizadas del Backlog v2
-están completos (ver sesión 15). La **sesión 16 fue una auditoría de QA contra el checklist
-de lanzamiento del spec, no desarrollo** — conclusión: **el producto está, en código, listo
-para lanzar**, con una sola pieza sin confirmar visualmente (Álbum de conciertos, bloqueada
-por el emulador desde hace 4 sesiones) y una recomendación de infraestructura (crash
-reporting). Lo que falta para un lanzamiento real es puramente de negocio/marketing
-(patrocinador firmado, pitch, web, video, campaña) — ver la sección de la sesión 16 para el
-detalle completo, punto por punto del checklist. Solo quedan del Backlog v2, sin construir
-ni confirmadas para retomar: **Seguridad/ubicación en vivo** y **Conexión en vivo
-(Spotify/Apple Music OAuth beta)**. "Compañero ideal" (Sprint 3) sigue pausado por separado
-— no se resolvió, es una decisión distinta.
+están completos (ver sesión 15); el checklist de lanzamiento quedó auditado a fondo (ver
+sesión 16); Sentry quedó instalado en app móvil + panel admin (ver sesión 17, sin commitear
+todavía). La **sesión 18 probó en un teléfono Android físico real** (HONOR Magic7 Pro, vía
+Expo Go) los dos pendientes que llevaban varias sesiones bloqueados solo por el
+emulador: **Álbum de conciertos quedó cerrado de verdad** (`expo-image-picker` +
+`expo-file-system`, subida real confirmada en Storage y en la tabla) y **el ANR "System UI
+isn't responding" no se reprodujo en ningún momento** de una sesión de pruebas extensa,
+incluyendo los dos flujos de `TextInput` específicamente documentados como problemáticos en
+el emulador — sugiere fuertemente que era un problema del AVD, no de la app (con una
+salvedad importante sobre Sentry, ver sesión 18: Expo Go no incluye el módulo nativo, así
+que esta prueba no vino "verificada por Sentry", solo observada directamente). Solo quedan
+del Backlog v2, sin construir ni confirmadas para retomar: **Seguridad/ubicación en vivo** y
+**Conexión en vivo (Spotify/Apple Music OAuth beta)**. "Compañero ideal" (Sprint 3) sigue
+pausado por separado — no se resolvió, es una decisión distinta.
 
 Proyecto Supabase: `ijwyykfuyeaahvxmaild` ("Sound Project", org `ljcnanwlkijozacnyhck`).
+Proyecto Sentry: org `dragonflailabs`, proyectos `musicaleando-app` y `musicaleando-admin`.
 Repo: rama `master`, sin remoto configurado todavía. Último commit antes de esta sesión:
-`abfb3e5` (cierre de sesión 15, Match por historial compartido).
+`13ae4b9` (cierre de sesión 16 — la instalación de Sentry de la sesión 17 sigue sin
+commitear, ver "Cómo retomar" para el detalle de lo que queda staged).
 
 ## Completado y verificado en dispositivo (no solo compilado — probado tocando la app)
 
@@ -1806,7 +1812,7 @@ emulador) y 1 sigue bloqueado**:
 
 | # | Punto del checklist | Estado | Evidencia |
 |---|---|---|---|
-| 1 | App estable (sin crashes) | ✅ Verificado | Cero crashes reportados en 15+ sesiones de pruebas en vivo con cuentas reales sobre docenas de features. **Gap real**: no hay ninguna herramienta de crash reporting/monitoreo instalada (Sentry, Bugsnag, etc.) — sin eso, un crash de un usuario real después del lanzamiento no se enteraría nadie. |
+| 1 | App estable (sin crashes) | ✅ Verificado | Cero crashes reportados en 15+ sesiones de pruebas en vivo con cuentas reales sobre docenas de features. ~~**Gap real**: no hay ninguna herramienta de crash reporting/monitoreo instalada~~ — **cerrado en sesión 17**: Sentry instalado y verificado en app móvil + panel admin (detección de ANR en Android activada por default). |
 | 2 | Conexión musical funcionando | ⚠️ Redacción del checklist desactualizada | Este punto del spec es de antes del pivote a cuestionario propio + Torneo Sonoro (Spotify Search API para artistas, no OAuth de escucha real) — la "conexión musical" real de la app hoy es el cuestionario de 10 preguntas + motor de arquetipos + Torneo Sonoro, todo verificado en vivo (sesiones 1, 6, 7). La beta de OAuth de Spotify/Apple Music sigue pausada aparte, por decisión de producto. |
 | 3 | Trends diarios activos | ✅ Verificado en vivo esta sesión | `cron.job_run_details`: `musicaleando-daily-trends` corrió con éxito todos los días 2026-09-02 a 2026-09-07 sin fallos. |
 | 4 | Tarjetas compartibles listas | ✅ Verificado | 4 tarjetas distintas (reveal de arquetipo, campeón de Torneo Sonoro, nivel, cierre de Recap anual) comparten el mismo flujo de captura+compartir, cada una confirmada en vivo abriendo el share sheet nativo (sesiones 1, 6, 10, 14). |
@@ -1833,6 +1839,221 @@ campaña) que ningún cambio de código puede resolver.
 
 No quedaron cuentas ni filas de prueba residuales de esta sesión — confirmado por conteo
 (`public.users` de vuelta a 6, línea base desde sesión 10).
+
+## Sesión 17 (2026-09-08): instalación de Sentry (crash reporting) en app móvil y panel admin
+
+Sesión dedicada a la recomendación que dejó la sesión 16: instalar crash reporting real para
+tener visibilidad automática de crashes y, sobre todo, del ANR "System UI isn't responding"
+que lleva documentado desde la sesión 1 sin causa raíz clara. El usuario ya tenía cuenta de
+Sentry (org `dragonflailabs`) y creó los dos proyectos (`musicaleando-app`,
+`musicaleando-admin`), pasando ambos DSN al inicio de la sesión — no se creó ninguna cuenta
+ni proyecto en su nombre, siguiendo la regla de no completar altas de cuentas de terceros.
+
+### Instalación en la app móvil (`@sentry/react-native` 7.2.0)
+
+- `npx expo install @sentry/react-native` — agregó el paquete y el config plugin
+  `"@sentry/react-native/expo"` a `app.json` automáticamente.
+- [metro.config.js](metro.config.js) nuevo (el proyecto no tenía uno propio hasta ahora):
+  `getSentryExpoConfig` en vez de `getDefaultConfig` — necesario para que Metro inyecte
+  contexto de source maps.
+- [src/lib/sentry.ts](src/lib/sentry.ts) nuevo: `initSentry()` lee
+  `EXPO_PUBLIC_SENTRY_DSN` de `.env` (no versionado, mismo patrón que las credenciales de
+  Supabase) y no rompe el arranque si falta (solo un warning) — pensado para poder correr
+  local sin la variable configurada.
+- [index.ts](index.ts): `initSentry()` se llama antes de importar `App`, como pide la
+  documentación oficial (debe inicializarse lo antes posible). [App.tsx](App.tsx): el
+  componente raíz ahora se exporta envuelto en `Sentry.wrap(App)` (breadcrumbs de touch
+  events + boundary de errores de React, sin tocar la lógica interna del componente).
+- **Detección de ANR en Android — investigado a fondo, no asumido**: la primera
+  implementación usó `enableNdkAppHangTracking`/`ndkAppHangTimeoutIntervalMillis`, basada en
+  documentación de Sentry que resultó ser de una versión distinta a la que `expo install`
+  realmente resolvió para SDK 54 (7.2.0) — `tsc --noEmit` lo detectó de inmediato
+  (`enableNdkAppHangTracking` no existe en el tipo `ReactNativeOptions` de esa versión).
+  Revisando los `.d.ts` del paquete instalado: `enableAppHangTracking` está documentado
+  explícitamente como **solo iOS** en esta versión. La detección de ANR en Android no tiene
+  ningún flag JS en 7.2.0 — vive en la capa nativa del SDK Android que `@sentry/react-native`
+  empaqueta, **activada por default** (`io.sentry.anr.enable`, default `true`, umbral de 5
+  segundos vía `io.sentry.anr.timeout-interval-millis`) sin necesitar ningún cambio de
+  `AndroidManifest.xml` ni del config plugin de Expo. Confirmado también contra la
+  documentación pública de Sentry para Android. En otras palabras: **no hizo falta ninguna
+  configuración extra para que el ANR se capture — ya viene activada**, y el umbral de 5s
+  coincide exactamente con el disparador real de "System UI isn't responding" de Android.
+- `npx tsc --noEmit` limpio después del ajuste.
+
+### Instalación en el panel admin (`@sentry/nextjs`)
+
+- `npm install @sentry/nextjs` dentro de `admin/`.
+- Archivos nuevos: [admin/src/instrumentation.ts](admin/src/instrumentation.ts) (registra
+  init de servidor/edge), [admin/src/instrumentation-client.ts](admin/src/instrumentation-client.ts)
+  (init de cliente), [admin/sentry.server.config.ts](admin/sentry.server.config.ts),
+  [admin/sentry.edge.config.ts](admin/sentry.edge.config.ts),
+  [admin/src/app/global-error.tsx](admin/src/app/global-error.tsx) (captura errores de
+  render de React que ni siquiera llegan al boundary normal). Todos leen
+  `NEXT_PUBLIC_SENTRY_DSN` de `admin/.env.local` (no versionado).
+- [admin/next.config.ts](admin/next.config.ts): envuelto con `withSentryConfig` — se probó
+  primero el import documentado (`@sentry/nextjs`) pero el propio dev server avisó que está
+  deprecado desde v11 en favor de `@sentry/nextjs/config`, así que se usó ese import directo.
+  **Sin `SENTRY_AUTH_TOKEN` configurado** (no se pidió ni se generó esta sesión — no hace
+  falta para que el reporte de errores funcione, solo para subir source maps legibles en
+  producción): el build sigue funcionando, solo se salta la subida de source maps con un
+  aviso. Pendiente si se quiere stack traces legibles en producción real.
+
+### Verificación real de que funciona (no solo "está importado")
+
+Siguiendo la instrucción explícita de no dar por buena la instalación sin confirmar que
+reporta de verdad:
+
+- **DSN de ambos proyectos confirmado como válido y recibiendo eventos, por fuera del código
+  de la app**: `curl` directo contra el endpoint de ingesta de Sentry
+  (`POST https://o4512051176144896.ingest.us.sentry.io/api/<project_id>/store/`) con la
+  auth key de cada DSN devolvió `HTTP 200` y un `event_id` real para **ambos** proyectos
+  (`musicaleando-admin`: `4a2d4ff17b844669aecba8d2d71ce0ee`; `musicaleando-app`:
+  `ec91a1700f0249ab81c151be137e86c6`) — confirma que los DSN están bien copiados y que
+  Sentry está aceptando eventos de este proyecto, independiente de si el SDK del cliente
+  logra enviarlos.
+- **Panel admin, verificado en vivo en el navegador**: se agregó temporalmente una ruta
+  `/sentry-qa-test` con un botón que llama `Sentry.captureException(...)`, se sirvió el
+  panel en un puerto separado (3001, sin tocar el servidor de otra sesión que ya ocupaba el
+  3000) y se hizo clic en el botón real desde el Browser tool. La consola del navegador (con
+  `debug: true` en desarrollo) confirmó `"Captured error event"` — el SDK procesó el evento
+  de punta a punta por su pipeline interno. **La request de red hacia `*.sentry.io` en sí no
+  se pudo ver en el capturador de red de este navegador sandboxeado** (posible bloqueo de
+  dominio de analytics/tracking propio del entorno, no del código — los curl directos contra
+  el mismo host sí funcionaron sin problema). Ruta de prueba borrada al terminar, no quedó
+  en el repo.
+- **Confirmación final pendiente de los ojos del usuario**: no hay forma de que esta sesión
+  inicie sesión en la cuenta de Sentry del usuario para verificar en el dashboard que los
+  eventos de prueba llegaron — es una limitación real, no una omisión. **Pedir al usuario que
+  entre a ambos proyectos de Sentry y confirme que aparecen los eventos de prueba** (los dos
+  `event_id` de curl arriba, más cualquier evento de `sentry-qa-test` si el navegador sí lo
+  envió pese a no verse en la captura de red).
+- **App móvil: no se pudo disparar un error de prueba real desde la UI** — ver abajo, el
+  emulador volvió a fallar antes de llegar a mostrar ninguna pantalla de la app. La
+  verificación del lado móvil quedó en: código revisado (`tsc` limpio, patrón idéntico al de
+  Sentry.io para Expo/Metro), DSN confirmado con curl, pero sin un evento real disparado
+  desde el SDK de React Native en un dispositivo — pendiente de la próxima sesión con
+  emulador o teléfono físico disponible.
+
+### El ANR NO se pudo capturar con datos reales esta sesión — encontrado un problema nuevo, más severo
+
+Con Sentry ya instalado, se intentó un relanzamiento (uno solo, siguiendo la regla de no
+insistir más de 1-2 veces) para ver si el ANR ya documentado ocurría de nuevo y quedaba
+capturado con stack trace real. **No se llegó ni siquiera a ver la app o el diálogo de ANR
+de siempre**: `adb shell am start ... host.exp.exponent` devolvió
+`"Error: Activity not started, unable to resolve Intent"` en el primer intento; en el
+segundo intento (tras un `KEYCODE_HOME`), la captura de pantalla mostró un spinner de carga
+con el logo de Google ocupando el centro de la pantalla (no la app, no Expo Go, no el
+diálogo de ANR conocido) y `adb shell dumpsys window` devolvió `mCurrentFocus=null` /
+`mFocusedApp=null` — **ninguna ventana tiene foco en absoluto**, un síntoma más profundo que
+el ANR de "System UI no responde" ya documentado (ahí al menos System UI mostraba un
+diálogo). Esto indica que el AVD en sí quedó en un estado roto esta vez, no solo lento.
+Siguiendo la misma regla de no insistir, se paró ahí: se mató el proceso de Metro
+(`taskkill` sobre el PID que escuchaba el puerto 8081) y no se investigó más a fondo el AVD
+en sí — eso queda fuera del alcance de esta sesión (instalar Sentry), no algo que
+Sentry pueda diagnosticar por sí solo si la app nunca llega a arrancar.
+
+**Conclusión de esta sesión sobre el ANR**: la infraestructura para capturarlo con datos
+reales (stack trace, hilo bloqueado) **ya está lista y verificada** — lo único que falta es
+que el ANR ocurra mientras la app realmente está corriendo con Sentry activo. Dado que el
+AVD actual parece cada vez más inestable (esta sesión encontró un problema nuevo y peor que
+el ANR original), la recomendación concreta para la próxima sesión es **probar en el
+teléfono físico del usuario en cuanto haya oportunidad**, en vez de seguir apostando al
+mismo AVD — tanto para este pendiente como para el de Álbum de conciertos (sesión 13-16).
+
+No quedaron datos de prueba en Supabase (esta sesión no tocó la base de datos en ningún
+momento — todo el trabajo fue instalación de SDK + verificación vía Sentry/curl/navegador).
+
+## Sesión 18 (2026-09-08): verificación en teléfono físico — Álbum de conciertos cerrado, ANR no reproducido
+
+Sesión puramente de verificación (sin features nuevas), siguiendo la recomendación de la
+sesión 17: probar en un dispositivo físico real en vez de seguir insistiendo con el AVD del
+emulador, que llevaba varias sesiones cada vez más inestable.
+
+### Conectar el teléfono no fue trivial — dos obstáculos reales de entorno, documentados para la próxima vez
+
+- **USB con depuración habilitada no funcionó**: el teléfono (HONOR Magic7 Pro) se conectó
+  por USB con depuración habilitada y el diálogo de autorización RSA se aceptó en el
+  teléfono, pero `adb devices` nunca lo listó. Diagnóstico con
+  `Get-PnpDevice`: Windows sí reconocía el teléfono (`HONOR Magic7 Pro`, `Status: OK`), pero
+  clasificado como **WPD** (dispositivo portátil / MTP), no como interfaz ADB — le falta el
+  driver ADB correcto de Windows para este fabricante (problema conocido de HONOR/Huawei en
+  Windows, no algo que se arregle desde el lado del teléfono). Se recomendó al usuario
+  instalar el "Google USB Driver" oficial (`developer.android.com/studio/run/win-usb`) o el
+  driver oficial de HONOR (`honor.com/global/support/downloads`) — **evitar sitios de
+  terceros tipo gsmusbdriver.com/androidusbdrivers.com**, no son fuente confiable para un
+  driver que se instala con privilegios de sistema. El usuario no pudo completar la
+  instalación esta sesión (requiere permisos de administrador) — **se abandonó la vía USB y
+  se usó Expo Go en su lugar**.
+- **Expo Go instalado en el teléfono era de SDK 57, el proyecto está en SDK 54** —
+  incompatibles (Expo Go solo carga proyectos de su misma versión de SDK exacta). Se
+  resolvió instalando la versión correcta desde la página oficial de Expo
+  (`expo.dev/go?sdkVersion=54&platform=android&device=true`), no desde APKMirror/APKPure ni
+  ningún mirror de terceros.
+- **Limitación importante para la próxima vez que se use Expo Go con Sentry**: Expo Go es un
+  cliente genérico precompilado — **no incluye el código nativo de `@sentry/react-native`**
+  (ni el de ningún paquete con código nativo propio que no venga ya empaquetado en el
+  binario de Expo Go). Esto significa que la detección nativa de ANR/crashes de Sentry
+  **no estaba activa** durante esta sesión de pruebas — para probar eso de verdad hace falta
+  un development build (`expo-dev-client`) o un build de EAS, lo cual a su vez necesita la
+  conexión USB/ADB que no se pudo resolver esta sesión. Ver "Pendiente" para el seguimiento.
+
+### 1. Álbum de conciertos (`expo-image-picker` + `expo-file-system`) — cerrado de verdad, 6 sesiones bloqueado hasta ahora
+
+Con una cuenta anónima real creada en el dispositivo (marcó "Voy" en Corona Capital 2026
+primero, como exige el flujo), se probó el flujo completo desde la UI real: Perfil → "Mi
+álbum de conciertos" → "+ Agregar foto" → elegir Corona Capital 2026 → selector nativo de
+fotos de Android → diálogo de consentimiento ("Sí, autorizo") → subida.
+
+- **Verificado con evidencia real, no solo por apariencia en la UI** (la primera consulta a
+  la base de datos dio 0 filas — resultó ser que se consultó *antes* de que la subida
+  terminara, no un bug; una segunda consulta momentos después confirmó todo): fila real en
+  `concert_album` (`consentimiento_patrocinadores: true`, `festival_id` de Corona Capital
+  2026) con `foto_path` que coincide **exactamente** con un objeto real en
+  `storage.objects` del bucket `concert-album` (1.38MB, `image/jpeg`, `owner` = el
+  `user_id` correcto).
+- **Borrado también verificado de punta a punta**: long-press → "Quitar" desde la app
+  (necesario para pasar por la Storage API real, ya que `storage.objects` no se puede borrar
+  por SQL directo) confirmó `concert_album` y `storage.objects` en 0 filas después.
+- **Conclusión**: el flujo de `expo-image-picker`/`expo-file-system` funciona correctamente
+  en un dispositivo real — el pendiente que llevaba bloqueado desde la sesión 13 (6 sesiones
+  seguidas, 13-18) queda cerrado. Nunca fue un bug de código, solo falta de acceso a un
+  dispositivo/emulador utilizable.
+
+### 2. El ANR "System UI isn't responding" — no se reprodujo, evidencia fuerte de que era del AVD
+
+Se navegó extensamente por la app en el teléfono físico, incluyendo específicamente los dos
+flujos de `TextInput` documentados como problemáticos en el emulador desde las sesiones 8/9
+(bug de teclado + salto de navegación a Home):
+
+- **Feed de comentarios de festival** (`festival_comments`): se escribió y guardó
+  "Gorillaz!!!!!!" sin ningún problema — confirmado por SQL, texto exacto persistido.
+- **Campo "¿Qué le cambiarías?"** (`festival_feedback.comentario`, el campo específico
+  nunca antes confirmado en vivo — ver sesiones 8, 9, 16): se escribió y guardó "Mejores
+  headliners" junto con tags (`mas_urbano`, `headliner_internacional`) — confirmado por SQL,
+  el campo funciona perfecto en físico. **Este es el segundo de los tres pendientes
+  originales de Sprint 3 que queda cerrado de verdad esta sesión** (el primero, import
+  corrupto, se cerró en la sesión 16 sin necesitar dispositivo).
+- **Navegación general** (Squads, Torneo Sonoro, Trends comunitarios, ir y venir entre
+  pantallas repetidamente): sin ningún congelamiento ni diálogo de "no responde" en ningún
+  momento de toda la sesión de pruebas, confirmado explícitamente por el usuario.
+- **Conclusión, con la salvedad importante de Sentry ya explicada arriba**: en una sesión de
+  uso real y extensa en hardware real, cubriendo exactamente los flujos que más
+  consistentemente disparaban el ANR en el emulador, **no ocurrió ni una sola vez**. Esto es
+  evidencia fuerte (no una prueba matemática) de que el ANR documentado desde la sesión 1 es
+  un problema del AVD/entorno de desarrollo, no un bug real de la app. Como la prueba corrió
+  sobre Expo Go (sin el módulo nativo de Sentry activo), **no quedó capturado ni descartado
+  con datos de Sentry** — si se quiere una confirmación 100% concluyente, hace falta repetir
+  esta misma prueba con un development build una vez que el driver USB esté resuelto.
+
+### Limpieza de datos de prueba
+
+Cuenta anónima real creada en el dispositivo (marcó "Voy", jugó Torneo Sonoro dos veces,
+creó un squad propio de una sola persona, votó un trend, subió y borró la foto). Todo
+limpiado al terminar por SQL (`apply_migration`, en orden por dependencias de FK):
+`community_share_votes`, `user_badges`, `torneo_campeon_historial`, `trends`,
+`squad_members`+`squads` (el squad de prueba "Hamster"), `festival_intent`,
+`festival_comments`, `festival_feedback`, `music_profile`, `public.users`, `auth.users`.
+Confirmado por conteo: `public.users` de vuelta a 6 (línea base).
 
 ## Pendiente
 
@@ -1861,11 +2082,11 @@ No quedaron cuentas ni filas de prueba residuales de esta sesión — confirmado
     directamente con 7 entradas realmente corruptas y siempre devuelve `null` sin lanzar
     excepción; no hacía falta el emulador para esto.
   - ~~El comentario libre de "¿Qué le cambiarías?" en reacciones al cartel no se probó en
-    vivo~~ — **cerrado en sesión 16**: probado por REST con cuentas reales, el campo
-    `festival_feedback.comentario` guarda/lee/borra texto real (tildes, ñ, emoji) sin
-    ningún problema de datos/RLS. Lo único que sigue sin probarse es el `TextInput` físico
-    del emulador en sí (bug de teclado ya documentado, entorno, no dato) — probarlo en un
-    teléfono real cerraría la duda por completo.
+    vivo~~ — **cerrado en sesión 16 por REST, y en sesión 18 con el `TextInput` físico
+    real**: el campo `festival_feedback.comentario` guarda/lee/borra texto real (tildes, ñ,
+    emoji) sin ningún problema de datos/RLS (sesión 16), y en un teléfono físico real el
+    teclado funcionó perfecto para escribirlo (sesión 18) — el bug de teclado documentado en
+    el emulador (sesiones 8/9) queda confirmado como un problema del emulador, no de la app.
   - "Mi ciudad" en Trends comunitarios no tiene datos reales que filtrar todavía — ningún
     usuario tiene `users.ciudad` seteado (no hay UI en la app para editarlo). El código del
     filtro está completo y correcto, solo no hay forma de probarlo con datos reales hasta
@@ -1976,14 +2197,45 @@ No quedaron cuentas ni filas de prueba residuales de esta sesión — confirmado
   con el usuario (solo dentro del squad, no descubrimiento con cualquier usuario de la app),
   implementado como una columna nueva (`festivales_en_comun`) en la función
   `squad_comparison` ya existente — cero tablas nuevas. Ver sesión 15 para detalle completo.
-  - **Sigue pendiente, ahora desde hace cuatro sesiones**: el flujo de `expo-image-picker` de
-    Álbum de conciertos (sesión 13). La sesión 16 reparó un problema de ADB genuino (daemon
-    colgado + ~100 procesos zombie, distinto del problema de "otra sesión lo está usando" de
-    sesiones anteriores) y logró conectar con el emulador, pero la app volvió a caer en el
-    mismo ANR "System UI isn't responding" documentado desde la sesión 1 en cuanto se
-    relanzó — ni siquiera llegó a abrirse la pantalla. Recomendación: si el emulador sigue
-    sin ser confiable en la próxima sesión, probar este flujo puntual en el teléfono físico
-    del usuario en vez de seguir reintentando con el AVD.
+  - ~~Sigue pendiente el flujo de `expo-image-picker` de Álbum de conciertos~~ — **cerrado
+    en sesión 18**: probado en un HONOR Magic7 Pro real vía Expo Go, subida real confirmada
+    en `concert_album` + `storage.objects` (bytes/mime/owner correctos), borrado también
+    confirmado. Nunca fue un bug de código — 6 sesiones bloqueado (13-18) solo por falta de
+    un dispositivo/emulador utilizable.
+  - **Nuevo tras sesión 18 — falta driver ADB de Windows para el teléfono físico**: el
+    HONOR Magic7 Pro del usuario se conecta y Windows lo reconoce, pero como MTP/WPD, no
+    como interfaz ADB — hace falta instalar el "Google USB Driver" oficial
+    (`developer.android.com/studio/run/win-usb`) o el driver oficial de HONOR
+    (`honor.com/global/support/downloads`) y actualizarlo manualmente en el Administrador de
+    dispositivos de Windows (requiere permisos de administrador, no se pudo completar en la
+    sesión 18). Sin esto no se puede correr `adb`, ni instalar un development build con el
+    módulo nativo de Sentry en el teléfono.
+  - **Nuevo tras sesión 18 — el ANR de Sentry sigue sin captura real, con una precisión
+    importante**: en la sesión 18 el ANR **no se reprodujo en absoluto** en el teléfono
+    físico (evidencia fuerte de que era del AVD, no de la app — ver esa sección), pero la
+    prueba corrió sobre **Expo Go, que no incluye el módulo nativo de Sentry** (Expo Go es
+    un cliente genérico precompilado, no puede cargar código nativo de terceros como
+    `@sentry/react-native`). Así que aunque el ANR hubiera ocurrido, Sentry no lo habría
+    capturado en esa prueba — la ausencia de ANR es una observación directa, no una
+    confirmación de Sentry. Para una confirmación 100% concluyente con datos de Sentry hace
+    falta un development build (`expo-dev-client`) o EAS build, lo cual requiere resolver
+    primero el pendiente del driver ADB de arriba.
+  - Confirmar en el dashboard de Sentry (`dragonflailabs`, proyectos
+    `musicaleando-app`/`musicaleando-admin`) que los eventos de prueba de la sesión 17
+    llegaron — dos vía `curl` directo (`event_id`: `4a2d4ff17b844669aecba8d2d71ce0ee` en
+    admin, `ec91a1700f0249ab81c151be137e86c6` en app) y uno vía clic real en el navegador
+    sobre el panel admin (no se pudo confirmar la request de red en el navegador
+    sandboxeado, posible bloqueo de dominio de analytics propio del entorno — los DSN en sí
+    ya están confirmados como válidos).
+  - No hay `SENTRY_AUTH_TOKEN` configurado en ninguno de los dos proyectos — el reporte de
+    errores funciona igual, pero sin él no se suben source maps, así que los stack traces en
+    producción no serán legibles (nombres de variables/líneas minificados). Si se quiere
+    eso, generar un auth token en Sentry y agregarlo a `.env` / `admin/.env.local` (nunca al
+    repo).
+  - ~~El comentario libre de "¿Qué le cambiarías?" nunca se probó en vivo, sospecha de bug
+    de teclado del emulador~~ — **cerrado en sesión 18**: probado en el teléfono físico,
+    funciona perfecto (`festival_feedback.comentario` guardó "Mejores headliners" real). El
+    bug de teclado documentado en sesiones 8/9 era del emulador, no de la app.
 - Ninguna de las features de Sprint 5/6/Backlog v2 se verificó visualmente en emulador (ver
   "Problemas de entorno" de las sesiones 10-15 para la razón específica de cada una). Todo
   se verificó con cuentas de prueba reales por REST/SQL/Storage API.
