@@ -1,19 +1,20 @@
 # Estado del proyecto — Musicaleando
 
-Última actualización: 2026-09-08 (sesión 14, cierre). Este archivo es el punto de partida
+Última actualización: 2026-09-08 (sesión 15, cierre). Este archivo es el punto de partida
 para retomar el trabajo en una sesión nueva sin perder contexto.
 
-**Estado en una línea**: Los 7 sprints numerados están completos. Backlog v2: **Álbum de
-conciertos** (sesión 13) y ahora **Recap anual estilo Wrapped** (sesión 14) están completos
-— este último agregó un historial real de campeones del Torneo Sonoro (no existía antes,
-`flavor.torneo_campeon` solo guardaba el último) para poder calcular "artista del año" de
-verdad. **Match por historial compartido** es la última pieza priorizada del Backlog v2,
-sigue sin construir. **Conexión en vivo (Spotify/Apple Music OAuth beta)** y
-**Seguridad/ubicación en vivo** siguen pausadas, ninguna confirmada para retomar todavía.
+**Estado en una línea**: Los 7 sprints numerados están completos. **Las 3 piezas priorizadas
+del Backlog v2 están completas**: Álbum de conciertos (sesión 13), Recap anual estilo
+Wrapped (sesión 14), y ahora **Match por historial compartido** (sesión 15) — implementado
+como una extensión de la comparación de squad ya existente ("festivales en común contigo"),
+no como descubrimiento con cualquier usuario de la app, tras confirmar el alcance con el
+usuario. Solo quedan del Backlog v2, sin construir ni confirmadas para retomar: **Seguridad/
+ubicación en vivo** y **Conexión en vivo (Spotify/Apple Music OAuth beta)**. "Compañero
+ideal" (Sprint 3) sigue pausado por separado — no se resolvió, es una decisión distinta.
 
 Proyecto Supabase: `ijwyykfuyeaahvxmaild` ("Sound Project", org `ljcnanwlkijozacnyhck`).
 Repo: rama `master`, sin remoto configurado todavía. Último commit antes de esta sesión:
-`60d0d75` (cierre de sesión 13, Álbum de conciertos).
+`4278d5a` (cierre de sesión 14, Recap anual).
 
 ## Completado y verificado en dispositivo (no solo compilado — probado tocando la app)
 
@@ -1659,6 +1660,78 @@ del año" — se confirmaron ambos puntos con el usuario antes de construir (`As
   no solo el estado final deseado — un test que llega al mismo estado por un camino distinto
   puede dar un resultado engañoso.
 
+## Sesión 15 (2026-09-08): prompt desactualizado detectado + limpieza de procesos huérfanos + Backlog v2 — Match por historial compartido
+
+### El prompt de continuación estaba desactualizado — se detectó y se confirmó con el usuario antes de hacer nada
+
+El prompt pegado al inicio de esta sesión era literalmente el de la sesión anterior (pedía
+construir "Recap anual estilo Wrapped", que ya estaba completo y commiteado en `4278d5a`).
+En vez de reconstruirlo o de asumir en silencio qué tocaba, se le señaló esto al usuario
+explícitamente y se confirmó el alcance real antes de escribir código — el usuario confirmó
+seguir con **Match por historial compartido**, la pieza que `ESTADO.md` ya tenía marcada
+como siguiente.
+
+### Procesos huérfanos del emulador/Metro — investigados con evidencia real, no solo "sigue ocupado"
+
+El prompt pedía revisar si había evidencia real de otra sesión corriendo en paralelo en vez
+de seguir asumiendo "está ocupado" sin más. Se investigó con `wmic`/PowerShell (no solo
+`tasklist`) el árbol completo de procesos:
+
+- **`expo start` (Metro) y el emulador** (`emulator.exe`/`qemu-system-x86_64.exe`):
+  trazados hacia arriba, sus procesos lanzadores (`bash.exe`/`cmd.exe` intermedios) **ya
+  habían salido** — huérfanos genuinos, corriendo hacía ~6.5 horas sin nada que los
+  sostuviera.
+- **El servidor `next dev` del panel admin**: trazado hacia arriba, su cadena de procesos
+  terminaba en un `claude.exe` **todavía vivo** (corriendo desde el 2026-09-04) — es decir,
+  sí había una sesión de Claude Code real detrás de ese proceso específico, a diferencia del
+  emulador/Metro.
+- Se reportó esto exacto al usuario (distinguiendo los dos casos, no un veredicto único de
+  "todo está huérfano" ni "todo está en uso") y se pidió confirmación antes de cerrar nada,
+  ya que matar un proceso de otra sesión activa sería una acción destructiva sobre trabajo
+  ajeno. El usuario confirmó cerrar los huérfanos; el panel admin del otro `claude.exe` no
+  se tocó.
+- **Los intentos de ejecutar `taskkill` y `adb devices` fueron bloqueados por el "auto mode
+  classifier" del entorno** (acciones de sistema/proceso, no relacionadas con git ni con el
+  código del proyecto) — se le explicó esto al usuario en vez de intentar un rodeo, y el
+  usuario mismo cerró los procesos huérfanos desde su propia terminal. Como consecuencia,
+  **el pendiente de verificar visualmente `expo-image-picker` (Álbum de conciertos, sesión
+  13) sigue sin cerrarse** — no hubo Metro/emulador utilizable dentro de esta sesión en
+  ningún momento (el emulador quedó libre de Metro, pero esta sesión no pudo iniciar su
+  propio Metro ni interactuar con `adb` para probarlo, por el mismo bloqueo del classifier).
+
+### Match por historial compartido — alcance confirmado, extiende la comparación de squad existente
+
+El spec describe esta pieza en una sola oración ("conectar usuarios por festivales a los que
+ambos asistieron realmente, no solo por gustos declarados") sin definir mecanismo — y está
+directamente emparentada con "Compañero ideal" (Sprint 3), que sigue pausado exactamente por
+la misma razón (mecánica de match no definida, sesión 8). Se confirmó con el usuario antes
+de construir (`AskUserQuestion`): **alcance limitado al propio squad**, extendiendo la
+"Comparación del squad" ya existente (Sprint 6/7) — no un descubrimiento con cualquier
+usuario de la app (eso habría sido, en la práctica, construir "Compañero ideal" ahora mismo,
+con una superficie de privacidad nueva — "tu asistencia se vuelve descubrible por
+extraños" — que nadie pidió resolver esta sesión).
+
+- **Cero tablas nuevas.** Se recreó la función `squad_comparison(p_squad_id)` (Sprint 7)
+  agregando una columna `festivales_en_comun` — el conteo de festivales donde tanto el
+  usuario que llama (`auth.uid()`) como ese miembro marcaron `festival_intent.status='voy'`.
+  `null` para la fila propia (no aplica "en común contigo mismo"). Al ser relativo a quien
+  mira (como el "% contigo" del compat score), tenía que vivir en la misma RPC que ya
+  devuelve datos relativos al llamador, no en una tabla nueva.
+- **UI**: una sola línea agregada al `memberMeta` ya existente en
+  [SquadDetailScreen.tsx](src/screens/main/SquadDetailScreen.tsx) ("· N en común contigo"),
+  sin sección ni componente nuevo.
+- **Verificado con cuentas de prueba reales**: squad de dos miembros, A marcó "voy" a dos
+  festivales (uno real, uno de prueba creado y borrado en la misma sesión), B solo a uno de
+  esos dos — confirmado `festivales_en_comun = 1` visto desde A hacia B **y** simétricamente
+  desde B hacia A, `null` en ambas filas propias, y que un no-miembro sigue recibiendo el
+  mismo rechazo de siempre (confirma que recrear la función no rompió la guarda de
+  `is_squad_member`). Squad, festival de prueba y cuentas borrados al terminar — conteos de
+  `users`/`squads`/`festivals`/`festival_intent` confirmados de vuelta a la línea base.
+
+**Con esto, las 3 piezas priorizadas del Backlog v2 quedan completas.** Lo único que falta
+del spec completo es lo explícitamente pausado (conexión en vivo, seguridad/ubicación) y
+"Compañero ideal", que sigue siendo una decisión de producto distinta y sin resolver.
+
 ## Pendiente
 
 - No hay UI para editar nombre/ciudad/fechas de un festival ya creado desde el panel (solo
@@ -1784,24 +1857,30 @@ del año" — se confirmaron ambos puntos con el usuario antes de construir (`As
     un patrón ya probado. El mecanismo de Storage/RLS subyacente sí se verificó a fondo (subida
     real de bytes vía API, no solo filas), pero la ruta completa "usuario toca botón → elige
     foto → sube → la ve en su álbum" necesita un dispositivo real o emulador disponible.
-  - ~~Backlog v2 — Recap anual sigue sin construir~~ — **resuelto en sesión 14**, ver esa
-    sección. **Match por historial compartido** sigue sin construir, es la última pieza
-    priorizada del Backlog v2.
+  - ~~Backlog v2 — Recap anual sigue sin construir~~ — **resuelto en sesión 14**.
+    ~~Match por historial compartido sigue sin construir~~ — **resuelto en sesión 15**, ver
+    esa sección.
   - **Backlog v2 — Seguridad/ubicación en vivo en squad** sigue sin construir y sin tocar,
     tal como está documentado en el spec (necesita una decisión de producto/legal explícita
-    antes de cualquier código).
+    antes de cualquier código). **Es la única pieza del Backlog v2 sin construir que sigue
+    activa** (conexión en vivo es una decisión aparte, ya pausada desde antes del Backlog v2).
 - **Backlog v2 — Recap anual estilo Wrapped completo** (sesión 14): período de año
   calendario, historial real de campeones del Torneo Sonoro (tabla nueva
   `torneo_campeon_historial`, no existía antes), función `get_recap_anual(p_anio)`, carrusel
   de slides en `RecapScreen` con tarjeta compartible de cierre. Ver sesión 14 para detalle
   completo, incluyendo una lección sobre cómo probar triggers `AFTER UPDATE` correctamente.
-  - **Sigue pendiente**: el flujo de `expo-image-picker` de Álbum de conciertos (sesión 13)
-    — el prompt de esta sesión pedía aprovechar si el emulador estaba libre para cerrarlo,
-    pero seguía ocupado, así que sigue exactamente igual de pendiente.
-- Ninguna de las features de Sprint 5/6/Backlog v2 se verificó visualmente en emulador (otra
-  sesión de Claude Code seguía usando el emulador/Metro en las cinco sesiones seguidas — ver
-  "Problemas de entorno" de las sesiones 10/11/12/13/14). Todo se verificó con cuentas de
-  prueba reales por REST/SQL/Storage API.
+- **Backlog v2 — Match por historial compartido completo** (sesión 15): alcance confirmado
+  con el usuario (solo dentro del squad, no descubrimiento con cualquier usuario de la app),
+  implementado como una columna nueva (`festivales_en_comun`) en la función
+  `squad_comparison` ya existente — cero tablas nuevas. Ver sesión 15 para detalle completo.
+  - **Sigue pendiente, ahora desde hace tres sesiones**: el flujo de `expo-image-picker` de
+    Álbum de conciertos (sesión 13) — esta sesión encontró y ayudó a limpiar los procesos
+    huérfanos que ocupaban el emulador, pero el "auto mode classifier" del entorno bloqueó
+    tanto `taskkill` como `adb devices` dentro de la sesión misma, así que no se pudo
+    aprovechar la limpieza para cerrar este pendiente todavía.
+- Ninguna de las features de Sprint 5/6/Backlog v2 se verificó visualmente en emulador (ver
+  "Problemas de entorno" de las sesiones 10-15 para la razón específica de cada una). Todo
+  se verificó con cuentas de prueba reales por REST/SQL/Storage API.
 
 ## Decisiones técnicas tomadas en el camino (no estaban en el prompt original)
 
@@ -1970,30 +2049,34 @@ del año" — se confirmaron ambos puntos con el usuario antes de construir (`As
    Insights (dashboard de patrocinios), Moderación — más la auditoría de RLS que precedió
    ese sprint (sin casos nuevos encontrados) y dos bugs reales en las funciones de insights
    (ver esa sección).
-   **Backlog v2, piezas 1 y 2: Álbum de conciertos (sesión 13) y Recap anual (sesión 14)
-   completos.** Álbum: tabla `concert_album`, bucket privado `concert-album`, visibilidad
-   dueño+squad, subida desde `ConcertAlbumScreen`, consentimiento explícito, reportar +
-   `/moderacion` con eliminación real de fotos. Recap: historial real de campeones del
+   **Backlog v2, las 3 piezas priorizadas están completas.** Álbum de conciertos (sesión
+   13): tabla `concert_album`, bucket privado `concert-album`, visibilidad dueño+squad,
+   subida desde `ConcertAlbumScreen`, consentimiento explícito, reportar + `/moderacion` con
+   eliminación real de fotos. Recap anual (sesión 14): historial real de campeones del
    Torneo Sonoro (`torneo_campeon_historial`, no existía antes), función
    `get_recap_anual(p_anio)` (año calendario), carrusel en `RecapScreen` con tarjeta
-   compartible de cierre. **Match por historial compartido es la última pieza priorizada del
-   Backlog v2** y sigue sin construir — ya desbloqueada (necesita datos reales de asistencia,
-   que el álbum y `festival_intent` ya proveen).
-   **Pendiente de verificación visual explícito, acumulado desde sesión 13**: el flujo de
-   `expo-image-picker`/`expo-file-system` desde la UI real del álbum de conciertos — es
-   código nuevo, cinco sesiones seguidas sin emulador disponible para probarlo.
-   **Conexión en vivo (Spotify/Apple Music OAuth) sigue pausada** (el usuario debe confirmar
-   explícitamente antes de abrir esa beta) y **Seguridad/ubicación en vivo** sigue sin
-   construir (necesita decisión de producto/legal antes de tocarse).
-   **Siguiente foco: a decidir con el usuario.** Opciones razonables: (a) Match por historial
-   compartido (última pieza priorizada del Backlog v2, ya desbloqueada), (b)
-   Seguridad/ubicación en vivo si el usuario confirma que ya se resolvió la decisión de
-   producto/legal que el spec pide, (c) abrir la beta de conexión en vivo, o (d) cerrar los
-   pendientes de verificación visual acumulados por el emulador ocupado (ver "Pendiente") —
-   el más urgente sigue siendo probar la subida de fotos del álbum en un dispositivo real. El
-   detalle exacto del spec **no está guardado en este repo ni en el sistema de archivos** —
-   se ha leído seis veces (sesiones 9-14) desde un Artifact publicado que el usuario comparte
-   por link en el chat, y ese contenido no persiste entre sesiones. **Antes de construir
+   compartible de cierre. Match por historial compartido (sesión 15): alcance limitado al
+   propio squad (confirmado con el usuario, no descubrimiento con cualquier usuario de la
+   app), columna nueva `festivales_en_comun` en la función `squad_comparison` ya existente
+   — cero tablas nuevas.
+   **Pendiente de verificación visual explícito, acumulado desde sesión 13 (ahora van tres
+   sesiones)**: el flujo de `expo-image-picker`/`expo-file-system` desde la UI real del
+   álbum de conciertos. La sesión 15 encontró y el usuario cerró los procesos huérfanos que
+   ocupaban el emulador, pero el "auto mode classifier" del entorno bloqueó `taskkill` y
+   `adb devices` dentro de la sesión misma — no se pudo aprovechar la limpieza todavía.
+   **Solo queda sin construir del Backlog v2: Seguridad/ubicación en vivo** (necesita
+   decisión de producto/legal antes de tocarse). **Conexión en vivo (Spotify/Apple Music
+   OAuth)** sigue pausada por separado (el usuario debe confirmar explícitamente antes de
+   abrir esa beta), igual que **Compañero ideal** (Sprint 3, mecánica sin definir).
+   **Siguiente foco: a decidir con el usuario.** Opciones razonables: (a) Seguridad/
+   ubicación en vivo si el usuario confirma que ya se resolvió la decisión de producto/legal
+   que el spec pide, (b) abrir la beta de conexión en vivo, (c) definir por fin la mecánica
+   de Compañero ideal, o (d) cerrar los pendientes de verificación visual acumulados (ver
+   "Pendiente") — el más urgente sigue siendo probar la subida de fotos del álbum en un
+   dispositivo real, ahora que el emulador está libre de procesos huérfanos. El detalle
+   exacto del spec **no está guardado en este repo ni en el sistema de archivos** — se ha
+   leído siete veces (sesiones 9-15) desde un Artifact publicado que el usuario comparte por
+   link en el chat, y ese contenido no persiste entre sesiones. **Antes de construir
    cualquier cosa nueva, pedirle al usuario el link del Artifact del spec de nuevo y
    confirmar el alcance exacto** — no asumir a partir de lo que se infiere abajo.
    - **Compañero ideal sigue sin definir**: no avanzar en código hasta que el usuario
@@ -2120,3 +2203,25 @@ del año" — se confirmaron ambos puntos con el usuario antes de construir (`As
     (el flujo real de la app nunca fija el campeón en el insert inicial del perfil) y una
     lección sobre cómo probar ese tipo de trigger correctamente (reproducir la secuencia
     real insert-luego-updates, no solo el estado final).
+20. **Backlog v2 — Match por historial compartido (sesión 15)**: sin tablas nuevas — la
+    función `squad_comparison(p_squad_id)` (Sprint 7) ahora también devuelve
+    `festivales_en_comun` (conteo de festivales donde el llamador y ese miembro coinciden en
+    `status='voy'`, `null` para la fila propia). Recordar que cambiar las columnas de
+    retorno de una función requiere `DROP FUNCTION` + `CREATE` (no basta `CREATE OR REPLACE`
+    cuando cambia el shape de salida) — así se hizo aquí.
+21. **El "auto mode classifier" del entorno bloquea comandos de sistema/proceso** (`taskkill`,
+    `adb devices`, un `find /` amplio) **incluso cuando no involucran credenciales** —
+    confirmado en sesión 15. A diferencia del bloqueo de contraseñas en texto plano (sesión
+    9, sí evitable usando la UI real), este bloqueo de comandos de sistema no tiene rodeo
+    razonable — hay que explicarle al usuario qué se necesitaba hacer y para qué, y dejar
+    que lo haga desde su propia terminal si aplica. No reintentar con variantes del mismo
+    comando.
+22. **Para saber si un proceso (Metro, emulador, un dev server) sigue realmente en uso o es
+    un huérfano de una sesión que terminó mal**, `tasklist`/`Get-Process` solos no alcanzan
+    — hay que trazar el árbol de procesos hacia arriba
+    (`Get-CimInstance Win32_Process -Filter "ProcessId=<pid>"` → columna `ParentProcessId`,
+    repetir con cada padre) hasta encontrar la raíz: si esa raíz ya no existe, es un
+    huérfano genuino; si termina en un `claude.exe`/terminal todavía vivo, alguien puede
+    seguir usándolo. Sesión 15 encontró exactamente ambos casos a la vez (Metro/emulador
+    huérfanos, panel admin con una sesión viva detrás) — no asumir que todos los procesos
+    de una carpeta comparten el mismo estado.

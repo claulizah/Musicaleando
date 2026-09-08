@@ -1210,6 +1210,7 @@ export type Database = {
         Returns: {
           energia: number
           festivales_confirmados: number
+          festivales_en_comun: number | null
           generos_count: number
           nombre: string
           user_id: string

@@ -259,6 +259,8 @@ export function SquadDetailScreen({ route, navigation }: Props) {
                         {level.label} · {row.festivales_confirmados}{' '}
                         {row.festivales_confirmados === 1 ? 'festival confirmado' : 'festivales confirmados'} ·
                         energía {Math.round(row.energia * 100)}%
+                        {row.festivales_en_comun !== null &&
+                          ` · ${row.festivales_en_comun} en común contigo`}
                       </Text>
                     </View>
                   </View>

@@ -23,6 +23,10 @@ export type SquadComparisonRow = {
   energia: number;
   generos_count: number;
   festivales_confirmados: number;
+  // Match por historial compartido (Backlog v2): festivales donde tanto el
+  // que llama como este miembro marcaron "voy" — null para la fila propia
+  // (no aplica "en común contigo mismo").
+  festivales_en_comun: number | null;
 };
 
 type Status = 'idle' | 'loading' | 'ready' | 'error';
