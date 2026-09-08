@@ -8,7 +8,8 @@ import { useSessionStore } from '../../store/useSessionStore';
 import { useCommunityStore, CommunityShareWithSongs } from '../../store/useCommunityStore';
 import { supabase } from '../../lib/supabase';
 import { GENEROS } from '../../lib/archetypes';
-import { Tables } from '../../types/database';
+import { promptReportContent } from '../../lib/moderation';
+import { ContentReportMotivo, Tables } from '../../types/database';
 import { colors, radii, spacing, type } from '../../theme';
 
 type Song = Tables<'songs'>;
@@ -23,6 +24,7 @@ export function CommunityTrendsScreen({ navigation }: Props) {
   const fetchShares = useCommunityStore((s) => s.fetch);
   const shareSongs = useCommunityStore((s) => s.shareSongs);
   const toggleVote = useCommunityStore((s) => s.toggleVote);
+  const reportShare = useCommunityStore((s) => s.reportShare);
 
   const [ciudad, setCiudad] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<Song[]>([]);
@@ -236,7 +238,13 @@ export function CommunityTrendsScreen({ navigation }: Props) {
         {top && (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>Trend comunitario de la semana</Text>
-            <ShareCard entry={top} highlighted userId={userId} onVote={() => userId && toggleVote(userId, top.share_id)} />
+            <ShareCard
+              entry={top}
+              highlighted
+              userId={userId}
+              onVote={() => userId && toggleVote(userId, top.share_id)}
+              onReport={(motivo) => userId && reportShare(userId, top.share_id, motivo)}
+            />
           </View>
         )}
 
@@ -249,6 +257,7 @@ export function CommunityTrendsScreen({ navigation }: Props) {
                 entry={entry}
                 userId={userId}
                 onVote={() => userId && toggleVote(userId, entry.share_id)}
+                onReport={(motivo) => userId && reportShare(userId, entry.share_id, motivo)}
               />
             ))}
           </View>
@@ -263,12 +272,15 @@ function ShareCard({
   highlighted,
   userId,
   onVote,
+  onReport,
 }: {
   entry: CommunityShareWithSongs;
   highlighted?: boolean;
   userId: string | null;
   onVote: () => void;
+  onReport: (motivo: ContentReportMotivo) => void;
 }) {
+  const isMine = entry.user_id === userId;
   return (
     <View style={[styles.card, highlighted && styles.cardHighlighted]}>
       {entry.songs.map((song) => (
@@ -283,14 +295,19 @@ function ShareCard({
       ))}
       {entry.caption && <Text style={styles.caption}>"{entry.caption}"</Text>}
       <View style={styles.cardFooter}>
-        <Text style={styles.meta}>
-          {entry.user_id === userId ? 'Compartido por ti' : 'Compartido por alguien más'}
-        </Text>
-        <Pressable style={styles.voteButton} onPress={onVote}>
-          <Text style={[styles.voteButtonText, entry.iVoted && styles.voteButtonTextActive]}>
-            {entry.iVoted ? '❤️' : '🤍'} {entry.vote_count}
-          </Text>
-        </Pressable>
+        <Text style={styles.meta}>{isMine ? 'Compartido por ti' : 'Compartido por alguien más'}</Text>
+        <View style={styles.cardFooterActions}>
+          {!isMine && (
+            <Pressable hitSlop={8} onPress={() => promptReportContent(onReport)}>
+              <Text style={styles.reportLink}>Reportar</Text>
+            </Pressable>
+          )}
+          <Pressable style={styles.voteButton} onPress={onVote}>
+            <Text style={[styles.voteButtonText, entry.iVoted && styles.voteButtonTextActive]}>
+              {entry.iVoted ? '❤️' : '🤍'} {entry.vote_count}
+            </Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -517,6 +534,15 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   meta: {
+    ...type.caption,
+    color: colors.textMuted,
+  },
+  cardFooterActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  reportLink: {
     ...type.caption,
     color: colors.textMuted,
   },

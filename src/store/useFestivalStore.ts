@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import {
+  ContentReportMotivo,
   FestivalReactionType,
   FestivalStatus,
   SurveyCalificacion,
@@ -35,6 +36,10 @@ export type FestivalWithIntent = {
   festival: Tables<'festivals'>;
   myStatus: FestivalStatus | null;
   squadGoingCount: number;
+  // "Mapa social" (Sprint 6): who exactly, not just how many — resolved to
+  // arquetipo/nombre in the UI via useSquadStore's already-loaded squads
+  // (built from squad_members_with_profile), not a new query here.
+  squadGoingIds: string[];
   lineup: Tables<'festival_lineup'>[];
   reactions: FestivalReactionSummary;
   feedback: FestivalFeedbackSummary;
@@ -61,6 +66,7 @@ type FestivalState = {
   ) => Promise<void>;
   postComment: (userId: string, festivalId: string, texto: string) => Promise<void>;
   deleteComment: (festivalId: string, commentId: string) => Promise<void>;
+  reportComment: (userId: string, commentId: string, motivo: ContentReportMotivo) => Promise<void>;
   toggleInterest: (userId: string, festivalId: string, announcementId: string) => Promise<void>;
   submitSurvey: (
     userId: string,
@@ -196,9 +202,10 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
     const festivals: FestivalWithIntent[] = (festivalRows ?? []).map((festival) => {
       const rowsForFestival = (intentRows ?? []).filter((i) => i.festival_id === festival.id);
       const mine = rowsForFestival.find((i) => i.user_id === userId);
-      const squadGoingCount = rowsForFestival.filter(
-        (i) => i.user_id !== userId && i.status === 'voy',
-      ).length;
+      const squadGoingIds = rowsForFestival
+        .filter((i) => i.user_id !== userId && i.status === 'voy')
+        .map((i) => i.user_id);
+      const squadGoingCount = squadGoingIds.length;
       const lineup = (lineupRows ?? []).filter((l) => l.festival_id === festival.id);
 
       const reactionsForFestival = (reactionRows ?? []).filter((r) => r.festival_id === festival.id);
@@ -233,6 +240,7 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
         festival,
         myStatus,
         squadGoingCount,
+        squadGoingIds,
         lineup,
         reactions,
         feedback: { mine: myFeedback },
@@ -351,6 +359,13 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
         f.festival.id === festivalId ? { ...f, comments: [data, ...f.comments] } : f,
       ),
     });
+  },
+
+  reportComment: async (userId, commentId, motivo) => {
+    const { error } = await supabase
+      .from('content_reports')
+      .insert({ content_type: 'festival_comment', content_id: commentId, reporter_user_id: userId, motivo });
+    if (error) throw error;
   },
 
   deleteComment: async (festivalId, commentId) => {

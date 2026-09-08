@@ -6,10 +6,18 @@ import { RootStackParamList } from '../../navigation/types';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useProfileStore } from '../../store/useProfileStore';
 import { useFestivalStore, FestivalWithIntent } from '../../store/useFestivalStore';
-import { FestivalReactionType, FestivalStatus, SurveyCalificacion, SurveyVolveria } from '../../types/database';
+import {
+  ContentReportMotivo,
+  FestivalReactionType,
+  FestivalStatus,
+  SurveyCalificacion,
+  SurveyVolveria,
+} from '../../types/database';
 import { FEEDBACK_TAGS } from '../../lib/festivalFeedback';
 import { fetchFestivalPersonalization, FestivalGenreMatch } from '../../lib/spotify';
-import { GENEROS } from '../../lib/archetypes';
+import { GENEROS, ARCHETYPES } from '../../lib/archetypes';
+import { promptReportContent } from '../../lib/moderation';
+import { useSquadStore } from '../../store/useSquadStore';
 import { colors, radii, spacing, type } from '../../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Festivals'>;
@@ -53,11 +61,25 @@ export function FestivalHubScreen({ navigation }: Props) {
   const deleteComment = useFestivalStore((s) => s.deleteComment);
   const toggleInterest = useFestivalStore((s) => s.toggleInterest);
   const submitSurvey = useFestivalStore((s) => s.submitSurvey);
+  const reportComment = useFestivalStore((s) => s.reportComment);
+  const squads = useSquadStore((s) => s.squads);
+  const fetchMySquads = useSquadStore((s) => s.fetchMySquads);
 
   useEffect(() => {
     if (userId) fetchFestivals(userId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
+
+  useEffect(() => {
+    if (userId) fetchMySquads(userId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
+  // "Mapa social": squadmates' arquetipo, resolved from squads already
+  // loaded via squad_members_with_profile — no new query for this screen.
+  const squadmateArchetypeById = new Map(
+    squads.flatMap((s) => s.members).map((m) => [m.user_id, m.arquetipo]),
+  );
 
   return (
     <Screen>
@@ -96,6 +118,9 @@ export function FestivalHubScreen({ navigation }: Props) {
               userId ? postComment(userId, entry.festival.id, texto) : Promise.resolve()
             }
             onDeleteComment={(commentId) => deleteComment(entry.festival.id, commentId)}
+            onReportComment={(commentId, motivo) =>
+              userId ? reportComment(userId, commentId, motivo) : Promise.resolve()
+            }
             onToggleInterest={(announcementId) =>
               userId ? toggleInterest(userId, entry.festival.id, announcementId) : Promise.resolve()
             }
@@ -103,6 +128,7 @@ export function FestivalHubScreen({ navigation }: Props) {
               userId ? submitSurvey(userId, entry.festival.id, calificacion, volveria) : Promise.resolve()
             }
             generos={generos}
+            squadmateArchetypeById={squadmateArchetypeById}
           />
         ))}
       </ScrollView>
@@ -118,9 +144,11 @@ function FestivalCard({
   userId,
   onPostComment,
   onDeleteComment,
+  onReportComment,
   onToggleInterest,
   onSubmitSurvey,
   generos,
+  squadmateArchetypeById,
 }: {
   entry: FestivalWithIntent;
   onSetStatus: (status: FestivalStatus) => void;
@@ -129,13 +157,27 @@ function FestivalCard({
   userId: string | null;
   onPostComment: (texto: string) => Promise<void>;
   onDeleteComment: (commentId: string) => void;
+  onReportComment: (commentId: string, motivo: ContentReportMotivo) => Promise<void>;
   onToggleInterest: (announcementId: string) => Promise<void>;
   onSubmitSurvey: (calificacion: SurveyCalificacion, volveria: SurveyVolveria) => Promise<void>;
   generos: string[];
+  squadmateArchetypeById: Map<string, string | null>;
 }) {
-  const { festival, myStatus, squadGoingCount, lineup, reactions, feedback, comments, announcements, mapPins, survey } =
-    entry;
+  const {
+    festival,
+    myStatus,
+    squadGoingCount,
+    squadGoingIds,
+    lineup,
+    reactions,
+    feedback,
+    comments,
+    announcements,
+    mapPins,
+    survey,
+  } = entry;
   const [showLineup, setShowLineup] = useState(false);
+  const [showSquadGoing, setShowSquadGoing] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [selectedEscenario, setSelectedEscenario] = useState<string | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -217,9 +259,27 @@ function FestivalCard({
       </Text>
 
       {squadGoingCount > 0 && (
-        <Text style={styles.squadHint}>
-          👥 {squadGoingCount} {squadGoingCount === 1 ? 'de tu squad va' : 'de tu squad van'}
-        </Text>
+        <View>
+          <Pressable onPress={() => setShowSquadGoing((v) => !v)}>
+            <Text style={styles.squadHint}>
+              👥 {squadGoingCount} {squadGoingCount === 1 ? 'de tu squad va' : 'de tu squad van'}{' '}
+              {showSquadGoing ? '▾' : '▸'}
+            </Text>
+          </Pressable>
+          {showSquadGoing && (
+            <View style={styles.squadGoingList}>
+              {squadGoingIds.map((id) => {
+                const arquetipoId = squadmateArchetypeById.get(id);
+                const archetype = arquetipoId ? ARCHETYPES[arquetipoId as keyof typeof ARCHETYPES] : undefined;
+                return (
+                  <Text key={id} style={styles.squadGoingRow}>
+                    {archetype ? `${archetype.emoji} ${archetype.label}` : '🎧 Squadmate'}
+                  </Text>
+                );
+              })}
+            </View>
+          )}
+        </View>
       )}
 
       {lineup.length > 0 && (
@@ -484,9 +544,16 @@ function FestivalCard({
           {comments.map((c) => (
             <View key={c.id} style={styles.commentRow}>
               <Text style={styles.commentText}>{c.texto}</Text>
-              {c.user_id === userId && (
+              {c.user_id === userId ? (
                 <Pressable hitSlop={8} onPress={() => onDeleteComment(c.id)}>
                   <Text style={styles.removeLink}>Borrar</Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  hitSlop={8}
+                  onPress={() => promptReportContent((motivo) => onReportComment(c.id, motivo))}
+                >
+                  <Text style={styles.removeLink}>Reportar</Text>
                 </Pressable>
               )}
             </View>
@@ -572,6 +639,15 @@ const styles = StyleSheet.create({
   squadHint: {
     ...type.label,
     color: colors.accentPrimary,
+  },
+  squadGoingList: {
+    marginTop: spacing.xs,
+    gap: 2,
+    paddingLeft: spacing.sm,
+  },
+  squadGoingRow: {
+    ...type.body,
+    color: colors.textSecondary,
   },
   statusRow: {
     flexDirection: 'row',

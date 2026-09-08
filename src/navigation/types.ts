@@ -9,5 +9,6 @@ export type RootStackParamList = {
   SquadDetail: { squadId: string };
   Festivals: undefined;
   Torneo: undefined;
+  SquadTorneo: { squadId: string };
   CommunityTrends: undefined;
 };

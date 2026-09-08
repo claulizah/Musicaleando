@@ -31,6 +31,12 @@ export default async function DashboardPage() {
           <Link href="/sponsors" className="text-sm underline">
             Patrocinadores
           </Link>
+          <Link href="/insights" className="text-sm underline">
+            Sound Insights
+          </Link>
+          <Link href="/moderacion" className="text-sm underline">
+            Moderación
+          </Link>
           <Link
             href="/festivals/new"
             className="rounded-md bg-black px-3 py-2 text-sm text-white"

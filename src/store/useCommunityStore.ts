@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
-import { Tables } from '../types/database';
+import { ContentReportMotivo, Tables } from '../types/database';
 
 export type CommunityShareStats = Tables<'community_share_stats'>;
 export type CommunityShareWithSongs = CommunityShareStats & {
@@ -22,6 +22,7 @@ type CommunityState = {
   fetch: (userId: string, ciudad: string | null) => Promise<void>;
   shareSongs: (userId: string, songIds: string[], ciudad: string | null, caption?: string) => Promise<void>;
   toggleVote: (userId: string, shareId: string) => Promise<void>;
+  reportShare: (userId: string, shareId: string, motivo: ContentReportMotivo) => Promise<void>;
 };
 
 export const useCommunityStore = create<CommunityState>((set, get) => ({
@@ -115,5 +116,12 @@ export const useCommunityStore = create<CommunityState>((set, get) => ({
     if (error) {
       set({ shares: previous, error: error.message });
     }
+  },
+
+  reportShare: async (userId, shareId, motivo) => {
+    const { error } = await supabase
+      .from('content_reports')
+      .insert({ content_type: 'community_share', content_id: shareId, reporter_user_id: userId, motivo });
+    if (error) throw error;
   },
 }));

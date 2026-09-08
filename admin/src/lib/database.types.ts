@@ -9,6 +9,14 @@ export type Database = {
         Args: { p_announcement_id: string };
         Returns: { ganador_user_id: string; ganador_nombre: string }[];
       };
+      insights_arquetipo_generos: {
+        Args: { p_min_usuarios?: number };
+        Returns: { arquetipo: string; genero: string; usuarios: number }[];
+      };
+      insights_profile_count: {
+        Args: Record<string, never>;
+        Returns: number;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
@@ -132,6 +140,69 @@ export type Database = {
             referencedColumns: ['id'];
           },
         ];
+      };
+      announcement_interest: {
+        Row: { announcement_id: string; user_id: string; created_at: string };
+        Insert: Partial<Database['public']['Tables']['announcement_interest']['Row']>;
+        Update: Partial<Database['public']['Tables']['announcement_interest']['Row']>;
+        Relationships: [];
+      };
+      content_reports: {
+        Row: {
+          id: string;
+          content_type: string;
+          content_id: string;
+          reporter_user_id: string;
+          motivo: string;
+          created_at: string;
+          resuelto: boolean;
+          resuelto_at: string | null;
+        };
+        Insert: Omit<Database['public']['Tables']['content_reports']['Row'], 'id' | 'created_at'> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['content_reports']['Row']>;
+        Relationships: [];
+      };
+      festival_comments: {
+        Row: {
+          id: string;
+          festival_id: string;
+          user_id: string;
+          texto: string;
+          created_at: string;
+          oculto: boolean;
+        };
+        Insert: Omit<Database['public']['Tables']['festival_comments']['Row'], 'id' | 'created_at'> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['festival_comments']['Row']>;
+        Relationships: [];
+      };
+      community_shares: {
+        Row: {
+          id: string;
+          user_id: string;
+          song_ids: string[];
+          caption: string | null;
+          ciudad: string | null;
+          created_at: string;
+          oculto: boolean;
+        };
+        Insert: Omit<Database['public']['Tables']['community_shares']['Row'], 'id' | 'created_at'> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['community_shares']['Row']>;
+        Relationships: [];
+      };
+      songs: {
+        Row: { id: string; titulo: string; artista: string; genero: string; mood: string; orden: number };
+        Insert: Partial<Database['public']['Tables']['songs']['Row']>;
+        Update: Partial<Database['public']['Tables']['songs']['Row']>;
+        Relationships: [];
       };
     };
   };

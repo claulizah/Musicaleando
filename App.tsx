@@ -25,6 +25,7 @@ import { SquadsScreen } from './src/screens/main/SquadsScreen';
 import { SquadDetailScreen } from './src/screens/main/SquadDetailScreen';
 import { FestivalHubScreen } from './src/screens/main/FestivalHubScreen';
 import { TorneoScreen } from './src/screens/main/TorneoScreen';
+import { SquadTorneoScreen } from './src/screens/main/SquadTorneoScreen';
 import { CommunityTrendsScreen } from './src/screens/main/CommunityTrendsScreen';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -116,6 +117,7 @@ export default function App() {
           <Stack.Screen name="SquadDetail" component={SquadDetailScreen} />
           <Stack.Screen name="Festivals" component={FestivalHubScreen} />
           <Stack.Screen name="Torneo" component={TorneoScreen} />
+          <Stack.Screen name="SquadTorneo" component={SquadTorneoScreen} />
           <Stack.Screen name="CommunityTrends" component={CommunityTrendsScreen} />
         </Stack.Navigator>
       </NavigationContainer>

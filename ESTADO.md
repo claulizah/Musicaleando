@@ -1,19 +1,20 @@
 # Estado del proyecto — Musicaleando
 
-Última actualización: 2026-09-08 (sesión 11, cierre). Este archivo es el punto de partida
+Última actualización: 2026-09-08 (sesión 12, cierre). Este archivo es el punto de partida
 para retomar el trabajo en una sesión nueva sin perder contexto.
 
-**Estado en una línea**: Sprints 1-4 y 7 completos. **Sprint 5 completo** (trends avanzados,
-energía musical visible, Recomendaciones V2 colaborativo, rifas + selección de ganador — ver
-sesión 11 abajo), más un bug real de RLS encontrado y arreglado en Squads que afectaba desde
-antes de esta sesión. **Sprint 6 sigue sin construir** (mapa social, Torneo Sonoro grupal,
-dashboard de patrocinios agregado, moderación) y **conexión en vivo (Spotify/Apple Music
-OAuth beta) sigue explícitamente pausada** — el usuario pidió no tocarla salvo confirmación
-explícita.
+**Estado en una línea**: **Los 7 sprints numerados del roadmap original del spec están
+completos** (Sprint 6 — mapa social, Torneo Sonoro grupal, dashboard de patrocinios,
+moderación — cerrado en sesión 12). Antes de Sprint 6 se hizo una auditoría completa del
+patrón de RLS silencioso que ya había aparecido 3 veces (Squads original, comparación de
+squad, `fetchMySquads`) — no se encontraron casos adicionales, el patrón queda cerrado. Lo
+único que sigue explícitamente fuera de alcance por decisión del usuario: **conexión en vivo
+(Spotify/Apple Music OAuth beta)** y **todo el Backlog v2** del spec (seguridad/ubicación en
+vivo, recap anual, álbum de conciertos, match por historial compartido).
 
 Proyecto Supabase: `ijwyykfuyeaahvxmaild` ("Sound Project", org `ljcnanwlkijozacnyhck`).
 Repo: rama `master`, sin remoto configurado todavía. Último commit antes de esta sesión:
-`67112fa` (cierre de sesión 10, Sprint 7).
+`8dd09e6` (cierre de sesión 11, Sprint 5).
 
 ## Completado y verificado en dispositivo (no solo compilado — probado tocando la app)
 
@@ -1217,6 +1218,216 @@ nuevo, tal como pedía el prompt — la tabla `announcements` y el flujo de
   confirma que vale la pena, como hábito, recontar tablas clave al cierre de la sesión en vez
   de solo confiar en que cada script individual limpió bien lo suyo.
 
+## Sesión 12 (2026-09-08): auditoría de RLS cerrada + Sprint 6 completo (mapa social, Torneo Sonoro grupal, dashboard de patrocinios, moderación)
+
+### Auditoría de RLS en lecturas cruzando `squad_members`/`music_profile` — sin casos nuevos
+
+Van tres bugs del mismo patrón en sesiones distintas (Squads original, `squad_comparison` de
+Sprint 7 —construida ya con el fix desde el inicio—, y `fetchMySquads` arreglado en sesión 11)
+así que antes de tocar Sprint 6 se dedicó tiempo a buscar el patrón en todo el código (móvil y
+admin), no solo dentro de Squads:
+
+- **Grep de `.from('music_profile')`, `.from('users')`, `.from('trends')`,
+  `.from('mood_logs')` en todo `src/` y `admin/src/`**: todos los usos restantes son lecturas
+  de la fila propia (`.eq('user_id', userId)` o `.eq('id', user.id)` con el id de la sesión
+  actual) — ninguno intenta leer la fila de otro usuario directamente. El único punto que
+  antes leía perfiles ajenos (`useSquadStore.fetchMySquads`) ya se había arreglado en la
+  sesión 11.
+- **Confirmado con cuentas de prueba reales** (no solo lectura de código, siguiendo la
+  instrucción del prompt): se recreó un squad con dos miembros — uno con playlist de squad
+  agregada — y se confirmó que `squad_members`/`squad_playlist` (que tienen policies propias
+  de "compañero de squad", no de "fila propia") sí funcionan como lectura cruzada real para
+  miembros y sí bloquean a un no-miembro; y que `recommendation_cache` (nueva en Sprint 5,
+  select-own) efectivamente bloquea que un squadmate lea las recomendaciones cacheadas de
+  otro. Cuentas y datos de prueba borrados al terminar.
+- **Conclusión: no se encontraron casos adicionales.** El patrón queda documentado como
+  cerrado — cualquier tabla nueva que necesite "leer datos de alguien más porque comparte
+  squad/festival conmigo" debe usar una policy explícita de tipo "compañero" (como
+  `squad_members_select_fellow`) o una RPC `SECURITY DEFINER` con `is_squad_member()` (como
+  `squad_comparison`/`squad_members_with_profile`) — nunca asumir que una policy de
+  `select-own` alcanza para mostrar datos de otros usuarios.
+
+### 1. Mapa social — completado y verificado
+
+Interpretación confirmada con el usuario antes de construir (`AskUserQuestion`): mostrar,
+junto al conteo que ya existía (`squadGoingCount`, Sprint 3), la lista real de squadmates que
+confirmaron "Voy" a ese festival — sin ubicación en tiempo real (eso sigue en Backlog v2).
+
+- [useFestivalStore.ts](src/store/useFestivalStore.ts): `FestivalWithIntent` gana
+  `squadGoingIds: string[]` (los mismos ids que ya se usaban para contar, ahora expuestos).
+- [FestivalHubScreen.tsx](src/screens/main/FestivalHubScreen.tsx): construye un mapa
+  `user_id -> arquetipo` a partir de `useSquadStore.squads` (que ya carga
+  `squad_members_with_profile` completo desde la sesión 11) — **sin ninguna query nueva**, y
+  sin repetir el patrón de lectura roto que motivó la auditoría de esta sesión. Toggle
+  "▸ N de tu squad van" ahora expande la lista con emoji+arquetipo de cada squadmate.
+- **Verificado por revisión de código** (el mecanismo subyacente — `squad_members_with_profile`
+  y la policy `festival_intent_select_own_or_squadmate` — ya estaba probado con cuentas
+  reales en sesiones 5 y 11; esta sesión solo cambia cómo se combinan esos datos en cliente,
+  no agrega superficie nueva de RLS que verificar).
+
+### 2. Torneo Sonoro grupal (squads) — completado y verificado
+
+Regla de avance confirmada con el usuario antes de construir: sin tiempo real, el **owner del
+squad avanza manualmente** cuando quiere, gana el artista con más votos en ese momento (no se
+requiere que todos voten). Reutiliza la mecánica exacta de `TorneoScreen`/`tournament.ts`
+(cola de contendientes → ganadores → siguiente ronda), movida a la base de datos para que
+todo el squad vote sobre el mismo matchup.
+
+- Migración `sprint6_squad_tournament`: tablas `squad_tournaments` (estado del bracket:
+  `artists`/`remaining`/`winners_this_round`/`round`/`turn`/`champion`, todo `jsonb` salvo los
+  contadores) y `squad_tournament_votes` (un voto por miembro por `turn`, upsert para poder
+  cambiar de voto antes de que el owner avance). `squad_tournaments` sigue el patrón
+  "sin insert/update de cliente" de `user_badges`/`recommendation_cache` — todo pasa por
+  `start_squad_tournament`/`advance_squad_tournament` (`SECURITY DEFINER`, verifican
+  `squads.owner_id = auth.uid()` internamente). Columnas nuevas en `squads`:
+  `himno_artist_id`/`himno_nombre`/`himno_imagen_url`, escritas por `advance_squad_tournament`
+  al coronar campeón — el "himno oficial del squad" vive en el squad, no en el perfil de
+  ningún miembro.
+- Nueva pantalla [SquadTorneoScreen.tsx](src/screens/main/SquadTorneoScreen.tsx) + store
+  [useSquadTournamentStore.ts](src/store/useSquadTournamentStore.ts): el owner arma el pool
+  de 8 artistas con la unión de géneros de **todos** los miembros del squad (ya disponible
+  vía `squad_members_with_profile`, sin query nueva) pasada a `fetchTournamentArtists` (el
+  mismo Edge Function `spotify-artists` del torneo individual). Cualquier miembro vota
+  tocando un lado del duelo; el owner ve "N votos en este matchup" y un botón "Avanzar
+  ronda". Al coronar campeón, tarjeta compartible reutilizando `ArchetypeCard` (mismo patrón
+  que niveles/campeón individual). Botón de acceso nuevo en
+  [SquadDetailScreen.tsx](src/screens/main/SquadDetailScreen.tsx) mostrando el himno actual
+  o "Sin torneo grupal todavía".
+- **Bug real encontrado y corregido durante el desarrollo, no solo teórico**: la primera
+  versión de `advance_squad_tournament` no tenía guarda contra avanzar sin ningún voto — se
+  agregó explícitamente `raise exception` si nadie votó el matchup actual, para que un owner
+  descuidado no corone un campeón al azar sin que nadie haya participado.
+- **Verificado end-to-end con cuentas de prueba reales, bracket completo**: squad de prueba
+  con owner + 1 miembro, torneo de 8 artistas de prueba, se jugaron los 7 duelos completos
+  (4 de "ronda de 8" → 2 de semifinal → 1 de gran final, confirmando que
+  `TOURNAMENT_DUEL_COUNT = 7` de `tournament.ts` aplica igual aquí), ambos votando siempre
+  por el mismo lado para que el resultado fuera determinista — el campeón final coincidió
+  exactamente con el artista votado, y `squads.himno_artist_id`/`himno_nombre` quedaron
+  escritos correctamente. **Confirmado además**: un no-owner no puede iniciar ni avanzar el
+  torneo (`"Solo el owner del squad puede..."`), un no-miembro no puede votar (RLS), y avanzar
+  sin votos falla con el mensaje esperado. Squad, torneo, votos y cuentas de prueba borrados
+  al terminar (la limpieza de `squad_tournaments`/`squad_tournament_votes` fue automática vía
+  `ON DELETE CASCADE` desde `squads`, no hizo falta borrarlas a mano).
+
+### 3. Dashboard de patrocinios (Sound Insights) — completado y verificado
+
+Retoma "Tendencias por segmento de arquetipo" (la interpretación de Trends avanzados que
+**no** se construyó en Sprint 5) como reporte agregado para patrocinadores, tal como sugería
+el prompt — aplicando la regla de cumplimiento del spec ("agregación mínima de 30-50
+usuarios, nunca datos individuales identificables") como una restricción real de la base de
+datos, no solo un texto en la UI.
+
+- Migración `sprint6_sponsor_insights` (+ fix `sprint6_sponsor_insights_admin_only` y
+  `sprint6_fix_insights_ambiguous_column`, ver bug abajo): función
+  `insights_arquetipo_generos(p_min_usuarios int default 30)` — cuenta perfiles con
+  arquetipo, y si el total es menor al mínimo **devuelve cero filas**, ni siquiera al admin;
+  no es un filtro de UI que se pueda saltar. `insights_profile_count()` expone solo el total
+  (para que el panel explique "faltan N perfiles" sin revelar nada más granular). Ambas
+  funciones verifican `is_admin` del llamador — no basta con pasar el mínimo, tienen que
+  venir del panel admin.
+- **Dos bugs reales encontrados y corregidos durante el desarrollo**:
+  1. Las funciones de insights inicialmente solo aplicaban el filtro de mínimo de usuarios,
+     sin verificar `is_admin` — cualquier usuario de la app móvil habría podido llamar el RPC
+     directamente y obtener el agregado completo una vez que el proyecto superara el umbral
+     de 30 perfiles. Se agregó el mismo chequeo `exists (... is_admin)` que usa el resto del
+     panel admin.
+  2. `insights_arquetipo_generos` fallaba con `column reference "arquetipo" is ambiguous` —
+     los parámetros de salida de la función (`returns table (arquetipo text, ...)`) se
+     llaman igual que las columnas de la consulta interna, un problema clásico de PL/pgSQL
+     donde el nombre del parámetro de salida sombrea la columna. Se arregló con el pragma
+     `#variable_conflict use_column` al inicio del cuerpo de la función. Confirmado con
+     cuentas de prueba reales antes y después del fix (el error reproducía consistente antes,
+     desapareció después).
+- **Panel admin**: nueva página `/insights` — junta el interés por anuncio de **todos** los
+  festivales en una sola lista ordenada (esto cierra el pendiente de "dashboard de interés
+  agregado" que Sprint 4/5 dejaban explícitamente fuera), y muestra la tabla
+  arquetipo×género si hay suficientes perfiles, o un mensaje explicando cuántos faltan si no
+  los hay. Con los 4 perfiles reales actuales, el reporte está vacío por diseño — es el
+  comportamiento correcto del piso de cumplimiento, no un bug.
+- **Verificado con cuentas de prueba reales**: un usuario no-admin recibe `"No autorizado."`
+  al llamar cualquiera de las dos funciones; con una cuenta de prueba marcada `is_admin` (vía
+  `apply_migration`, ver nota de entorno abajo), `insights_profile_count()` devolvió el total
+  real (4), `insights_arquetipo_generos()` con el mínimo default (30) devolvió vacío, y con
+  `p_min_usuarios: 1` devolvió las filas reales agregadas — confirma tanto el gate de admin
+  como el gate de volumen funcionando de verdad, no solo en el código. Cuenta de prueba
+  borrada al terminar.
+
+### 4. Moderación — completado y verificado
+
+Alcance deliberadamente mínimo, acotado a las dos únicas superficies de texto libre de
+usuario que existen hoy (comentarios de festival y el `caption` de Trends comunitarios) — las
+reacciones son solo like/dislike y la playlist de squad es selección de un catálogo fijo, no
+hay nada más que "reportar" ahí.
+
+- Migración `sprint6_moderation`: columna `oculto boolean` en `festival_comments` y
+  `community_shares`; las policies de `select` de ambas tablas cambiaron de "todos ven todo"
+  a **"todos ven lo no oculto, el admin ve todo"** — el contenido oculto se vuelve invisible
+  a nivel de RLS, no solo por un filtro de cliente que alguien podría olvidar. La vista
+  `community_share_stats` (usada por el ranking de Trends comunitarios) es
+  `security_invoker`, así que hereda esta regla automáticamente sin tocarla. Tabla nueva
+  `content_reports` (`content_type`, `content_id`, `reporter_user_id`, `motivo` fijo:
+  spam/ofensivo/otro, `resuelto`) — `select`/`update` admin-only, `insert` propio; **sin
+  policy de `delete` para nadie**, a propósito: la acción de moderación es "ocultar +
+  resolver", nunca borrar (ni el contenido ni el reporte).
+- **App móvil**: helper compartido
+  [src/lib/moderation.ts](src/lib/moderation.ts) (`promptReportContent`, un `Alert` de 3
+  opciones) usado tanto en
+  [FestivalHubScreen.tsx](src/screens/main/FestivalHubScreen.tsx) (link "Reportar" junto a
+  cada comentario ajeno) como en
+  [CommunityTrendsScreen.tsx](src/screens/main/CommunityTrendsScreen.tsx) (junto a cada share
+  ajeno). Nuevas acciones `reportComment`/`reportShare` en
+  `useFestivalStore`/`useCommunityStore` — **sin encadenar `.select()` tras el insert**,
+  porque `content_reports` no tiene policy de `select` para el usuario normal (ver nota de
+  entorno abajo, esto salió de un error real durante la verificación).
+- **Panel admin**: página nueva `/moderacion` — lista reportes sin resolver con el texto del
+  contenido reportado (leyendo `festival_comments`/`community_shares` directamente; el admin
+  ya puede ver contenido oculto gracias a la policy de arriba), botón "Ocultar contenido"
+  (pone `oculto = true` **y** `resuelto = true` en un solo paso) y "Descartar reporte" (solo
+  `resuelto = true`, el contenido queda como estaba).
+- **Verificado end-to-end con cuentas de prueba reales**: comentario creado por A, reportado
+  por B con motivo "spam"; confirmado que **ni A ni B** pueden leer el reporte de vuelta
+  (`content_reports` es admin-only incluso para el propio reportero); con una cuenta marcada
+  `is_admin` se leyó el reporte, se ocultó el comentario y se resolvió el reporte en los
+  mismos dos pasos que hace la acción del panel; confirmado que un usuario nuevo ya no ve el
+  comentario oculto en absoluto (`select` devuelve `[]`, no solo un flag para filtrar), y que
+  el admin sigue viéndolo (`oculto: true` visible). Comentario, reporte y las 4 cuentas de
+  prueba borrados al terminar.
+
+### Problemas de entorno (sesión 12)
+
+- **El emulador Android seguía ocupado por otra sesión de Claude Code** (tercera sesión
+  seguida con este hallazgo — ver sesiones 10 y 11). Toda la verificación se hizo por
+  REST/SQL con cuentas de prueba reales.
+- **Encadenar `.select()` tras un `.insert()` en una tabla sin policy de `select` para el
+  rol que escribe rompe el insert, no solo el select** — confirmado esta sesión con
+  `content_reports` (insert-only para el reportero): `supabase.from('content_reports').insert(...).select().single()`
+  falla con `"new row violates row-level security policy"` aunque el `insert` en sí sea
+  válido, porque PostgREST necesita hacer un `select` de la fila recién insertada para poder
+  devolverla, y ese `select` sí choca con RLS. El código real de la app
+  (`reportComment`/`reportShare`) nunca encadenó `.select()`, así que no tuvo este problema —
+  pero el primer intento del script de verificación sí, y sirvió para documentar la regla:
+  **si una tabla tiene insert-propio pero no select-propio (como `content_reports`,
+  `user_badges`, `recommendation_cache`), cualquier insert desde el cliente debe omitir
+  `.select()`/`.single()` después.**
+- **Un cleanup de prueba con la sesión "admin" no puede borrar filas que no le pertenecen a
+  él mismo** — parecía obvio en retrospectiva, pero un script de esta sesión intentó que la
+  cuenta admin de prueba borrara `festival_comments`/`content_reports`/`users` de otras
+  cuentas de prueba, y esos deletes fallaron en silencio (RLS filtra antes de aplicar el
+  `DELETE`, sin excepción — el mismo comportamiento de Postgrest/RLS ya documentado en
+  sesiones anteriores para `UPDATE`). Ninguna de esas tablas tiene policy de `delete` para
+  admin a propósito (ver el punto de "Moderación" arriba — ocultar, no borrar). Se detectó
+  recontando `users`/`festival_comments`/`content_reports` al final de la sesión (11 en vez
+  de 6) y se limpió con `apply_migration` en vez de reintentar con la sesión equivocada.
+  **Regla para la próxima sesión**: para limpiar datos de prueba tras verificar RLS
+  admin-only, o se usa la sesión del actor original (dueño de la fila) para borrar, o se
+  hace la limpieza final por `apply_migration` directamente — no asumir que la sesión admin
+  puede borrar todo.
+- `execute_sql` del MCP de Supabase sigue en modo solo-lectura este entorno (ya documentado
+  en sesión 11) — todas las escrituras de verificación puntuales de esta sesión (flags de
+  `is_admin` temporales) se hicieron con `apply_migration`, dejando varios registros de
+  migración con nombre `verify_*` — es el costo aceptado de no tener otra vía de escritura
+  elevada disponible.
+
 ## Pendiente
 
 - No hay UI para editar nombre/ciudad/fechas de un festival ya creado desde el panel (solo
@@ -1303,8 +1514,8 @@ nuevo, tal como pedía el prompt — la tabla `announcements` y el flujo de
     confirmado con el usuario) — si se decide construir push real después, hace falta
     `expo-notifications`, una tabla de tokens por usuario, y una Edge Function o trigger que
     llame a la Expo Push API.
-  - Dashboard de interés agregado (comparar entre anuncios/festivales) sigue sin construir —
-    el spec lo separa de "selección de ganador" y no se pidió esta sesión.
+  - ~~Dashboard de interés agregado (comparar entre anuncios/festivales) sigue sin
+    construir~~ — **resuelto en sesión 12**, ver `/insights` en el panel admin.
   - Sigue sin existir una pantalla de "editar mi perfil" (nombre/ciudad) — bloquea que la
     comparación de energía por ciudad y "Mi ciudad" en Trends comunitarios tengan datos
     reales para la mayoría de usuarios.
@@ -1315,15 +1526,25 @@ nuevo, tal como pedía el prompt — la tabla `announcements` y el flujo de
   squadmate ajeno mostraba "Perfil incompleto" y "% contigo" salía mal. Arreglado con una RPC
   (`squad_members_with_profile`, mismo patrón que `squad_comparison`). Ver sesión 11 para el
   detalle completo de cómo se confirmó con cuentas de prueba antes y después del fix.
-- **Sprint 6 del spec sigue sin construir**: mapa social, Torneo Sonoro grupal (squads),
-  dashboard de patrocinios, moderación de comentarios reportados.
+- **Sprint 6 — completo** (sesión 12): mapa social (lista de squadmates asistentes en
+  Festival Hub), Torneo Sonoro grupal (bracket compartido por squad, owner avanza
+  manualmente, himno oficial guardado en `squads`), Dashboard de patrocinios (`/insights` en
+  el panel admin: interés agregado + tendencias por arquetipo×género con piso de 30
+  usuarios), Moderación (reportar + ocultar sobre comentarios de festival y shares
+  comunitarios, panel `/moderacion`). Ver sesión 12 para detalle completo, incluyendo la
+  auditoría de RLS que se hizo antes (sin casos nuevos encontrados) y dos bugs reales
+  corregidos en las funciones de insights (falta de chequeo admin, columna ambigua en
+  PL/pgSQL).
+  - Con los 7 sprints numerados del roadmap original completos, lo único que queda del
+    spec es lo explícitamente pausado: conexión en vivo y Backlog v2 (ver abajo).
 - **Conexión en vivo (Spotify/Apple Music OAuth, beta cerrada)** sigue explícitamente
   pausada — el spec la marca como feature detrás de feature flag solo para una cohorte
   allowlist, y el usuario pidió no construirla salvo confirmación explícita de que es
   momento de abrir esa beta.
-- Ninguna de las features de Sprint 5 se verificó visualmente en emulador (otra sesión de
-  Claude Code seguía usando el emulador/Metro, igual que en la sesión 10 — ver "Problemas de
-  entorno" de esa sesión). Todo se verificó con cuentas de prueba reales por REST/SQL.
+- Ninguna de las features de Sprint 5/6 se verificó visualmente en emulador (otra sesión de
+  Claude Code seguía usando el emulador/Metro en las tres sesiones seguidas — ver "Problemas
+  de entorno" de las sesiones 10/11/12). Todo se verificó con cuentas de prueba reales por
+  REST/SQL.
 
 ## Decisiones técnicas tomadas en el camino (no estaban en el prompt original)
 
@@ -1481,22 +1702,32 @@ nuevo, tal como pedía el prompt — la tabla `announcements` y el flujo de
    mismo patrón de despliegue/secretos que las anteriores. Ninguna escribe en la base de
    datos (puro cálculo sobre datos de Spotify), verificadas por curl directo, no por REST
    con sesión de usuario.
-7. **Sprint 4, 5 y 7 están completos.** Sprint 4 (commit `74185d1` y el anterior de la
-   sesión 9): Festival generado por gustos, Mapa del festival, Recomendaciones V1,
-   Comentarios por festival, Anuncios y promociones. Sprint 7 (sesión 10): insignia
-   fundador, insignias por combinación rara, niveles + tarjeta compartible, encuestas
-   post-festival, comparación de squad, reto semanal. Sprint 5 (sesión 11): trends
-   avanzados, energía musical visible, Recomendaciones V2 (colaborativo), rifas + selección
-   de ganador — más un bug real de RLS en Squads encontrado y arreglado (ver esa sección).
-   **Sprint 6 sigue sin construir** y **conexión en vivo (Spotify/Apple Music OAuth) sigue
-   pausada** (el usuario debe confirmar explícitamente antes de abrir esa beta).
-   **Siguiente foco: a decidir con el usuario — probablemente Sprint 6, o cerrar los
-   pendientes de verificación visual que se fueron acumulando (ver "Pendiente").** El
-   detalle exacto del spec **no está guardado en este repo ni en el sistema de archivos** —
-   se ha leído tres veces (sesiones 9, 10, 11) desde un Artifact publicado que el usuario
-   comparte por link en el chat, y ese contenido no persiste entre sesiones. **Antes de
-   construir nada de un sprint nuevo, pedirle al usuario el link del Artifact del spec de
-   nuevo y confirmar el alcance exacto** — no asumir a partir de lo que se infiere abajo.
+7. **Los 7 sprints numerados del roadmap original del spec están completos.** Sprint 4
+   (commit `74185d1` y el anterior de la sesión 9): Festival generado por gustos, Mapa del
+   festival, Recomendaciones V1, Comentarios por festival, Anuncios y promociones. Sprint 7
+   (sesión 10): insignia fundador, insignias por combinación rara, niveles + tarjeta
+   compartible, encuestas post-festival, comparación de squad, reto semanal. Sprint 5
+   (sesión 11): trends avanzados, energía musical visible, Recomendaciones V2
+   (colaborativo), rifas + selección de ganador — más un bug real de RLS en Squads
+   encontrado y arreglado. Sprint 6 (sesión 12): mapa social, Torneo Sonoro grupal, Sound
+   Insights (dashboard de patrocinios), Moderación — más la auditoría de RLS que precedió
+   ese sprint (sin casos nuevos encontrados) y dos bugs reales en las funciones de insights
+   (ver esa sección).
+   **Conexión en vivo (Spotify/Apple Music OAuth) sigue pausada** (el usuario debe confirmar
+   explícitamente antes de abrir esa beta) y **todo el Backlog v2 del spec sigue fuera de
+   alcance** (seguridad/ubicación en vivo, recap anual estilo Wrapped, álbum de conciertos,
+   match por historial compartido).
+   **Siguiente foco: a decidir con el usuario.** Con el roadmap numerado cerrado, las
+   opciones razonables son: (a) abrir la beta de conexión en vivo si el usuario lo confirma,
+   (b) empezar a evaluar el Backlog v2 feature por feature (cada una tiene su propia
+   sección de "por qué se dejó fuera" en el spec — leerla antes de proponer nada), o (c)
+   cerrar los pendientes de verificación visual que se fueron acumulando por el emulador
+   ocupado (ver "Pendiente"). El detalle exacto del spec **no está guardado en este repo ni
+   en el sistema de archivos** — se ha leído cuatro veces (sesiones 9, 10, 11, 12) desde un
+   Artifact publicado que el usuario comparte por link en el chat, y ese contenido no
+   persiste entre sesiones. **Antes de construir cualquier cosa nueva, pedirle al usuario el
+   link del Artifact del spec de nuevo y confirmar el alcance exacto** — no asumir a partir
+   de lo que se infiere abajo.
    - **Compañero ideal sigue sin definir**: no avanzar en código hasta que el usuario
      confirme o corrija la interpretación propuesta en la sesión 8 (compat_score más alto
      entre todos los usuarios de la app, no solo squadmates). No es parte de ningún sprint
@@ -1566,3 +1797,33 @@ nuevo, tal como pedía el prompt — la tabla `announcements` y el flujo de
     `announcements`, etc.) contra el conteo esperado antes de dar por buena la limpieza — la
     sesión 11 encontró 2 cuentas de prueba huérfanas exactamente así, de un script que había
     fallado a medias antes de llegar a su propia limpieza.
+14. **Sprint 6 (sesión 12)**: tablas nuevas `squad_tournaments`/`squad_tournament_votes`
+    (RLS: select para miembros del squad vía `is_squad_member()`, sin insert/update de
+    cliente — todo pasa por `start_squad_tournament`/`advance_squad_tournament`,
+    `SECURITY DEFINER`, verifican `owner_id` internamente) y `content_reports` (insert
+    propio, select/update solo admin, **sin delete para nadie** — moderación es
+    ocultar+resolver, nunca borrar). Columnas nuevas: `squads.himno_artist_id`/`himno_nombre`/
+    `himno_imagen_url`; `festival_comments.oculto`/`community_shares.oculto` (con las
+    policies de `select` de ambas tablas cambiadas a "no oculto o admin" — revisar
+    `sprint6_moderation` antes de tocarlas). Funciones nuevas `insights_arquetipo_generos`/
+    `insights_profile_count` (admin-only, la primera con el pragma
+    `#variable_conflict use_column` — necesario porque sus parámetros de salida se llaman
+    igual que columnas de la consulta interna, un bug real que se reprodujo y arregló esta
+    sesión). Antes de tocar cualquiera de estas, revisar la sección de sesión 12 completa —
+    incluye la auditoría de RLS que se hizo antes de construir nada.
+15. **Un `.insert(...).select()` encadenado falla si la tabla no tiene policy de `select`
+    para quien escribe** (confirmado en sesión 12 con `content_reports`, que es insert-propio
+    pero sin select-propio) — el error es el mismo `"new row violates row-level security
+    policy"` que un insert realmente rechazado, así que puede confundir. Si una tabla sigue
+    el patrón "insert propio, select solo admin/nadie" (`content_reports`, `user_badges`,
+    `recommendation_cache`), cualquier insert desde el cliente debe omitir `.select()`
+    después — el código real de la app ya lo hace bien, pero un script de verificación
+    puede pisar este mismo error si no se tiene presente.
+16. **La sesión "admin" de una prueba no puede borrar filas de otros usuarios en tablas sin
+    policy de `delete` para admin** (confirmado en sesión 12: intentar borrar
+    `festival_comments`/`users` ajenos desde una cuenta admin de prueba falla en silencio,
+    0 filas afectadas, sin excepción — mismo comportamiento de Postgrest/RLS ya documentado
+    para `UPDATE` en sesiones anteriores). Para limpiar datos de prueba después de verificar
+    un flujo admin-only, usar la sesión del actor original (dueño de la fila) para borrar, o
+    hacer la limpieza final directamente por `apply_migration` — no asumir que "admin" puede
+    borrar cualquier cosa solo porque puede leerla/ocultarla.

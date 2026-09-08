@@ -160,6 +160,7 @@ export type Database = {
           ciudad: string | null
           created_at: string
           id: string
+          oculto: boolean
           song_ids: string[]
           user_id: string
         }
@@ -168,6 +169,7 @@ export type Database = {
           ciudad?: string | null
           created_at?: string
           id?: string
+          oculto?: boolean
           song_ids: string[]
           user_id: string
         }
@@ -176,6 +178,7 @@ export type Database = {
           ciudad?: string | null
           created_at?: string
           id?: string
+          oculto?: boolean
           song_ids?: string[]
           user_id?: string
         }
@@ -189,11 +192,53 @@ export type Database = {
           },
         ]
       }
+      content_reports: {
+        Row: {
+          content_id: string
+          content_type: string
+          created_at: string
+          id: string
+          motivo: string
+          reporter_user_id: string
+          resuelto: boolean
+          resuelto_at: string | null
+        }
+        Insert: {
+          content_id: string
+          content_type: string
+          created_at?: string
+          id?: string
+          motivo: string
+          reporter_user_id: string
+          resuelto?: boolean
+          resuelto_at?: string | null
+        }
+        Update: {
+          content_id?: string
+          content_type?: string
+          created_at?: string
+          id?: string
+          motivo?: string
+          reporter_user_id?: string
+          resuelto?: boolean
+          resuelto_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_reports_reporter_user_id_fkey"
+            columns: ["reporter_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       festival_comments: {
         Row: {
           created_at: string
           festival_id: string
           id: string
+          oculto: boolean
           texto: string
           user_id: string
         }
@@ -201,6 +246,7 @@ export type Database = {
           created_at?: string
           festival_id: string
           id?: string
+          oculto?: boolean
           texto: string
           user_id: string
         }
@@ -208,6 +254,7 @@ export type Database = {
           created_at?: string
           festival_id?: string
           id?: string
+          oculto?: boolean
           texto?: string
           user_id?: string
         }
@@ -731,9 +778,92 @@ export type Database = {
           },
         ]
       }
+      squad_tournament_votes: {
+        Row: {
+          artist_id: string
+          created_at: string
+          squad_id: string
+          turn: number
+          user_id: string
+        }
+        Insert: {
+          artist_id: string
+          created_at?: string
+          squad_id: string
+          turn: number
+          user_id: string
+        }
+        Update: {
+          artist_id?: string
+          created_at?: string
+          squad_id?: string
+          turn?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "squad_tournament_votes_squad_id_fkey"
+            columns: ["squad_id"]
+            isOneToOne: false
+            referencedRelation: "squads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "squad_tournament_votes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      squad_tournaments: {
+        Row: {
+          artists: Json
+          champion: Json | null
+          remaining: Json
+          round: number
+          squad_id: string
+          turn: number
+          updated_at: string
+          winners_this_round: Json
+        }
+        Insert: {
+          artists: Json
+          champion?: Json | null
+          remaining: Json
+          round?: number
+          squad_id: string
+          turn?: number
+          updated_at?: string
+          winners_this_round?: Json
+        }
+        Update: {
+          artists?: Json
+          champion?: Json | null
+          remaining?: Json
+          round?: number
+          squad_id?: string
+          turn?: number
+          updated_at?: string
+          winners_this_round?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "squad_tournaments_squad_id_fkey"
+            columns: ["squad_id"]
+            isOneToOne: true
+            referencedRelation: "squads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       squads: {
         Row: {
           created_at: string
+          himno_artist_id: string | null
+          himno_imagen_url: string | null
+          himno_nombre: string | null
           id: string
           invite_code: string
           nombre: string
@@ -741,6 +871,9 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          himno_artist_id?: string | null
+          himno_imagen_url?: string | null
+          himno_nombre?: string | null
           id?: string
           invite_code?: string
           nombre: string
@@ -748,6 +881,9 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          himno_artist_id?: string | null
+          himno_imagen_url?: string | null
+          himno_nombre?: string | null
           id?: string
           invite_code?: string
           nombre?: string
@@ -855,6 +991,9 @@ export type Database = {
       // null (confirmed against the view definition), but the type generator
       // can't infer that for a view and marks every column nullable. Narrowed
       // back to match reality, same as the hand-written version this replaced.
+      // security_invoker on this view means it also inherits community_shares'
+      // RLS — hidden (oculto) shares disappear from it automatically for
+      // non-admins, no extra filter needed here.
       community_share_stats: {
         Row: {
           caption: string | null
@@ -877,6 +1016,25 @@ export type Database = {
       }
     }
     Functions: {
+      advance_squad_tournament: {
+        Args: { p_squad_id: string }
+        Returns: {
+          artists: Json
+          champion: Json | null
+          remaining: Json
+          round: number
+          squad_id: string
+          turn: number
+          updated_at: string
+          winners_this_round: Json
+        }
+        SetofOptions: {
+          from: "*"
+          to: "squad_tournaments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       cosine_similarity: {
         Args: { v1: number[]; v2: number[] }
         Returns: number
@@ -885,6 +1043,9 @@ export type Database = {
         Args: { p_nombre: string }
         Returns: {
           created_at: string
+          himno_artist_id: string | null
+          himno_imagen_url: string | null
+          himno_nombre: string | null
           id: string
           invite_code: string
           nombre: string
@@ -915,6 +1076,15 @@ export type Database = {
         Returns: undefined
       }
       generate_trends_for_all: { Args: never; Returns: undefined }
+      insights_arquetipo_generos: {
+        Args: { p_min_usuarios?: number }
+        Returns: {
+          arquetipo: string
+          genero: string
+          usuarios: number
+        }[]
+      }
+      insights_profile_count: { Args: never; Returns: number }
       is_squad_member: {
         Args: { p_squad_id: string; p_user_id: string }
         Returns: boolean
@@ -923,6 +1093,9 @@ export type Database = {
         Args: { p_invite_code: string }
         Returns: {
           created_at: string
+          himno_artist_id: string | null
+          himno_imagen_url: string | null
+          himno_nombre: string | null
           id: string
           invite_code: string
           nombre: string
@@ -971,6 +1144,10 @@ export type Database = {
           joined_at: string
           user_id: string
         }[]
+      }
+      start_squad_tournament: {
+        Args: { p_artists: Json; p_squad_id: string }
+        Returns: undefined
       }
     }
     Enums: {
@@ -1115,3 +1292,5 @@ export type AnnouncementTipo = "simple" | "rifa" | "descuento"
 export type SurveyCalificacion = "genial" | "bien" | "regular" | "malo"
 export type SurveyVolveria = "si" | "no" | "tal_vez"
 export type RecommendationFuente = "v1_contenido" | "v2_colaborativo"
+export type ContentReportType = "festival_comment" | "community_share"
+export type ContentReportMotivo = "spam" | "ofensivo" | "otro"

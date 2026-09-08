@@ -182,6 +182,17 @@ export function SquadDetailScreen({ route, navigation }: Props) {
           <Text style={styles.codeShare}>Compartir ↗</Text>
         </Pressable>
 
+        <Pressable
+          style={styles.codeCard}
+          onPress={() => navigation.navigate('SquadTorneo', { squadId })}
+        >
+          <View>
+            <Text style={styles.codeLabel}>Himno oficial del squad</Text>
+            <Text style={styles.himnoValue}>{squad.himno_nombre ?? 'Sin torneo grupal todavía'}</Text>
+          </View>
+          <Text style={styles.codeShare}>🏆 Torneo ↗</Text>
+        </Pressable>
+
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Miembros</Text>
           {members.map((member) => {
@@ -385,6 +396,10 @@ const styles = StyleSheet.create({
   codeShare: {
     ...type.label,
     color: colors.accentSecondary,
+  },
+  himnoValue: {
+    ...type.bodyLg,
+    color: colors.textPrimary,
   },
   section: {
     gap: spacing.sm,
