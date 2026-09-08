@@ -74,44 +74,39 @@ export const useSquadStore = create<SquadState>((set, get) => ({
       return;
     }
 
-    const { data: memberRows, error: memberErr } = await supabase
-      .from('squad_members')
-      .select('*')
-      .in('squad_id', squadIds);
+    // music_profile only has a select-own RLS policy, so a direct client
+    // query for every member's profile (the old approach here) silently
+    // returns nothing for anyone but the caller — confirmed live with a
+    // disposable test squad while auditing this pattern. squad_members_with_profile
+    // is a SECURITY DEFINER RPC (same shape as squad_comparison) that reads
+    // real profile data for a squad's members, gated by is_squad_member().
+    const membersBySquad = await Promise.all(
+      squadIds.map(async (squadId) => {
+        const { data, error } = await supabase.rpc('squad_members_with_profile', {
+          p_squad_id: squadId,
+        });
+        if (error) throw error;
+        return { squadId, members: data ?? [] };
+      }),
+    ).catch((err: unknown) => {
+      set({ status: 'error', error: err instanceof Error ? err.message : String(err) });
+      return null;
+    });
 
-    if (memberErr) {
-      set({ status: 'error', error: memberErr.message });
-      return;
-    }
+    if (!membersBySquad) return;
 
-    const allUserIds = [...new Set((memberRows ?? []).map((m) => m.user_id))];
-    const { data: profileRows, error: profileErr } = await supabase
-      .from('music_profile')
-      .select('user_id, arquetipo, generos, energia')
-      .in('user_id', allUserIds);
-
-    if (profileErr) {
-      set({ status: 'error', error: profileErr.message });
-      return;
-    }
-
-    const profileByUser = new Map((profileRows ?? []).map((p) => [p.user_id, p]));
+    const membersMap = new Map(membersBySquad.map((m) => [m.squadId, m.members]));
 
     const squads: SquadWithMembers[] = (squadRows ?? []).map((squad) => ({
       squad,
-      members: (memberRows ?? [])
-        .filter((m) => m.squad_id === squad.id)
-        .map((m) => {
-          const profile = profileByUser.get(m.user_id);
-          return {
-            user_id: m.user_id,
-            compat_score: m.compat_score,
-            joined_at: m.joined_at,
-            arquetipo: profile?.arquetipo ?? null,
-            generos: (profile?.generos as string[]) ?? [],
-            energia: profile?.energia ?? 0.5,
-          };
-        }),
+      members: (membersMap.get(squad.id) ?? []).map((m) => ({
+        user_id: m.user_id,
+        compat_score: m.compat_score,
+        joined_at: m.joined_at,
+        arquetipo: m.arquetipo,
+        generos: (m.generos as string[]) ?? [],
+        energia: m.energia,
+      })),
     }));
 
     set({ squads, status: 'ready' });

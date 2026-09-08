@@ -112,6 +112,30 @@ export async function createAnnouncement(
   return {};
 }
 
+// Picking a winner needs to read a random announcement_interest row and
+// resolve the winner's nombre from `users` — but `users` only has a
+// select-own RLS policy, so even an authenticated admin session can't read
+// another user's nombre directly. select_raffle_winner is a SECURITY DEFINER
+// RPC (checks is_admin itself) that does the pick + name lookup + write in
+// one step, same shape as every other RLS gap fixed this session.
+export async function selectRaffleWinner(
+  festivalId: string,
+  announcementId: string,
+): Promise<{ error?: string; ganadorNombre?: string }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) return { error: 'No autorizado.' };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .rpc('select_raffle_winner', { p_announcement_id: announcementId })
+    .single();
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/festivals/${festivalId}`);
+  return { ganadorNombre: data?.ganador_nombre ?? undefined };
+}
+
 export async function deleteAnnouncement(
   festivalId: string,
   announcementId: string,

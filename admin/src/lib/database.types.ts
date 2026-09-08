@@ -4,7 +4,12 @@ export type Database = {
   };
   public: {
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      select_raffle_winner: {
+        Args: { p_announcement_id: string };
+        Returns: { ganador_user_id: string; ganador_nombre: string }[];
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
     Tables: {
@@ -105,10 +110,17 @@ export type Database = {
           codigo_descuento: string | null;
           created_by: string | null;
           created_at: string;
+          ganador_user_id: string | null;
+          ganador_nombre: string | null;
         };
-        Insert: Omit<Database['public']['Tables']['announcements']['Row'], 'id' | 'created_at'> & {
+        Insert: Omit<
+          Database['public']['Tables']['announcements']['Row'],
+          'id' | 'created_at' | 'ganador_user_id' | 'ganador_nombre'
+        > & {
           id?: string;
           created_at?: string;
+          ganador_user_id?: string | null;
+          ganador_nombre?: string | null;
         };
         Update: Partial<Database['public']['Tables']['announcements']['Row']>;
         Relationships: [

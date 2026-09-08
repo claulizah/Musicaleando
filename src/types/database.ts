@@ -57,6 +57,8 @@ export type Database = {
           created_by: string | null
           descripcion: string | null
           festival_id: string
+          ganador_nombre: string | null
+          ganador_user_id: string | null
           id: string
           sponsor_nombre: string | null
           tipo: string
@@ -68,6 +70,8 @@ export type Database = {
           created_by?: string | null
           descripcion?: string | null
           festival_id: string
+          ganador_nombre?: string | null
+          ganador_user_id?: string | null
           id?: string
           sponsor_nombre?: string | null
           tipo: string
@@ -79,6 +83,8 @@ export type Database = {
           created_by?: string | null
           descripcion?: string | null
           festival_id?: string
+          ganador_nombre?: string | null
+          ganador_user_id?: string | null
           id?: string
           sponsor_nombre?: string | null
           tipo?: string
@@ -97,6 +103,13 @@ export type Database = {
             columns: ["festival_id"]
             isOneToOne: false
             referencedRelation: "festivals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "announcements_ganador_user_id_fkey"
+            columns: ["ganador_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -547,6 +560,44 @@ export type Database = {
           },
         ]
       }
+      recommendation_cache: {
+        Row: {
+          artista_id: string
+          artista_imagen_url: string | null
+          artista_nombre: string
+          fuente: string
+          score: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          artista_id: string
+          artista_imagen_url?: string | null
+          artista_nombre: string
+          fuente?: string
+          score?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          artista_id?: string
+          artista_imagen_url?: string | null
+          artista_nombre?: string
+          fuente?: string
+          score?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recommendation_cache_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       songs: {
         Row: {
           artista: string
@@ -846,7 +897,19 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      energia_ciudad_avg: {
+        Args: { p_ciudad: string }
+        Returns: {
+          muestras: number
+          promedio: number
+        }[]
+      }
       evaluate_rare_badges: { Args: { p_user_id: string }; Returns: undefined }
+      generate_recommendations_v2_for_all: { Args: never; Returns: undefined }
+      generate_recommendations_v2_for_user: {
+        Args: { p_user_id: string }
+        Returns: undefined
+      }
       generate_trend_for_user: {
         Args: { p_user_id: string }
         Returns: undefined
@@ -880,6 +943,14 @@ export type Database = {
         Args: { p_squad_id: string }
         Returns: undefined
       }
+      refresh_my_recommendations_v2: { Args: never; Returns: undefined }
+      select_raffle_winner: {
+        Args: { p_announcement_id: string }
+        Returns: {
+          ganador_nombre: string
+          ganador_user_id: string
+        }[]
+      }
       squad_comparison: {
         Args: { p_squad_id: string }
         Returns: {
@@ -887,6 +958,17 @@ export type Database = {
           festivales_confirmados: number
           generos_count: number
           nombre: string
+          user_id: string
+        }[]
+      }
+      squad_members_with_profile: {
+        Args: { p_squad_id: string }
+        Returns: {
+          arquetipo: string
+          compat_score: number
+          energia: number
+          generos: Json
+          joined_at: string
           user_id: string
         }[]
       }
@@ -1032,3 +1114,4 @@ export type FestivalReactionType = "like" | "dislike"
 export type AnnouncementTipo = "simple" | "rifa" | "descuento"
 export type SurveyCalificacion = "genial" | "bien" | "regular" | "malo"
 export type SurveyVolveria = "si" | "no" | "tal_vez"
+export type RecommendationFuente = "v1_contenido" | "v2_colaborativo"

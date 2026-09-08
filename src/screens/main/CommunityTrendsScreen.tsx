@@ -7,6 +7,7 @@ import { RootStackParamList } from '../../navigation/types';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useCommunityStore, CommunityShareWithSongs } from '../../store/useCommunityStore';
 import { supabase } from '../../lib/supabase';
+import { GENEROS } from '../../lib/archetypes';
 import { Tables } from '../../types/database';
 import { colors, radii, spacing, type } from '../../theme';
 
@@ -29,6 +30,7 @@ export function CommunityTrendsScreen({ navigation }: Props) {
   const [pickerGenre, setPickerGenre] = useState<string | null>(null);
   const [selectedSongIds, setSelectedSongIds] = useState<string[]>([]);
   const [sharing, setSharing] = useState(false);
+  const [genreFilter, setGenreFilter] = useState<string | null>(null);
 
   useEffect(() => {
     if (!userId) return;
@@ -77,8 +79,15 @@ export function CommunityTrendsScreen({ navigation }: Props) {
   };
 
   const genres = [...new Set(catalog.map((s) => s.genero))];
-  const top = shares[0];
-  const rest = shares.slice(1);
+
+  // "Trends avanzados" (Sprint 5): filter the ranking by género — data was
+  // already loaded client-side (every share's songs come with the fetch),
+  // this is purely a display filter, no new query.
+  const filteredShares = genreFilter
+    ? shares.filter((s) => s.songs.some((song) => song.genero === genreFilter))
+    : shares;
+  const top = filteredShares[0];
+  const rest = filteredShares.slice(1);
 
   return (
     <Screen>
@@ -113,6 +122,35 @@ export function CommunityTrendsScreen({ navigation }: Props) {
         {scope === 'ciudad' && !ciudad && (
           <Text style={styles.hint}>Tu perfil todavía no tiene ciudad guardada — no habrá resultados.</Text>
         )}
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.genreFilterRow}>
+          <Pressable
+            style={[styles.genreFilterChip, genreFilter === null && styles.genreFilterChipSelected]}
+            onPress={() => setGenreFilter(null)}
+          >
+            <Text
+              style={[styles.genreFilterChipText, genreFilter === null && styles.genreFilterChipTextSelected]}
+            >
+              Todos
+            </Text>
+          </Pressable>
+          {GENEROS.map((g) => (
+            <Pressable
+              key={g.id}
+              style={[styles.genreFilterChip, genreFilter === g.id && styles.genreFilterChipSelected]}
+              onPress={() => setGenreFilter(g.id)}
+            >
+              <Text
+                style={[
+                  styles.genreFilterChipText,
+                  genreFilter === g.id && styles.genreFilterChipTextSelected,
+                ]}
+              >
+                {g.emoji} {g.label}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
 
         <Pressable style={styles.shareButton} onPress={openPicker}>
           <Text style={styles.shareButtonText}>+ Compartir canción o playlist</Text>
@@ -190,6 +228,9 @@ export function CommunityTrendsScreen({ navigation }: Props) {
         {status === 'loading' && shares.length === 0 && <Text style={styles.hint}>Cargando...</Text>}
         {status === 'ready' && shares.length === 0 && (
           <Text style={styles.hint}>Nadie ha compartido nada esta semana todavía.</Text>
+        )}
+        {status === 'ready' && shares.length > 0 && filteredShares.length === 0 && (
+          <Text style={styles.hint}>Nadie compartió este género esta semana.</Text>
         )}
 
         {top && (
@@ -304,6 +345,29 @@ const styles = StyleSheet.create({
   hint: {
     ...type.body,
     color: colors.textSecondary,
+  },
+  genreFilterRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  genreFilterChip: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bgElevated,
+  },
+  genreFilterChipSelected: {
+    backgroundColor: colors.accentPrimary,
+    borderColor: colors.accentPrimary,
+  },
+  genreFilterChipText: {
+    ...type.label,
+    color: colors.textSecondary,
+  },
+  genreFilterChipTextSelected: {
+    color: colors.onAccent,
   },
   shareButton: {
     alignItems: 'center',

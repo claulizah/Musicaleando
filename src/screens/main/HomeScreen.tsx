@@ -6,6 +6,7 @@ import { MoodSelector } from '../../components/MoodSelector';
 import { TrendCard } from '../../components/TrendCard';
 import { PlaylistCard } from '../../components/PlaylistCard';
 import { RecommendedArtistCard } from '../../components/RecommendedArtistCard';
+import { CollaborativeArtistCard } from '../../components/CollaborativeArtistCard';
 import { RootStackParamList } from '../../navigation/types';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useMoodStore } from '../../store/useMoodStore';
@@ -13,6 +14,7 @@ import { useProfileStore, readTorneoCampeon } from '../../store/useProfileStore'
 import { useTrendStore } from '../../store/useTrendStore';
 import { usePlaylistStore } from '../../store/usePlaylistStore';
 import { useRecommendationsStore } from '../../store/useRecommendationsStore';
+import { useRecommendationsV2Store } from '../../store/useRecommendationsV2Store';
 import { useAchievementsStore } from '../../store/useAchievementsStore';
 import { ARCHETYPES } from '../../lib/archetypes';
 import { ARCHETYPE_IMAGES } from '../../lib/images';
@@ -37,6 +39,11 @@ export function HomeScreen({ navigation }: Props) {
   const fetchPlaylist = usePlaylistStore((s) => s.fetch);
   const recommended = useRecommendationsStore((s) => s.artists);
   const fetchRecommended = useRecommendationsStore((s) => s.fetch);
+  const recommendedV2 = useRecommendationsV2Store((s) => s.recommendations);
+  const fetchRecommendedV2 = useRecommendationsV2Store((s) => s.fetch);
+  const trendHistory = useTrendStore((s) => s.history);
+  const fetchTrendHistory = useTrendStore((s) => s.fetchHistory);
+  const [showHistory, setShowHistory] = useState(false);
   const festivalesConfirmados = useAchievementsStore((s) => s.festivalesConfirmados);
   const fetchAchievements = useAchievementsStore((s) => s.fetch);
   const [challenge, setChallenge] = useState<WeeklyChallenge | null>(null);
@@ -84,9 +91,11 @@ export function HomeScreen({ navigation }: Props) {
   useEffect(() => {
     if (!userId || !archetype || !profile) return;
     fetchTrend(userId);
+    fetchTrendHistory(userId);
     fetchPlaylist(profile.generos as string[], today ?? 'fiesta');
     const champion = readTorneoCampeon((profile.flavor as Record<string, unknown>) ?? {});
     fetchRecommended((profile.generos as string[]) ?? [], champion?.generoId);
+    fetchRecommendedV2(userId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, archetype, profile?.generos, profile?.flavor]);
 
@@ -166,8 +175,38 @@ export function HomeScreen({ navigation }: Props) {
         )}
 
         {trend && <TrendCard trend={formatTrend(trend)} />}
+
+        {trendHistory.length > 0 && (
+          <View style={styles.section}>
+            <Pressable onPress={() => setShowHistory((v) => !v)}>
+              <Text style={styles.historyToggle}>
+                {showHistory ? '▾' : '▸'} Trends pasados ({trendHistory.length})
+              </Text>
+            </Pressable>
+            {showHistory &&
+              trendHistory.map((t) => {
+                const formatted = formatTrend(t);
+                return (
+                  <View key={t.id} style={styles.historyRow}>
+                    <Text style={styles.historyEmoji}>{formatted.emoji}</Text>
+                    <View style={styles.historyTextWrap}>
+                      <Text style={styles.historyTitle}>{formatted.title}</Text>
+                      <Text style={styles.historyDate}>
+                        {new Date(t.fecha + 'T00:00:00').toLocaleDateString('es-MX', {
+                          day: 'numeric',
+                          month: 'short',
+                        })}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+          </View>
+        )}
+
         {songs.length > 0 && <PlaylistCard songs={songs} />}
         <RecommendedArtistCard artists={recommended} />
+        <CollaborativeArtistCard recommendations={recommendedV2} />
       </ScrollView>
     </Screen>
   );
@@ -283,6 +322,35 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accentPrimary,
   },
   challengeProgress: {
+    ...type.caption,
+    color: colors.textMuted,
+  },
+  historyToggle: {
+    ...type.label,
+    color: colors.textSecondary,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.bgElevated,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.sm,
+  },
+  historyEmoji: {
+    fontSize: 20,
+  },
+  historyTextWrap: {
+    flex: 1,
+    gap: 2,
+  },
+  historyTitle: {
+    ...type.body,
+    color: colors.textPrimary,
+  },
+  historyDate: {
     ...type.caption,
     color: colors.textMuted,
   },

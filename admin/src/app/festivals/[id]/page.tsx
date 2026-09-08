@@ -6,6 +6,7 @@ import { LinkBoletosForm } from './link-boletos-form';
 import { DeleteLineupRowButton } from './delete-lineup-row-button';
 import { AnnouncementForm } from './announcement-form';
 import { DeleteAnnouncementButton } from './delete-announcement-button';
+import { SelectWinnerButton } from './select-winner-button';
 import { MapUploader } from './map-uploader';
 
 const TIPO_LABEL: Record<string, string> = {
@@ -47,7 +48,9 @@ export default async function FestivalDetailPage({
 
   const { data: announcements } = await supabase
     .from('announcements')
-    .select('id, tipo, titulo, descripcion, sponsor_nombre, codigo_descuento, created_at')
+    .select(
+      'id, tipo, titulo, descripcion, sponsor_nombre, codigo_descuento, created_at, ganador_user_id, ganador_nombre',
+    )
     .eq('festival_id', id)
     .order('created_at', { ascending: false });
 
@@ -112,9 +115,9 @@ export default async function FestivalDetailPage({
       <section className="mt-8">
         <h2 className="mb-2 font-medium">Anuncios y promociones ({announcements?.length ?? 0})</h2>
         <p className="mb-3 text-xs text-gray-500">
-          Dashboard de interés por promoción y selección de ganador de rifa: fuera de alcance
-          por ahora (Sprint 5) — aquí solo se publican/borran anuncios y se ve cuánta gente dio
-          &quot;me interesa&quot;.
+          Dashboard de interés agregado (comparar entre anuncios/festivales) sigue fuera de
+          alcance — aquí se publican/borran anuncios, se ve el conteo de &quot;me interesa&quot;
+          por anuncio, y para rifas se puede elegir un ganador al azar entre los interesados.
         </p>
         <ul className="mb-4 flex flex-col gap-2">
           {announcements?.map((a) => {
@@ -135,6 +138,17 @@ export default async function FestivalDetailPage({
                     {a.tipo === 'descuento' && a.codigo_descuento && `código: ${a.codigo_descuento} · `}
                     {interest} interesado{interest === 1 ? '' : 's'}
                   </p>
+                  {a.tipo === 'rifa' && (
+                    a.ganador_nombre ? (
+                      <p className="text-xs font-medium text-green-700">🎉 Ganador: {a.ganador_nombre}</p>
+                    ) : (
+                      <SelectWinnerButton
+                        festivalId={festival.id}
+                        announcementId={a.id}
+                        interestCount={interest}
+                      />
+                    )
+                  )}
                 </div>
                 <DeleteAnnouncementButton festivalId={festival.id} announcementId={a.id} />
               </li>

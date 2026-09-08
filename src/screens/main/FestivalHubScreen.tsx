@@ -392,6 +392,13 @@ function FestivalCard({
               {a.tipo === 'descuento' && a.codigo_descuento && (
                 <Text style={styles.announcementCode}>Código: {a.codigo_descuento}</Text>
               )}
+              {a.tipo === 'rifa' && a.ganador_nombre && (
+                <Text style={styles.raffleWinner}>
+                  {a.ganador_user_id === userId
+                    ? '🎉 ¡Ganaste esta rifa!'
+                    : `🎉 Ganador: ${a.ganador_nombre}`}
+                </Text>
+              )}
               <Pressable
                 style={[styles.interestButton, a.mineInterested && styles.interestButtonActive]}
                 onPress={() => onToggleInterest(a.id)}
@@ -723,6 +730,10 @@ const styles = StyleSheet.create({
     ...type.label,
     color: colors.textPrimary,
     fontFamily: type.h2.fontFamily,
+  },
+  raffleWinner: {
+    ...type.bodyLg,
+    color: colors.accentPrimary,
   },
   interestButton: {
     alignSelf: 'flex-start',

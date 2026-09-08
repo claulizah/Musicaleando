@@ -13,12 +13,15 @@ import { useProfileStore, readTorneoCampeon } from '../../store/useProfileStore'
 import { useQuizStore } from '../../store/useQuizStore';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useAchievementsStore } from '../../store/useAchievementsStore';
-import { ARCHETYPES, GENEROS, GUILTY_PLEASURES, SocialAxis, buildFlavorLine } from '../../lib/archetypes';
+import { ARCHETYPES, GENEROS, GUILTY_PLEASURES, SocialAxis, buildFlavorLine, energiaEmoji } from '../../lib/archetypes';
 import { ARCHETYPE_IMAGES } from '../../lib/images';
 import { parseListeningHistory, topArtists, fetchImportGenres } from '../../lib/musicImport';
 import { badgeFor } from '../../lib/badges';
 import { nextLevel } from '../../lib/levels';
+import { supabase } from '../../lib/supabase';
 import { colors, radii, spacing, type } from '../../theme';
+
+type CityEnergiaComparison = { ciudad: string; promedio: number | null; muestras: number };
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
 
@@ -35,11 +38,26 @@ export function ProfileScreen({ navigation }: Props) {
   const fetchAchievements = useAchievementsStore((s) => s.fetch);
   const [importing, setImporting] = useState(false);
   const [sharingLevel, setSharingLevel] = useState(false);
+  const [cityComparison, setCityComparison] = useState<CityEnergiaComparison | null>(null);
   const levelCardRef = useRef<View>(null);
 
   useEffect(() => {
     if (userId) fetchAchievements(userId);
   }, [userId, fetchAchievements]);
+
+  useEffect(() => {
+    if (!userId) return;
+    (async () => {
+      const { data: userRow } = await supabase.from('users').select('ciudad').eq('id', userId).maybeSingle();
+      const ciudad = userRow?.ciudad ?? null;
+      if (!ciudad) {
+        setCityComparison(null);
+        return;
+      }
+      const { data } = await supabase.rpc('energia_ciudad_avg', { p_ciudad: ciudad }).single();
+      setCityComparison({ ciudad, promedio: data?.promedio ?? null, muestras: data?.muestras ?? 0 });
+    })();
+  }, [userId]);
 
   const handleShareLevel = async () => {
     if (!levelCardRef.current) return;
@@ -164,6 +182,32 @@ export function ProfileScreen({ navigation }: Props) {
           flavor={flavor}
           image={ARCHETYPE_IMAGES[archetype.id]}
         />
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Tu energía musical</Text>
+          <View style={styles.energiaRow}>
+            <Text style={styles.energiaEmoji}>{energiaEmoji(profile.energia)}</Text>
+            <View style={styles.energiaBarTrack}>
+              <View style={[styles.energiaBarFill, { width: `${Math.round(profile.energia * 100)}%` }]} />
+            </View>
+          </View>
+          {!cityComparison ? (
+            <Text style={styles.hintText}>
+              Agrega tu ciudad para comparar tu energía con la de tu red.
+            </Text>
+          ) : cityComparison.promedio === null ? (
+            <Text style={styles.hintText}>
+              Todavía no hay suficientes perfiles en {cityComparison.ciudad} para comparar (mínimo 3).
+            </Text>
+          ) : (
+            <Text style={styles.hintText}>
+              {profile.energia >= cityComparison.promedio
+                ? `${Math.round((profile.energia - cityComparison.promedio) * 100)} puntos arriba del promedio de ${cityComparison.ciudad}`
+                : `${Math.round((cityComparison.promedio - profile.energia) * 100)} puntos abajo del promedio de ${cityComparison.ciudad}`}
+              {' '}({cityComparison.muestras} perfiles)
+            </Text>
+          )}
+        </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Géneros</Text>
@@ -361,5 +405,25 @@ const styles = StyleSheet.create({
   bodyText: {
     ...type.bodyLg,
     color: colors.textPrimary,
+  },
+  energiaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  energiaEmoji: {
+    fontSize: 24,
+  },
+  energiaBarTrack: {
+    flex: 1,
+    height: 8,
+    borderRadius: radii.pill,
+    backgroundColor: colors.bgElevated,
+    overflow: 'hidden',
+  },
+  energiaBarFill: {
+    height: '100%',
+    borderRadius: radii.pill,
+    backgroundColor: colors.accentSecondary,
   },
 });

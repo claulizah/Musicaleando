@@ -1,18 +1,19 @@
 # Estado del proyecto — Musicaleando
 
-Última actualización: 2026-09-07 (sesión 10, cierre). Este archivo es el punto de partida
+Última actualización: 2026-09-08 (sesión 11, cierre). Este archivo es el punto de partida
 para retomar el trabajo en una sesión nueva sin perder contexto.
 
-**Estado en una línea**: Sprints 1-4 completos. **Sprint 7 completo** (las 6 features de
-gamificación/retención de bajo esfuerzo — ver sesión 10 abajo), construido directamente
-sobre Sprint 4 sin pasar por Sprint 5/6 porque el usuario pidió priorizar Sprint 7 en esta
-sesión. **Sprint 5 y 6 del spec siguen sin construir** (trends avanzados, energía musical,
-recomendaciones V2, conexión en vivo, rifas + selección de ganador, mapa social, torneo
-grupal, dashboard de patrocinios, moderación) — ver "Pendiente".
+**Estado en una línea**: Sprints 1-4 y 7 completos. **Sprint 5 completo** (trends avanzados,
+energía musical visible, Recomendaciones V2 colaborativo, rifas + selección de ganador — ver
+sesión 11 abajo), más un bug real de RLS encontrado y arreglado en Squads que afectaba desde
+antes de esta sesión. **Sprint 6 sigue sin construir** (mapa social, Torneo Sonoro grupal,
+dashboard de patrocinios agregado, moderación) y **conexión en vivo (Spotify/Apple Music
+OAuth beta) sigue explícitamente pausada** — el usuario pidió no tocarla salvo confirmación
+explícita.
 
 Proyecto Supabase: `ijwyykfuyeaahvxmaild` ("Sound Project", org `ljcnanwlkijozacnyhck`).
 Repo: rama `master`, sin remoto configurado todavía. Último commit antes de esta sesión:
-`55229da` (cierre de sesión 9).
+`67112fa` (cierre de sesión 10, Sprint 7).
 
 ## Completado y verificado en dispositivo (no solo compilado — probado tocando la app)
 
@@ -997,6 +998,225 @@ para cuando el emulador no es una opción confiable.
 sesión ajena usándolo — si la hay, verificar por REST/SQL en vez de competir por el mismo
 recurso.
 
+## Sesión 11 (2026-09-08): Sprint 5 completo (trends avanzados, energía musical, Recomendaciones V2, rifas)
+
+El usuario pidió Sprint 5, dando de nuevo el link del Artifact del spec (no persiste entre
+sesiones, mismo patrón de siempre). Antes de tocar nada se hizo la auditoría que pedía el
+prompt de continuación: revisar si el patrón de lectura roto encontrado en la comparación de
+squad de Sprint 7 (`music_profile` solo tiene RLS de `select` para la fila propia, así que
+una lectura directa de perfiles ajenos desde el cliente devuelve `[]` en silencio) aparecía
+en otro lado.
+
+### Bug real confirmado y arreglado: `useSquadStore.fetchMySquads` leía perfiles de squadmates que nunca veía
+
+**Confirmado con cuentas de prueba reales antes de tocar código**: se creó un squad de
+prueba, un miembro B con un perfil completo (`arquetipo`, `generos`, `energia` reales), y se
+reprodujo exactamente la query que `fetchMySquads` hacía — devolvió `[]`, cero perfiles,
+ni siquiera el de A. Esto significaba que en `SquadDetailScreen`, **todo squadmate que no
+fuera el usuario actual mostraba "Perfil incompleto"** y el cálculo de "% contigo" corría
+contra un vector de géneros vacío — un bug real y visible, no solo teórico, que llevaba
+existiendo desde que Squads se construyó (sesión 1), sin relación con el trabajo de Sprint 7.
+
+- **Fix**: nueva función `squad_members_with_profile(p_squad_id)` (migración
+  `sprint5_fix_squad_member_profile_read`), mismo patrón `SECURITY DEFINER` +
+  `is_squad_member()` que ya se usó para `squad_comparison` (Sprint 7) — una RPC angosta en
+  vez de ensanchar la RLS de `music_profile` (que expondría perfiles a cualquier pantalla,
+  no solo a Squads). [useSquadStore.ts](src/store/useSquadStore.ts):
+  `fetchMySquads` ahora llama esta RPC una vez por squad (`Promise.all`) en vez de la query
+  directa de 2 pasos que fallaba en silencio.
+- **Verificado con cuentas de prueba reales, antes y después del fix**: el mismo escenario
+  (squad de prueba, miembro B con perfil completo) confirmó que `squad_members_with_profile`
+  llamado por A **sí** devuelve el `arquetipo`/`generos`/`energia` reales de B. Cuentas y
+  squad de prueba borrados al terminar.
+- **No se encontró el mismo patrón en Festival Hub ni en Trends** — `festival_intent` ya
+  tenía desde el principio una policy explícita `festival_intent_select_own_or_squadmate`
+  (permite leer las filas propias y las de squadmates), y ni Trends personales ni Trends
+  comunitarios leen `music_profile` de otros usuarios en ningún punto del código. La
+  auditoría quedó acotada a este único punto real.
+
+### 1. Trends avanzados
+
+El spec no detalla "Trends avanzados" más allá del nombre en el chip list de Sprint 5 (igual
+que Sprint 7) — se confirmó con el usuario antes de construir (`AskUserQuestion`), quien
+eligió dos interpretaciones de las tres propuestas:
+
+- **Historial de trends pasados**: cada trend diario ya se guardaba en `trends` (constraint
+  `unique(user_id, fecha)`, una fila por día) pero nada más que el de hoy se mostraba nunca.
+  Nueva acción `fetchHistory` en [useTrendStore.ts](src/store/useTrendStore.ts) (últimos 14
+  días, excluyendo hoy — ya se muestra aparte). Sección colapsable "▸ Trends pasados (N)" en
+  [HomeScreen.tsx](src/screens/main/HomeScreen.tsx), reutilizando `formatTrend` ya existente
+  para el texto de cada fila. Sin tabla ni migración nueva.
+- **Filtros adicionales en Trends comunitarios**: fila de chips de género (Todos + los 8
+  géneros de `GENEROS`) en
+  [CommunityTrendsScreen.tsx](src/screens/main/CommunityTrendsScreen.tsx) — filtra el
+  ranking ya cargado en cliente por si alguna canción de la playlist/share coincide con el
+  género elegido (dato ya presente en `entry.songs[].genero`, ningún query nuevo). El "Trend
+  de la semana" se recalcula sobre el conjunto filtrado, no sobre el global.
+- **Descartada explícitamente por el usuario**: tendencias por segmento de arquetipo (cruzar
+  `community_shares` con `arquetipo` de forma agregada) — no se construyó.
+- Verificado por lectura de código + los stores ya usan datos con RLS ya validada
+  (`trends_select_own`, `community_share_stats` select público) — no hizo falta ninguna
+  prueba de RLS nueva, solo confirmar que el filtro cliente-side funciona sobre datos reales
+  (revisado, no hay festivales/shares de prueba residuales que hubieran alterado el
+  resultado).
+
+### 2. Energía musical
+
+`music_profile.energia` (el slider 😴→🔥 del cuestionario) ya se usaba en tres lugares antes
+de esta sesión — el score de compatibilidad de squad, uno de los 3 tipos de trend rotativos
+(`energia_vs_ciudad`, ~1 de cada 3 días), y ahora también en la comparación de squad de
+Sprint 7 — pero **nunca se mostraba directamente en el perfil del usuario**, pese a ser un
+dato ya capturado. Se agregó una sección siempre visible en vez de depender de la rotación
+del trend diario.
+
+- **Hallazgo importante antes de construir**: el promedio de energía por ciudad
+  (`energia_vs_ciudad`) se calculaba con una query de agregación corrida como el usuario
+  normal — pero como `music_profile` solo tiene RLS de `select` para la fila propia, un
+  `avg()` corrido así **también** habría colapsado silenciosamente a un solo valor (el
+  propio), el mismo bug de fondo que el de Squads, aplicado a un agregado en vez de a filas
+  individuales. Ya estaba resuelto porque `generate_trend_for_user` es `SECURITY DEFINER`,
+  pero no había ninguna función reutilizable para el nuevo caso de uso (comparación en
+  Perfil). Se extrajo la lógica a una función compartida nueva, `energia_ciudad_avg(p_ciudad)`
+  (migración `sprint5_energia_ciudad_avg`), y se refactorizó `generate_trend_for_user` para
+  llamarla en vez de duplicar la query — mismo comportamiento exacto, sin duplicar lógica.
+  Además y a propósito no confirmado por el prompt: `energia_ciudad_avg` devuelve
+  `promedio = null` si hay menos de 3 perfiles en la ciudad — con 1-2 perfiles ajenos, un
+  usuario podría despejar algebraicamente el valor exacto de energía de otra persona
+  específica a partir del promedio. El número simplemente nunca sale de la base de datos
+  cuando eso es posible, no es un filtro de UI.
+  **Verificado con cuentas de prueba reales**: con 2 perfiles en una ciudad de prueba,
+  `promedio` fue `null` (`muestras: 2`); al agregar un tercer perfil, devolvió un promedio
+  real (`muestras: 3`). Perfiles y ciudad de prueba limpiados al terminar.
+- **UI en `ProfileScreen`**: nueva sección "Tu energía musical" — emoji de
+  `energiaEmoji(profile.energia)` (ya existía en `archetypes.ts`, sin usar hasta ahora) +
+  barra de progreso simple, y debajo un texto de comparación contra el promedio de la ciudad
+  del usuario (leída de `users.ciudad`, propia — RLS ya lo permite) vía
+  `energia_ciudad_avg`. Si no hay ciudad guardada o hay menos de 3 perfiles en ella, se
+  muestra un mensaje explicando por qué no hay comparación en vez de un número engañoso.
+- Sigue sin existir una pantalla de "editar mi perfil" para que el usuario cargue su propia
+  `ciudad` — sin eso, la comparación de energía (y "Mi ciudad" en Trends comunitarios,
+  pendiente desde Sprint 3) sigue sin datos reales que mostrar para la mayoría de usuarios.
+
+### 3. Recomendaciones V2 (colaborativo) — completado y verificado
+
+Job en batch nocturno (`pg_cron`, mismo patrón que el trend diario) que calcula "gente con tu
+arquetipo o alta compatibilidad también coronó a X" a partir de comportamiento real de la
+app — Torneo Sonoro + squads — sin ningún proveedor externo, tal como pide la sección
+"Arquitectura técnica" del spec.
+
+- **Señal usada**: campeones del Torneo Sonoro (`music_profile.flavor.torneo_campeon`, ya
+  guardado desde la sesión 7) entre (a) otros usuarios con el mismo `arquetipo` (peso 1) y
+  (b) squadmates con `compat_score >= 60` (peso 2 — un lazo social directo pesa más que
+  "mismo balde de arquetipo"). Se excluye el propio campeón actual del usuario. Top 5 por
+  score, escrito en una tabla nueva `recommendation_cache` (migración
+  `sprint5_recommendation_cache_v2`) con `fuente = 'v2_colaborativo'` — la tabla sigue el
+  modelo de datos `RecommendationCache` que ya estaba en el spec.
+- **Mismo patrón de integridad que `user_badges` (Sprint 7)**: `recommendation_cache` solo
+  tiene policy de `select` propia, ningún insert/update de cliente — todas las escrituras
+  pasan por `generate_recommendations_v2_for_user`/`_for_all` (`SECURITY DEFINER`, `EXECUTE`
+  revocado para `anon`/`authenticated`, solo invocables desde el cron o entre sí). Para que
+  un usuario no tenga que esperar al batch nocturno para ver su primera recomendación, existe
+  `refresh_my_recommendations_v2()` — sin argumentos, siempre recalcula al `auth.uid()` del
+  llamador, nunca un id arbitrario (a diferencia de la función interna, que si acepta
+  cualquier `p_user_id` porque el batch la llama para todos).
+- **Cron nuevo**: `musicaleando-daily-recommendations-v2` a las 8:30am, junto al
+  `musicaleando-daily-trends` de las 9am ya existente.
+- **No es literalmente lo que algunas apps llaman "colaborativo" (filtrado por vecinos sobre
+  matrices de interacción)** — es una agregación simple de conteos ponderados sobre una señal
+  social real (torneo + squads), documentado así en el código: suficiente para cumplir la
+  definición del spec ("gente con tu arquetipo o alta compatibilidad también eligió X") sin
+  sobre-construir para el volumen de datos actual.
+- **UI**: [CollaborativeArtistCard.tsx](src/components/CollaborativeArtistCard.tsx), nuevo
+  componente (deliberadamente separado de `RecommendedArtistCard` de V1 — datos y copy
+  distintos) en Home, debajo de la tarjeta V1. Store
+  [useRecommendationsV2Store.ts](src/store/useRecommendationsV2Store.ts).
+- **Cold start esperado y confirmado**: con solo 6 usuarios reales y pocos squads/torneos
+  jugados, la mayoría de usuarios reales no tendrán recomendaciones V2 todavía — el propio
+  spec lo anticipa ("es un diferenciador real solo si supera el cold start inicial"). No es
+  un bug, es la realidad del volumen actual.
+- **Verificado con cuentas de prueba reales end-to-end**: se armó un squad de prueba con dos
+  miembros con géneros alineados (para que el trigger de compat_score ya validado en
+  sesiones anteriores produjera `compat_score >= 60` de verdad, no simulado), se le dio a un
+  miembro un campeón de Torneo Sonoro de prueba, se llamó `refresh_my_recommendations_v2`
+  desde la cuenta del otro miembro, y `recommendation_cache` devolvió exactamente ese
+  artista con `score: 2` (el peso de squad) — confirma el mecanismo completo, no solo la
+  escritura de la tabla. Squad, perfiles y caché de prueba borrados al terminar.
+
+### 4. Rifas + selección de ganador — completado y verificado
+
+Se extendió el panel de admin de Sprint 4 (anuncios/patrocinios) en vez de construir algo
+nuevo, tal como pedía el prompt — la tabla `announcements` y el flujo de
+`announcement_interest` ya existían completos, solo faltaba la selección de ganador.
+
+- **Decisión confirmada con el usuario antes de construir** (`AskUserQuestion`): el spec pide
+  notificación push automática al ganador, pero el proyecto no tenía ninguna infraestructura
+  de push (sin `expo-notifications`, sin tabla de tokens) — construir push real es
+  infraestructura nueva, no una extensión chica. El usuario eligió **indicador in-app en vez
+  de push real**: el admin elige ganador desde el panel, y el ganador ve un banner "🎉
+  ¡Ganaste!" la próxima vez que abre el Festival Hub. Push real queda pendiente si se decide
+  construirlo después.
+- **Migración `sprint5_raffle_winner`**: columnas nuevas `announcements.ganador_user_id` /
+  `ganador_nombre` (denormalizado, mismo patrón que `sponsor_nombre` de sesión 9 — la app
+  nunca necesita leer `users` de otro usuario). Función `select_raffle_winner(p_announcement_id)`
+  (`SECURITY DEFINER`): verifica `is_admin` del llamador, elige un `announcement_interest`
+  al azar (`order by random() limit 1`), resuelve el nombre (`coalesce(nombre, 'Usuario
+  anónimo')`), y escribe ambas columnas — todo en un solo paso, porque el panel admin
+  autentica como el usuario admin real (no service role) y `users` solo tiene RLS de
+  `select` propia, así que ni siquiera un admin autenticado podía resolver el nombre de otro
+  usuario directamente sin esto (mismo tipo de gap que motivó el fix de Squads arriba).
+- **Panel admin**: [select-winner-button.tsx](admin/src/app/festivals/[id]/select-winner-button.tsx)
+  (botón "🎲 Elegir ganador", deshabilitado si `interestCount === 0`, con confirmación nativa
+  porque no se puede deshacer) + acción
+  [selectRaffleWinner](admin/src/app/festivals/[id]/actions.ts) — mismo patrón
+  `requireAdmin()` + server action que el resto del panel. Una vez elegido, la fila de
+  anuncio muestra "🎉 Ganador: [nombre]" en vez del botón. `admin/src/lib/database.types.ts`
+  (tipos escritos a mano, ver "Decisiones técnicas") se actualizó con las 2 columnas nuevas y
+  la función.
+- **App móvil**: [FestivalHubScreen.tsx](src/screens/main/FestivalHubScreen.tsx) — cada
+  anuncio tipo rifa con ganador ya elegido muestra "🎉 ¡Ganaste esta rifa!" si
+  `ganador_user_id === userId`, o "🎉 Ganador: [nombre]" para el resto (el nombre del ganador
+  de una rifa es información pública por diseño, como en cualquier rifa real — no es una
+  fuga de PII nueva, ya viene denormalizado a propósito).
+- **Verificado end-to-end con cuentas de prueba reales**: confirmado que un no-admin
+  recibe `"No autorizado."` al llamar `select_raffle_winner`. Para probar el camino de éxito
+  se necesitó una cuenta real con `is_admin = true` — como no hay forma de escribir vía
+  `execute_sql` (el entorno lo tiene en modo solo-lectura, `apply_migration` fue la única vía
+  de escritura elevada disponible), se usó un usuario anónimo de prueba, se le puso
+  `is_admin = true` por migración temporal, se marcó interés desde una segunda cuenta, se
+  llamó la función como el admin de prueba, y devolvió exactamente esa segunda cuenta como
+  ganadora con `ganador_nombre: 'Usuario anónimo'` (coherente, la cuenta de prueba no tiene
+  `nombre`). Anuncio de prueba, flag de admin y ambas cuentas revertidos/borrados al
+  terminar — confirmado por conteo antes/después (`announcements: 0`, `users: 6`, igual que
+  al cierre de la sesión 10).
+- **Dashboard de interés agregado sigue sin construir** — el spec lo separa de "selección de
+  ganador" y el usuario no lo pidió para esta sesión; el panel sigue mostrando solo el
+  conteo crudo por anuncio.
+
+### Problemas de entorno (sesión 11)
+
+- **El emulador Android seguía ocupado por otra sesión de Claude Code** (mismo hallazgo que
+  sesión 10 — `tasklist` mostró `emulator.exe`/`qemu-system-x86_64.exe` corriendo desde el
+  inicio de esta sesión). Se evitó competir por él; toda la verificación fue por REST/SQL con
+  cuentas de prueba reales, igual que la sesión anterior. El panel admin (Next.js, puerto
+  3000) es un proceso completamente separado del emulador — no hubo necesidad de tocarlo
+  esta sesión porque toda la verificación de rifas se hizo por script en vez de por browser.
+- **`execute_sql` del MCP de Supabase corrió en modo de solo lectura toda la sesión**
+  (`UPDATE`/`INSERT` fallan con `ERROR: 25006: cannot execute UPDATE in a read-only
+  transaction`), a diferencia de sesiones anteriores donde no se había notado (probablemente
+  nunca se necesitó escribir por esa vía antes, solo leer). `apply_migration` sí puede
+  escribir — se usó para las escrituras de verificación puntuales de esta sesión (dar
+  `is_admin` temporal, crear/borrar un anuncio de prueba), documentado en el punto 4 arriba.
+  **Para la próxima sesión**: si se necesita mutar datos por SQL directo para una prueba
+  puntual (no un cambio de esquema real), usar `apply_migration` en vez de `execute_sql` —
+  esto último solo sirve para lecturas en este entorno.
+- Un primer intento del script de verificación de rifas falló por un bug del script mismo
+  (no recargaba la sesión guardada del usuario admin de prueba, creaba uno nuevo sin el flag
+  — el error `"No autorizado."` fue la pista correcta) y dejó 2 cuentas de prueba huérfanas
+  sin limpiar antes de que el script fallara. Se detectaron comparando el conteo de `users`
+  contra el esperado (8 en vez de 6) al hacer la verificación final de "sin residuos" —
+  confirma que vale la pena, como hábito, recontar tablas clave al cierre de la sesión en vez
+  de solo confiar en que cada script individual limpió bien lo suyo.
+
 ## Pendiente
 
 - No hay UI para editar nombre/ciudad/fechas de un festival ya creado desde el panel (solo
@@ -1065,15 +1285,6 @@ recurso.
     real de una imagen vía el selector de archivos del sistema operativo **no** se pudo
     probar (limitación de la herramienta de navegador de esta sesión, no del código) — sí se
     verificaron las políticas RLS del bucket `festival-maps` por inspección directa.
-- **Sprint 4 — dashboard de interés agregado y selección de ganador de rifa** son
-  explícitamente Sprint 5 según el spec ("Rifas + selección de ganador") — el panel admin
-  de esta sesión solo publica/borra anuncios y muestra el conteo crudo de interesados, sin
-  UI para elegir ganador ni notificación push automática.
-- **Sprint 5 y Sprint 6 del spec siguen sin construir** (se saltaron a propósito para hacer
-  Sprint 7 primero, a pedido del usuario): trends avanzados, energía musical, recomendaciones
-  V2 (colaborativo), conexión en vivo Spotify/Apple Music (beta cerrada), rifas + selección
-  de ganador, mapa social, Torneo Sonoro grupal (squads), dashboard de patrocinios,
-  moderación de comentarios reportados.
 - **Sprint 7 — completo** (insignia fundador, insignias por combinación rara, niveles +
   tarjeta compartible, encuestas post-festival, comparación de squad, reto semanal). Ver
   sesión 10 para detalle y verificación de cada una. Dos puntos quedan atados a datos que
@@ -1086,10 +1297,33 @@ recurso.
     Sprint 7 son features distintas — no confundirlas: la de Sprint 7 (festivales
     confirmados/energía por miembro) sí se construyó esta sesión, "Compañero ideal" (sugerir
     el usuario con mayor compat_score) sigue sin definir.
-  - Ninguna de las 6 se verificó visualmente en emulador esta sesión (otra sesión de Claude
-    Code ya tenía el emulador/Metro corriendo — ver "Problemas de entorno" de la sesión 10).
-    Todo lo demás (DB, RLS, triggers, RPCs) se verificó con cuentas de prueba reales por
-    REST, igual que sesiones 8/9.
+- **Sprint 5 — completo** (trends avanzados, energía musical, Recomendaciones V2, rifas +
+  selección de ganador). Ver sesión 11 para detalle y verificación de cada una.
+  - Push real para el ganador de rifa quedó explícitamente fuera (in-app banner en su lugar,
+    confirmado con el usuario) — si se decide construir push real después, hace falta
+    `expo-notifications`, una tabla de tokens por usuario, y una Edge Function o trigger que
+    llame a la Expo Push API.
+  - Dashboard de interés agregado (comparar entre anuncios/festivales) sigue sin construir —
+    el spec lo separa de "selección de ganador" y no se pidió esta sesión.
+  - Sigue sin existir una pantalla de "editar mi perfil" (nombre/ciudad) — bloquea que la
+    comparación de energía por ciudad y "Mi ciudad" en Trends comunitarios tengan datos
+    reales para la mayoría de usuarios.
+- **Bug real encontrado y arreglado en sesión 11, sin relación directa con el pedido de esa
+  sesión pero confirmado por instrucción explícita de auditar el patrón**: `music_profile`
+  solo tiene RLS de `select` propia, así que `useSquadStore.fetchMySquads` leía perfiles de
+  squadmates que la RLS bloqueaba en silencio desde que Squads existe (sesión 1) — todo
+  squadmate ajeno mostraba "Perfil incompleto" y "% contigo" salía mal. Arreglado con una RPC
+  (`squad_members_with_profile`, mismo patrón que `squad_comparison`). Ver sesión 11 para el
+  detalle completo de cómo se confirmó con cuentas de prueba antes y después del fix.
+- **Sprint 6 del spec sigue sin construir**: mapa social, Torneo Sonoro grupal (squads),
+  dashboard de patrocinios, moderación de comentarios reportados.
+- **Conexión en vivo (Spotify/Apple Music OAuth, beta cerrada)** sigue explícitamente
+  pausada — el spec la marca como feature detrás de feature flag solo para una cohorte
+  allowlist, y el usuario pidió no construirla salvo confirmación explícita de que es
+  momento de abrir esa beta.
+- Ninguna de las features de Sprint 5 se verificó visualmente en emulador (otra sesión de
+  Claude Code seguía usando el emulador/Metro, igual que en la sesión 10 — ver "Problemas de
+  entorno" de esa sesión). Todo se verificó con cuentas de prueba reales por REST/SQL.
 
 ## Decisiones técnicas tomadas en el camino (no estaban en el prompt original)
 
@@ -1247,33 +1481,22 @@ recurso.
    mismo patrón de despliegue/secretos que las anteriores. Ninguna escribe en la base de
    datos (puro cálculo sobre datos de Spotify), verificadas por curl directo, no por REST
    con sesión de usuario.
-7. **Sprint 4 y Sprint 7 están completos.** Sprint 4 (commit `74185d1` y el anterior de la
+7. **Sprint 4, 5 y 7 están completos.** Sprint 4 (commit `74185d1` y el anterior de la
    sesión 9): Festival generado por gustos, Mapa del festival, Recomendaciones V1,
-   Comentarios por festival, Anuncios y promociones. Sprint 7 (sesión 10, commit de cierre
-   de esa sesión): insignia fundador, insignias por combinación rara, niveles + tarjeta
-   compartible, encuestas post-festival, comparación de squad, reto semanal — ver esa
-   sección para detalle completo. **Sprint 5 y 6 del spec se saltaron a propósito** (el
-   usuario pidió priorizar Sprint 7) y siguen sin construir.
-   **Siguiente foco: a decidir con el usuario — probablemente Sprint 5, o cerrar los
+   Comentarios por festival, Anuncios y promociones. Sprint 7 (sesión 10): insignia
+   fundador, insignias por combinación rara, niveles + tarjeta compartible, encuestas
+   post-festival, comparación de squad, reto semanal. Sprint 5 (sesión 11): trends
+   avanzados, energía musical visible, Recomendaciones V2 (colaborativo), rifas + selección
+   de ganador — más un bug real de RLS en Squads encontrado y arreglado (ver esa sección).
+   **Sprint 6 sigue sin construir** y **conexión en vivo (Spotify/Apple Music OAuth) sigue
+   pausada** (el usuario debe confirmar explícitamente antes de abrir esa beta).
+   **Siguiente foco: a decidir con el usuario — probablemente Sprint 6, o cerrar los
    pendientes de verificación visual que se fueron acumulando (ver "Pendiente").** El
    detalle exacto del spec **no está guardado en este repo ni en el sistema de archivos** —
-   se ha leído dos veces (sesiones 9 y 10) desde un Artifact publicado que el usuario
+   se ha leído tres veces (sesiones 9, 10, 11) desde un Artifact publicado que el usuario
    comparte por link en el chat, y ese contenido no persiste entre sesiones. **Antes de
    construir nada de un sprint nuevo, pedirle al usuario el link del Artifact del spec de
-   nuevo y confirmar el alcance exacto** — no asumir a partir de lo que se infiere abajo. Lo
-   único que se sabe con certeza de sesiones anteriores (mencionado de pasada, no es el spec
-   completo):
-   - **Selección de ganador de rifa**: el panel admin de Sprint 4 (`/festivals/[id]`, sección
-     de Anuncios) ya publica/borra anuncios tipo `rifa` y muestra el conteo crudo de
-     `announcement_interest`, pero no tiene UI para elegir un ganador entre los interesados
-     ni para notificarlo.
-   - **Dashboard de interés agregado**: hoy cada anuncio solo muestra su propio conteo de
-     "me interesa"; un dashboard agregado (comparar interés entre anuncios/festivales, quizás
-     con filtros) no existe.
-   - Puede haber más features de Sprint 5 en el spec que no se mencionaron explícitamente en
-     ninguna sesión anterior — de ahí la importancia de releer el spec completo antes de
-     empezar, siguiendo la misma disciplina que ya costó un rework en Torneo Sonoro por no
-     confirmar antes de construir.
+   nuevo y confirmar el alcance exacto** — no asumir a partir de lo que se infiere abajo.
    - **Compañero ideal sigue sin definir**: no avanzar en código hasta que el usuario
      confirme o corrija la interpretación propuesta en la sesión 8 (compat_score más alto
      entre todos los usuarios de la app, no solo squadmates). No es parte de ningún sprint
@@ -1317,5 +1540,29 @@ recurso.
     inicio de la sección).
 11. Antes de arrancar el emulador o Metro, correr algo como
     `tasklist | grep -i "emulator\|qemu"` (Windows) para confirmar que no hay ya una sesión
-    de Claude Code distinta usándolo — la sesión 10 encontró exactamente eso y evitó
-    interferir verificando por REST/SQL en su lugar.
+    de Claude Code distinta usándolo — la sesión 10 (y también la 11) encontró exactamente
+    eso y evitó interferir verificando por REST/SQL en su lugar.
+12. **Sprint 5 (sesión 11)**: tabla nueva `recommendation_cache` (RLS: solo `select` propio,
+    mismo patrón sin-insert-de-cliente que `user_badges`), funciones
+    `generate_recommendations_v2_for_user`/`_for_all` (`SECURITY DEFINER`, `EXECUTE`
+    revocado para `anon`/`authenticated` — solo cron/entre sí) y
+    `refresh_my_recommendations_v2()` (self-serve, siempre sobre `auth.uid()`), cron
+    `musicaleando-daily-recommendations-v2` (8:30am). Función compartida nueva
+    `energia_ciudad_avg(p_ciudad)` (reemplazó lógica duplicada dentro de
+    `generate_trend_for_user`) — devuelve `promedio = null` si `muestras < 3`, a propósito,
+    ver sesión 11 para el porqué. Fix de RLS: `squad_members_with_profile(p_squad_id)`
+    reemplazó la lectura rota de perfiles de squadmates en `useSquadStore.fetchMySquads`.
+    Rifas: columnas `announcements.ganador_user_id`/`ganador_nombre` + función
+    `select_raffle_winner(p_announcement_id)` (verifica `is_admin` internamente, llamada
+    desde el panel admin). Antes de tocar cualquiera de estas, revisar la sección de sesión
+    11 completa.
+13. **`execute_sql` del MCP de Supabase es de solo lectura en este entorno** (confirmado en
+    sesión 11 — `INSERT`/`UPDATE`/`DELETE` fallan con "cannot execute UPDATE in a read-only
+    transaction"). Para cualquier escritura puntual de verificación (dar `is_admin` temporal
+    a una cuenta de prueba, crear/borrar una fila de prueba fuera del flujo normal de la
+    app), usar `apply_migration` en su lugar — funciona para DML, no solo DDL, aunque dejará
+    un registro de migración con nombre `verify_*`. Después de cualquier tanda de pruebas con
+    cuentas/datos desechables, recontar las tablas clave (`users`, `squads`,
+    `announcements`, etc.) contra el conteo esperado antes de dar por buena la limpieza — la
+    sesión 11 encontró 2 cuentas de prueba huérfanas exactamente así, de un script que había
+    fallado a medias antes de llegar a su propia limpieza.
