@@ -192,6 +192,48 @@ export type Database = {
           },
         ]
       }
+      concert_album: {
+        Row: {
+          consentimiento_patrocinadores: boolean
+          created_at: string
+          festival_id: string
+          foto_path: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          consentimiento_patrocinadores?: boolean
+          created_at?: string
+          festival_id: string
+          foto_path: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          consentimiento_patrocinadores?: boolean
+          created_at?: string
+          festival_id?: string
+          foto_path?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "concert_album_festival_id_fkey"
+            columns: ["festival_id"]
+            isOneToOne: false
+            referencedRelation: "festivals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "concert_album_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_reports: {
         Row: {
           content_id: string
@@ -1149,6 +1191,10 @@ export type Database = {
         Args: { p_artists: Json; p_squad_id: string }
         Returns: undefined
       }
+      users_share_a_squad: {
+        Args: { p_user_a: string; p_user_b: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
@@ -1292,5 +1338,5 @@ export type AnnouncementTipo = "simple" | "rifa" | "descuento"
 export type SurveyCalificacion = "genial" | "bien" | "regular" | "malo"
 export type SurveyVolveria = "si" | "no" | "tal_vez"
 export type RecommendationFuente = "v1_contenido" | "v2_colaborativo"
-export type ContentReportType = "festival_comment" | "community_share"
+export type ContentReportType = "festival_comment" | "community_share" | "concert_photo"
 export type ContentReportMotivo = "spam" | "ofensivo" | "otro"

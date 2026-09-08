@@ -204,6 +204,19 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['songs']['Row']>;
         Relationships: [];
       };
+      concert_album: {
+        Row: {
+          id: string;
+          user_id: string;
+          festival_id: string;
+          foto_path: string;
+          consentimiento_patrocinadores: boolean;
+          created_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['concert_album']['Row']>;
+        Update: Partial<Database['public']['Tables']['concert_album']['Row']>;
+        Relationships: [];
+      };
     };
   };
 };

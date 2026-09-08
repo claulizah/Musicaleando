@@ -27,6 +27,7 @@ import { FestivalHubScreen } from './src/screens/main/FestivalHubScreen';
 import { TorneoScreen } from './src/screens/main/TorneoScreen';
 import { SquadTorneoScreen } from './src/screens/main/SquadTorneoScreen';
 import { CommunityTrendsScreen } from './src/screens/main/CommunityTrendsScreen';
+import { ConcertAlbumScreen } from './src/screens/main/ConcertAlbumScreen';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -119,6 +120,7 @@ export default function App() {
           <Stack.Screen name="Torneo" component={TorneoScreen} />
           <Stack.Screen name="SquadTorneo" component={SquadTorneoScreen} />
           <Stack.Screen name="CommunityTrends" component={CommunityTrendsScreen} />
+          <Stack.Screen name="ConcertAlbum" component={ConcertAlbumScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </GestureHandlerRootView>

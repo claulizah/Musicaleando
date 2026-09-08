@@ -1,20 +1,20 @@
 # Estado del proyecto — Musicaleando
 
-Última actualización: 2026-09-08 (sesión 12, cierre). Este archivo es el punto de partida
+Última actualización: 2026-09-08 (sesión 13, cierre). Este archivo es el punto de partida
 para retomar el trabajo en una sesión nueva sin perder contexto.
 
-**Estado en una línea**: **Los 7 sprints numerados del roadmap original del spec están
-completos** (Sprint 6 — mapa social, Torneo Sonoro grupal, dashboard de patrocinios,
-moderación — cerrado en sesión 12). Antes de Sprint 6 se hizo una auditoría completa del
-patrón de RLS silencioso que ya había aparecido 3 veces (Squads original, comparación de
-squad, `fetchMySquads`) — no se encontraron casos adicionales, el patrón queda cerrado. Lo
-único que sigue explícitamente fuera de alcance por decisión del usuario: **conexión en vivo
-(Spotify/Apple Music OAuth beta)** y **todo el Backlog v2** del spec (seguridad/ubicación en
-vivo, recap anual, álbum de conciertos, match por historial compartido).
+**Estado en una línea**: Los 7 sprints numerados del roadmap original están completos.
+**Backlog v2, primera pieza: Álbum de conciertos completo** (sesión 13) — tabla, Storage
+privado, RLS verificada a fondo con cuentas reales (visibilidad dueño+squad), subida desde
+la app, consentimiento para patrocinadores, reportar + panel admin con eliminación real de
+fotos. **Esto desbloquea Recap anual y Match por historial** (ambos dependían de tener
+asistencia real acumulada) — ninguno de los dos se construyó todavía. **Conexión en vivo
+(Spotify/Apple Music OAuth beta)** sigue pausada, y del Backlog v2 quedan
+**Seguridad/ubicación en vivo**, **Recap anual** y **Match por historial** sin construir.
 
 Proyecto Supabase: `ijwyykfuyeaahvxmaild` ("Sound Project", org `ljcnanwlkijozacnyhck`).
 Repo: rama `master`, sin remoto configurado todavía. Último commit antes de esta sesión:
-`8dd09e6` (cierre de sesión 11, Sprint 5).
+`1dcbec0` (cierre de sesión 12, Sprint 6).
 
 ## Completado y verificado en dispositivo (no solo compilado — probado tocando la app)
 
@@ -1428,6 +1428,139 @@ hay nada más que "reportar" ahí.
   migración con nombre `verify_*` — es el costo aceptado de no tener otra vía de escritura
   elevada disponible.
 
+## Sesión 13 (2026-09-08): Backlog v2 — Álbum de conciertos (primera pieza, desbloquea Recap anual y Match por historial)
+
+El usuario dio el link del Artifact del spec de nuevo (mismo patrón de siempre) — la sección
+"Backlog v2" ya venía con un "Orden de ataque decidido" explícito confirmando Álbum de
+conciertos primero, y una ficha propia para esa feature con la moderación ya decidida
+(básica, no previa a publicar — visible de inmediato, reportable, el admin puede eliminar).
+Lo único que el spec **no** definía era el alcance exacto de visibilidad ("registro personal"
+pero también "cualquier usuario puede reportarla", que son casi contradictorios sin más
+contexto) — se confirmó con el usuario antes de construir (`AskUserQuestion`): **privado al
+dueño + visible a sus squadmates**, nada público a toda la app.
+
+### Esquema y RLS — verificado a fondo con cuentas reales, siguiendo la instrucción explícita de tratar esto como candidato a bug silencioso
+
+Dado que ya van tres bugs del mismo patrón (Squads, comparación de squad, `fetchMySquads`) y
+el prompt pedía explícitamente verificar este caso con el mismo rigor, se hizo la
+verificación MÁS exhaustiva de todas las sesiones hasta ahora — no solo la tabla, también el
+Storage:
+
+- **Nueva función `users_share_a_squad(p_user_a, p_user_b)`** (`SECURITY DEFINER`) — no
+  existía un helper para "¿estos dos usuarios comparten ALGÚN squad?" (`is_squad_member` es
+  para un squad específico). Evita el mismo patrón de recursión/lectura-silenciosa ya
+  documentado, igual que `squad_comparison`/`squad_members_with_profile`.
+- **Tabla `concert_album`** (`user_id`, `festival_id`, `foto_path`,
+  `consentimiento_patrocinadores`, `created_at`). RLS: `select` para el dueño, sus squadmates
+  (vía `users_share_a_squad`) o un admin; `insert` solo si el usuario **ya marcó "voy"** a ese
+  festival (`exists (... festival_intent ... status='voy')` en el propio `with check`) — no
+  se puede subir una foto de un festival cualquiera; `update`/`delete` propios; **`delete`
+  también para admin** — a diferencia de comentarios/shares (Sprint 6, que solo se "ocultan"),
+  el spec pide explícitamente que una foto reportada se pueda **eliminar**, así que esta es la
+  única tabla de moderación con policy de `delete` para admin.
+- **Bucket de Storage `concert-album`**: **privado** (`public = false`, a diferencia de
+  `festival-maps`), límite de 8MB, solo `image/jpeg`/`image/png`/`image/webp`. Policies en
+  `storage.objects` replican exactamente la misma regla que la tabla (dueño, vía
+  `(storage.foldername(name))[1] = auth.uid()`, o squadmate vía `users_share_a_squad`, o
+  admin) — verificar la tabla NO alcanza si el archivo real sigue siendo legible por
+  cualquiera; había que probar ambas capas por separado.
+- **`content_reports` (Sprint 6) extendido** con el tipo `'concert_photo'` en vez de un
+  mecanismo de reporte paralelo — mismo patrón, una sola tabla de reportes para todo el UGC.
+- **Verificado con tres cuentas de prueba reales (A dueña, B squadmate, C ajeno) cubriendo
+  cada capa por separado**:
+  - `users_share_a_squad(A,B)` → `true`; `(A,C)` → `false`.
+  - Insertar una foto para un festival donde A **no** había marcado "voy" → rechazado por RLS;
+    después de marcar "voy" → éxito.
+  - Subida real de bytes al bucket como A → éxito.
+  - Lectura de la fila en `concert_album` — B (squadmate) ve la fila, C (ajeno) no.
+  - Lectura del **archivo real** — B puede generar una URL firmada (`createSignedUrl`) para
+    la foto de A, C recibe `"Object not found"` al intentar descargarla (Storage no distingue
+    "no autorizado" de "no existe" en su respuesta, pero el efecto — bloqueo real — es el
+    mismo).
+  - B (no dueño) intenta borrar la fila de A → RLS lo filtra en silencio, sigue existiendo
+    (mismo comportamiento de Postgrest/RLS en `DELETE` ya documentado en sesiones anteriores).
+  - B reporta la foto de A (`content_type: 'concert_photo'`) → éxito.
+  - Cuentas, squad, fila y archivo de prueba borrados al terminar — conteos de
+    `users`/`squads`/`concert_album`/`content_reports`/objetos del bucket confirmados de
+    vuelta a la línea base (0 en las tablas nuevas, 6/2 en `users`/`squads`).
+
+### UI móvil — subir, ver álbum propio, consentimiento
+
+- **Paquete nuevo**: `expo-image-picker` (no estaba instalado) + plugin en `app.json` con el
+  texto de permiso de fotos para iOS.
+- Nueva pantalla [ConcertAlbumScreen.tsx](src/screens/main/ConcertAlbumScreen.tsx)
+  (navegable desde "📸 Mi álbum de conciertos" en `ProfileScreen`): lista los festivales
+  donde el usuario ya marcó "Voy" (de `useFestivalStore`, ya cargado), permite elegir uno y
+  subir una foto de la galería. **Antes de subir, un `Alert` pide consentimiento explícito**
+  ("¿Usar esta foto como evidencia para patrocinadores?", Sí/No) — la foto se sube de
+  cualquier forma, solo cambia `consentimiento_patrocinadores`, tal como pedía el spec ("el
+  consentimiento debe pedirse desde la subida, aunque el uso real del dato no se construya
+  todavía"). Muestra el álbum propio en grid con vista previa (`createSignedUrl`, expira en 1
+  hora — se regenera cada vez que se abre la pantalla) y permite quitar una foto propia
+  (mantener presionada).
+- Nuevo store [useConcertAlbumStore.ts](src/store/useConcertAlbumStore.ts): `addPhoto` sube
+  primero al bucket y luego inserta la fila (si la fila falla —p.ej. el usuario no había
+  marcado "voy"— borra el archivo recién subido para no dejar un objeto huérfano). Valida
+  tamaño (8MB) y formato en cliente antes de intentar subir, además del límite que ya aplica
+  el bucket del lado del servidor.
+- **"Álbum del squad" en `SquadDetailScreen`**: sección nueva que muestra las fotos de los
+  squadmates (no las propias, esas ya se ven en el álbum propio) — es la única superficie
+  donde tiene sentido un botón de reportar (el álbum propio no muestra fotos ajenas), así que
+  se agregó ahí en vez de construir una pantalla de "álbum de X squadmate" completa, que no
+  pedía el alcance de esta sesión. Mantener presionada una foto ajena abre el mismo
+  `promptReportContent` ya usado para comentarios/shares (Sprint 6).
+- Identificación de squadmates en ambas pantallas (mapa social y álbum del squad) sigue el
+  patrón ya establecido: por arquetipo/nombre resuelto vía RPCs existentes
+  (`squad_comparison`), nunca con una lectura nueva de `users`/`music_profile`.
+
+### Reportar + panel admin
+
+- [src/lib/moderation.ts](src/lib/moderation.ts) (`promptReportContent`, de Sprint 6) se
+  reutiliza sin cambios — el `Alert` de 3 motivos ya era genérico.
+- **Panel admin `/moderacion` extendido** (no se creó una página nueva — el patrón de
+  reportes de Sprint 6 ya era genérico y esto encajaba ahí): ahora también lista fotos
+  reportadas, mostrando una vista previa real (`createSignedUrl` resuelto en el servidor,
+  el admin puede leer cualquier foto reportada gracias a la policy de admin). Acción nueva
+  `deleteReportedPhoto` (en vez de "Ocultar contenido" que usan comentarios/shares): borra el
+  objeto de Storage, borra la fila de `concert_album`, y resuelve el reporte — en ese orden,
+  con manejo explícito del caso "la fila ya no existe" (el dueño pudo haberla borrado él
+  mismo después de ser reportado).
+- **Verificado con una cuenta de prueba real marcada `is_admin`** (vía `apply_migration`,
+  mismo patrón que sesiones anteriores): el admin pudo leer la fila y el archivo de una foto
+  reportada (aun sin ser squadmate del dueño), borrar el objeto de Storage, borrar la fila, y
+  se confirmó que el archivo realmente dejó de existir después (no solo quedó inaccesible).
+
+### Problemas de entorno (sesión 13)
+
+- **El emulador Android seguía ocupado por otra sesión de Claude Code** — cuarta sesión
+  seguida con este hallazgo (ver sesiones 10, 11, 12). Instrucción explícita de esta sesión:
+  decir claramente si la subida de imagen específicamente necesitaba verse en un dispositivo
+  real en vez de asumir que REST alcanzaba — **la respuesta es sí, en parte**:
+  - Lo que **sí** se verificó de forma equivalente a producción: el mecanismo real de subida
+    a Supabase Storage (bytes reales subidos vía la API de Storage, no solo filas de una
+    tabla), la RLS de lectura/escritura en ambas capas (tabla + Storage), la generación de
+    URLs firmadas, y el flujo completo de borrado — todo esto no depende de la UI de React
+    Native, es la misma llamada HTTP que haría la app.
+  - Lo que **no** se pudo verificar en esta sesión, y que sí requiere un dispositivo real:
+    que `expo-image-picker` realmente abra la galería y devuelva una foto utilizable en este
+    proyecto concreto; que `new File(uri).bytes()` (API nueva de `expo-file-system`) convierta
+    correctamente el URI que entrega el picker en bytes subibles — este es un camino de código
+    nuevo en este proyecto, no un patrón ya probado en otra feature; que el `Alert` de
+    consentimiento aparezca y se comporte como se espera; y que la imagen subida se vea
+    correctamente en el grid vía `Image` + URL firmada. **Ninguna de estas piezas se verificó
+    visualmente esta sesión** — quedan como pendiente explícito para cuando haya emulador o
+    dispositivo físico disponible, no se asumió que compilar sin errores fuera suficiente.
+  - Repetido de sesiones anteriores por consistencia: `execute_sql` sigue en modo
+    solo-lectura, se usó `apply_migration` para las escrituras de verificación puntual
+    (flags de `is_admin` temporales). `storage.objects` además **bloquea el `DELETE` directo
+    por SQL** ("Direct deletion from storage tables is not allowed. Use the Storage API
+    instead.") — un objeto de prueba que quedó huérfano de una corrida fallida del script de
+    verificación se tuvo que borrar con una sesión autenticada real llamando
+    `.storage.from(bucket).remove([...])`, no con SQL. **Regla para la próxima sesión**: si
+    un objeto de Storage queda huérfano de una prueba, no intentar `delete from
+    storage.objects` — crear una cuenta de prueba con `is_admin` y usar la Storage API para
+    quitarlo.
+
 ## Pendiente
 
 - No hay UI para editar nombre/ciudad/fechas de un festival ya creado desde el panel (solo
@@ -1541,10 +1674,29 @@ hay nada más que "reportar" ahí.
   pausada — el spec la marca como feature detrás de feature flag solo para una cohorte
   allowlist, y el usuario pidió no construirla salvo confirmación explícita de que es
   momento de abrir esa beta.
-- Ninguna de las features de Sprint 5/6 se verificó visualmente en emulador (otra sesión de
-  Claude Code seguía usando el emulador/Metro en las tres sesiones seguidas — ver "Problemas
-  de entorno" de las sesiones 10/11/12). Todo se verificó con cuentas de prueba reales por
-  REST/SQL.
+- **Backlog v2 — Álbum de conciertos completo** (sesión 13): tabla `concert_album` +
+  bucket privado `concert-album`, visibilidad dueño+squad confirmada con el usuario y
+  verificada a fondo con cuentas reales en ambas capas (tabla y Storage), subida desde
+  `ConcertAlbumScreen`, consentimiento explícito por foto, reportar + `/moderacion` con
+  eliminación real (no solo ocultar, a diferencia de comentarios/shares). Ver sesión 13 para
+  detalle completo.
+  - **Pendiente de verificación visual, explícitamente señalado (no asumido)**: el flujo de
+    `expo-image-picker` + `expo-file-system` (`File.bytes()`) abriendo la galería real y
+    subiendo una foto real desde la UI de React Native — es código nuevo en este proyecto, no
+    un patrón ya probado. El mecanismo de Storage/RLS subyacente sí se verificó a fondo (subida
+    real de bytes vía API, no solo filas), pero la ruta completa "usuario toca botón → elige
+    foto → sube → la ve en su álbum" necesita un dispositivo real o emulador disponible.
+  - **Backlog v2 — Recap anual y Match por historial siguen sin construir**, ahora
+    desbloqueados (dependían de tener asistencia real acumulada vía el álbum, que ya existe)
+    pero ninguno se construyó esta sesión — el prompt de esta sesión los dejó explícitamente
+    fuera, solo pedía la pieza base.
+  - **Backlog v2 — Seguridad/ubicación en vivo en squad** sigue sin construir y sin tocar,
+    tal como está documentado en el spec (necesita una decisión de producto/legal explícita
+    antes de cualquier código).
+- Ninguna de las features de Sprint 5/6/Backlog v2 se verificó visualmente en emulador (otra
+  sesión de Claude Code seguía usando el emulador/Metro en las cuatro sesiones seguidas — ver
+  "Problemas de entorno" de las sesiones 10/11/12/13). Todo se verificó con cuentas de prueba
+  reales por REST/SQL/Storage API.
 
 ## Decisiones técnicas tomadas en el camino (no estaban en el prompt original)
 
@@ -1713,21 +1865,29 @@ hay nada más que "reportar" ahí.
    Insights (dashboard de patrocinios), Moderación — más la auditoría de RLS que precedió
    ese sprint (sin casos nuevos encontrados) y dos bugs reales en las funciones de insights
    (ver esa sección).
+   **Backlog v2, primera pieza (sesión 13): Álbum de conciertos completo** — tabla
+   `concert_album`, bucket privado `concert-album`, visibilidad dueño+squad (confirmada con
+   el usuario, verificada a fondo con cuentas reales en tabla y Storage), subida desde
+   `ConcertAlbumScreen`, consentimiento explícito, reportar + `/moderacion` con eliminación
+   real de fotos. **Desbloquea Recap anual y Match por historial** (ninguno construido
+   todavía). **Pendiente de verificación visual explícito**: el flujo de
+   `expo-image-picker`/`expo-file-system` desde la UI real — es código nuevo, no se pudo
+   probar en dispositivo esta sesión (ver esa sección).
    **Conexión en vivo (Spotify/Apple Music OAuth) sigue pausada** (el usuario debe confirmar
-   explícitamente antes de abrir esa beta) y **todo el Backlog v2 del spec sigue fuera de
-   alcance** (seguridad/ubicación en vivo, recap anual estilo Wrapped, álbum de conciertos,
-   match por historial compartido).
-   **Siguiente foco: a decidir con el usuario.** Con el roadmap numerado cerrado, las
-   opciones razonables son: (a) abrir la beta de conexión en vivo si el usuario lo confirma,
-   (b) empezar a evaluar el Backlog v2 feature por feature (cada una tiene su propia
-   sección de "por qué se dejó fuera" en el spec — leerla antes de proponer nada), o (c)
-   cerrar los pendientes de verificación visual que se fueron acumulando por el emulador
-   ocupado (ver "Pendiente"). El detalle exacto del spec **no está guardado en este repo ni
-   en el sistema de archivos** — se ha leído cuatro veces (sesiones 9, 10, 11, 12) desde un
-   Artifact publicado que el usuario comparte por link en el chat, y ese contenido no
-   persiste entre sesiones. **Antes de construir cualquier cosa nueva, pedirle al usuario el
-   link del Artifact del spec de nuevo y confirmar el alcance exacto** — no asumir a partir
-   de lo que se infiere abajo.
+   explícitamente antes de abrir esa beta). Del Backlog v2 quedan sin construir: **Recap
+   anual estilo Wrapped**, **Match por historial compartido** (ambos ya desbloqueados) y
+   **Seguridad/ubicación en vivo** (necesita decisión de producto/legal antes de tocarse).
+   **Siguiente foco: a decidir con el usuario.** Opciones razonables: (a) Recap anual o
+   Match por historial (ya desbloqueados por el álbum), (b) Seguridad/ubicación en vivo si
+   el usuario confirma que ya se resolvió la decisión de producto/legal que el spec pide,
+   (c) abrir la beta de conexión en vivo, o (d) cerrar los pendientes de verificación visual
+   acumulados por el emulador ocupado (ver "Pendiente") — el más urgente de estos es
+   probar la subida de fotos en un dispositivo real. El detalle exacto del spec **no está
+   guardado en este repo ni en el sistema de archivos** — se ha leído cinco veces (sesiones
+   9, 10, 11, 12, 13) desde un Artifact publicado que el usuario comparte por link en el
+   chat, y ese contenido no persiste entre sesiones. **Antes de construir cualquier cosa
+   nueva, pedirle al usuario el link del Artifact del spec de nuevo y confirmar el alcance
+   exacto** — no asumir a partir de lo que se infiere abajo.
    - **Compañero ideal sigue sin definir**: no avanzar en código hasta que el usuario
      confirme o corrija la interpretación propuesta en la sesión 8 (compat_score más alto
      entre todos los usuarios de la app, no solo squadmates). No es parte de ningún sprint
@@ -1826,4 +1986,19 @@ hay nada más que "reportar" ahí.
     para `UPDATE` en sesiones anteriores). Para limpiar datos de prueba después de verificar
     un flujo admin-only, usar la sesión del actor original (dueño de la fila) para borrar, o
     hacer la limpieza final directamente por `apply_migration` — no asumir que "admin" puede
-    borrar cualquier cosa solo porque puede leerla/ocultarla.
+    borrar cualquier cosa solo porque puede leerla/ocultarla. **Confirmado de nuevo en sesión
+    13** con `concert_album`/`users`, mismo patrón exacto.
+17. **Backlog v2 — Álbum de conciertos (sesión 13)**: tabla `concert_album` (RLS: `select`
+    dueño/squadmate/admin vía el helper nuevo `users_share_a_squad(p_user_a, p_user_b)`,
+    `insert` solo si `festival_intent.status='voy'` para ese festival, `delete` propio **y**
+    admin — a diferencia del resto de moderación de Sprint 6, esta sí permite borrar de
+    verdad). Bucket de Storage **privado** `concert-album` (8MB, solo
+    jpeg/png/webp) con policies en `storage.objects` que replican la misma regla
+    dueño/squadmate/admin — verificar la tabla no basta, hay que probar el archivo real por
+    separado. `content_reports` extendido con `content_type = 'concert_photo'`. Antes de
+    tocar cualquiera de estas, revisar la sección de sesión 13 completa.
+18. **`storage.objects` bloquea `DELETE` directo por SQL** ("Direct deletion from storage
+    tables is not allowed. Use the Storage API instead.") — a diferencia de las tablas
+    normales, un objeto de Storage huérfano de una prueba no se puede limpiar con
+    `apply_migration`; hay que autenticar una sesión real (anónima + flag `is_admin` si el
+    objeto no es propio) y llamar `.storage.from(bucket).remove([...])`.

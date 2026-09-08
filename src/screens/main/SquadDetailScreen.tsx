@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Sharing from 'expo-sharing';
 import * as Haptics from 'expo-haptics';
@@ -10,11 +10,13 @@ import { useSessionStore } from '../../store/useSessionStore';
 import { useProfileStore } from '../../store/useProfileStore';
 import { useSquadStore } from '../../store/useSquadStore';
 import { useSquadPlaylistStore } from '../../store/useSquadPlaylistStore';
+import { useConcertAlbumStore } from '../../store/useConcertAlbumStore';
 import { supabase } from '../../lib/supabase';
 import { Tables } from '../../types/database';
 import { ARCHETYPES } from '../../lib/archetypes';
 import { compatScore } from '../../lib/compat';
 import { levelForFestivalCount } from '../../lib/levels';
+import { promptReportContent } from '../../lib/moderation';
 import { colors, radii, spacing, type } from '../../theme';
 
 type Song = Tables<'songs'>;
@@ -38,6 +40,11 @@ export function SquadDetailScreen({ route, navigation }: Props) {
   const removeTrack = useSquadPlaylistStore((s) => s.removeTrack);
   const tracks = tracksBySquad[squadId] ?? [];
 
+  const entriesBySquad = useConcertAlbumStore((s) => s.entriesBySquad);
+  const fetchSquadAlbum = useConcertAlbumStore((s) => s.fetchSquad);
+  const reportPhoto = useConcertAlbumStore((s) => s.reportPhoto);
+  const squadAlbum = entriesBySquad[squadId] ?? [];
+
   const [catalog, setCatalog] = useState<Song[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerGenre, setPickerGenre] = useState<string | null>(null);
@@ -54,6 +61,13 @@ export function SquadDetailScreen({ route, navigation }: Props) {
     fetchComparison(squadId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [squadId]);
+
+  useEffect(() => {
+    if (!entry || !userId) return;
+    const otherMemberIds = entry.members.map((m) => m.user_id).filter((id) => id !== userId);
+    fetchSquadAlbum(squadId, otherMemberIds);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [squadId, entry?.members.length, userId]);
 
   const openPicker = async () => {
     setPickerOpen(true);
@@ -253,6 +267,38 @@ export function SquadDetailScreen({ route, navigation }: Props) {
           </View>
         )}
 
+        {squadAlbum.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionLabel}>Álbum del squad</Text>
+            <Text style={styles.hint}>Fotos de tus squadmates — solo visibles para ustedes.</Text>
+            <View style={styles.albumGrid}>
+              {squadAlbum.map((entryPhoto) => {
+                const ownerNombre =
+                  comparison.find((c) => c.user_id === entryPhoto.user_id)?.nombre ?? 'Squadmate';
+                return (
+                  <Pressable
+                    key={entryPhoto.id}
+                    style={styles.albumCard}
+                    onLongPress={() =>
+                      promptReportContent((motivo) =>
+                        userId ? reportPhoto(userId, entryPhoto.id, motivo) : undefined,
+                      )
+                    }
+                  >
+                    {entryPhoto.signedUrl && (
+                      <Image source={{ uri: entryPhoto.signedUrl }} style={styles.albumImage} />
+                    )}
+                    <Text style={styles.memberMeta} numberOfLines={1}>
+                      {ownerNombre} · {entryPhoto.festivalNombre}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text style={styles.hint}>Mantén presionada una foto para reportarla.</Text>
+          </View>
+        )}
+
         <View style={styles.section}>
           <View style={styles.playlistHeader}>
             <Text style={styles.sectionLabel}>Playlist del squad</Text>
@@ -341,6 +387,21 @@ const styles = StyleSheet.create({
   hint: {
     ...type.body,
     color: colors.textSecondary,
+  },
+  albumGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  albumCard: {
+    width: '31%',
+    gap: 2,
+  },
+  albumImage: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: radii.md,
+    backgroundColor: colors.bgElevated,
   },
   header: {
     flexDirection: 'row',

@@ -35,6 +35,12 @@
             "backgroundColor": "#14111F"
           }
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Musicaleando necesita acceso a tus fotos para agregarlas a tu álbum de conciertos."
+        }
       ]
     ]
   }

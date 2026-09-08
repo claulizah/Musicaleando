@@ -299,6 +299,11 @@ export function ProfileScreen({ navigation }: Props) {
 
         <PrimaryButton label="Jugar Torneo Sonoro" variant="secondary" onPress={() => navigation.navigate('Torneo')} />
         <PrimaryButton
+          label="📸 Mi álbum de conciertos"
+          variant="secondary"
+          onPress={() => navigation.navigate('ConcertAlbum')}
+        />
+        <PrimaryButton
           label={importing ? 'Importando...' : 'Importar de Spotify / Apple Music'}
           variant="secondary"
           onPress={handleImport}
