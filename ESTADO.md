@@ -1,20 +1,19 @@
 # Estado del proyecto — Musicaleando
 
-Última actualización: 2026-09-08 (sesión 13, cierre). Este archivo es el punto de partida
+Última actualización: 2026-09-08 (sesión 14, cierre). Este archivo es el punto de partida
 para retomar el trabajo en una sesión nueva sin perder contexto.
 
-**Estado en una línea**: Los 7 sprints numerados del roadmap original están completos.
-**Backlog v2, primera pieza: Álbum de conciertos completo** (sesión 13) — tabla, Storage
-privado, RLS verificada a fondo con cuentas reales (visibilidad dueño+squad), subida desde
-la app, consentimiento para patrocinadores, reportar + panel admin con eliminación real de
-fotos. **Esto desbloquea Recap anual y Match por historial** (ambos dependían de tener
-asistencia real acumulada) — ninguno de los dos se construyó todavía. **Conexión en vivo
-(Spotify/Apple Music OAuth beta)** sigue pausada, y del Backlog v2 quedan
-**Seguridad/ubicación en vivo**, **Recap anual** y **Match por historial** sin construir.
+**Estado en una línea**: Los 7 sprints numerados están completos. Backlog v2: **Álbum de
+conciertos** (sesión 13) y ahora **Recap anual estilo Wrapped** (sesión 14) están completos
+— este último agregó un historial real de campeones del Torneo Sonoro (no existía antes,
+`flavor.torneo_campeon` solo guardaba el último) para poder calcular "artista del año" de
+verdad. **Match por historial compartido** es la última pieza priorizada del Backlog v2,
+sigue sin construir. **Conexión en vivo (Spotify/Apple Music OAuth beta)** y
+**Seguridad/ubicación en vivo** siguen pausadas, ninguna confirmada para retomar todavía.
 
 Proyecto Supabase: `ijwyykfuyeaahvxmaild` ("Sound Project", org `ljcnanwlkijozacnyhck`).
 Repo: rama `master`, sin remoto configurado todavía. Último commit antes de esta sesión:
-`1dcbec0` (cierre de sesión 12, Sprint 6).
+`60d0d75` (cierre de sesión 13, Álbum de conciertos).
 
 ## Completado y verificado en dispositivo (no solo compilado — probado tocando la app)
 
@@ -1561,6 +1560,105 @@ Storage:
     storage.objects` — crear una cuenta de prueba con `is_admin` y usar la Storage API para
     quitarlo.
 
+## Sesión 14 (2026-09-08): Backlog v2 — Recap anual estilo Wrapped
+
+El usuario dio el link del Artifact del spec de nuevo. La ficha de "Recap anual" en
+"Backlog v2" es breve (mod_desc: "Resumen del año del usuario: fotos, nivel alcanzado,
+música más escuchada, festivales visitados") y no precisa período ni cómo derivar "artista
+del año" — se confirmaron ambos puntos con el usuario antes de construir (`AskUserQuestion`):
+
+- **Período: año calendario** (1 enero – 31 diciembre), no "últimos 12 meses rodantes".
+- **Artista del año**: al revisar el código se encontró que `music_profile.flavor.torneo_campeon`
+  solo guarda el ÚLTIMO campeón coronado — no hay ningún historial por fecha, así que
+  "el más repetido este año" literalmente no se podía calcular con los datos existentes. El
+  usuario eligió invertir en agregar un historial real en vez de conformarse con "el campeón
+  actual" (que ni siquiera garantiza haberse coronado ese año).
+
+### Historial de campeones — pieza nueva que el Recap necesitaba
+
+- Migración `backlog_v2_recap_anual`: tabla `torneo_campeon_historial` (`user_id`,
+  `genero_id`, `artist_id`, `artist_nombre`, `artist_imagen_url`, `coronado_at`). Mismo
+  patrón de integridad que `user_badges`/`recommendation_cache` — sin insert/update/delete de
+  cliente, solo `select` propia; toda escritura pasa por un trigger nuevo,
+  `track_torneo_campeon_historial()` (`AFTER UPDATE OF flavor ON music_profile`), que
+  compara el `artistId` antes/después y registra una fila nueva solo cuando cambia a un
+  valor distinto (no en cada guardado del perfil que no toque el campeón).
+- **No dispara en el `INSERT` inicial del perfil** (cuando se completa el cuestionario) — a
+  propósito, porque en el flujo real (`saveFromQuiz` → inserta sin campeón,
+  `applyTournamentChampion` → siempre actualiza) el campeón nunca se fija en el insert
+  inicial. Se verificó esto explícitamente con una prueba que reproduce la secuencia real
+  (insert sin campeón, luego 3 `update()` separados coronando dos artistas distintos y
+  volviendo a coronar el primero) — confirmó 3 filas de historial y el cálculo de "más
+  repetido" (`artist-1`, 2 veces) correcto. Una primera prueba que puso el campeón
+  directamente en el `INSERT` (un flujo que la app real nunca produce) dio un resultado que
+  parecía un bug pero no lo era — quedó documentado como lección en "Problemas de entorno".
+- **Backfill para perfiles reales existentes**: los usuarios que ya tenían un campeón
+  guardado de sesiones anteriores (sesión 7) recibieron una entrada de historial usando
+  `updated_at` del perfil como fecha aproximada de coronación — es lo más cercano disponible,
+  no hay timestamp exacto de cuándo se jugó el torneo antes de esta migración.
+
+### Agregación del recap — `get_recap_anual(p_anio)`, siempre sobre el usuario propio
+
+- Función `SECURITY DEFINER` que arma un solo objeto `jsonb` por año: festivales confirmados
+  ese año (`festival_intent.status='voy'` join `festivals.fecha_inicio` dentro del rango),
+  el campeón más repetido del año (con empate resuelto por coronación más reciente), hasta 6
+  fotos del álbum de festivales de ese año (`concert_album` join `festivals.fecha_inicio`), y
+  géneros/arquetipo actuales del perfil. **Sin parámetro de usuario** — siempre usa
+  `auth.uid()`, no existe forma de pedir el recap de otro usuario (un recap es un resumen
+  personal, no se pidió ni tiene sentido compartir la vista cruda de datos de alguien más).
+- **Nivel alcanzado**: se calcula en cliente con `levelForFestivalCount` (ya existente,
+  Sprint 7) aplicado al conteo de festivales **de ese año específico**, no al total
+  histórico — un recap de 2026 debe reflejar el nivel según lo que pasó en 2026, no el nivel
+  acumulado de toda la cuenta.
+- **Verificado con cuentas de prueba reales**: recap vacío antes de tener datos (todo en
+  `null`/`0`/`[]`), recap completo después de marcar "voy", coronar campeones dos veces
+  (verificando el empate/desempate) y subir una foto — cada campo del JSON confirmado
+  contra los datos insertados. Confirmado que el recap de un usuario B (sin datos) nunca ve
+  nada del usuario A — aislamiento por `auth.uid()` funciona como se espera, sin necesidad
+  de ninguna policy de "compañero" porque no hay lectura cruzada aquí.
+
+### UI móvil — carrusel tipo Wrapped + tarjeta compartible
+
+- Nuevo [RecapScreen.tsx](src/screens/main/RecapScreen.tsx) (navegable desde "🎁 Mi
+  {año} en Musicaleando" en `ProfileScreen`): carrusel de slides tocables
+  (intro → festivales → artista del año → fotos → nivel → tarjeta final compartible),
+  reutilizando `QuizProgressBar` para el indicador de progreso y `ArchetypeCard` para la
+  tarjeta de cierre — mismo patrón exacto de captura+compartir (`react-native-view-shot` +
+  `expo-sharing`) que arquetipo/campeón/nivel de sesiones anteriores, sin construir nada
+  nuevo para eso.
+  - **Decisión deliberada sobre el "story" del spec**: en vez de gestos de swipe tipo
+    Instagram Stories (que necesitarían una librería nueva y son más difíciles de verificar
+    sin dispositivo), se implementó como un asistente con botones "Anterior"/"Siguiente" —
+    misma sensación de recorrido secuencial, mecánica mucho más simple de razonar y de
+    probar por código.
+- **Caso límite (punto 5 del alcance)**: si el año no tiene festivales, campeón ni fotos
+  (`isRecapEmpty` en [src/lib/recap.ts](src/lib/recap.ts)), se salta todo el carrusel y se
+  muestra una sola pantalla amable invitando a marcar "Voy", jugar el Torneo o subir una
+  foto — en vez de un carrusel con 4 de 6 slides vacíos.
+- Nuevo store [useRecapStore.ts](src/store/useRecapStore.ts): llama la RPC y resuelve las
+  URLs firmadas de las fotos (mismo patrón que `useConcertAlbumStore`/`ConcertAlbumScreen`
+  de la sesión anterior, TTL de 1 hora).
+
+### Problemas de entorno (sesión 14)
+
+- **El emulador Android seguía ocupado por otra sesión de Claude Code** — quinta sesión
+  seguida (ver sesiones 10-13). El prompt de esta sesión pedía aprovechar si estaba libre
+  para cerrar el pendiente de `expo-image-picker` de la sesión anterior — no fue posible,
+  sigue exactamente igual de pendiente. Toda la verificación de esta sesión (agregación,
+  trigger de historial, aislamiento por usuario) se hizo por REST/SQL con cuentas
+  desechables, igual que las últimas cinco sesiones.
+- **Un primer intento de verificar "más repetido" pareció encontrar un bug que en realidad
+  era un test mal diseñado**: se creó un perfil de prueba poniendo el campeón directamente
+  en el `INSERT` inicial (algo que la app real nunca hace — `saveFromQuiz` nunca setea
+  `torneo_campeon`). Como el trigger es `AFTER UPDATE OF flavor` (no dispara en `INSERT`),
+  esa primera coronación no quedó registrada, y el conteo de "veces" salió más bajo de lo
+  esperado. Rehacer la prueba reproduciendo la secuencia real de la app (insert sin campeón,
+  luego solo `update()`s) confirmó que el trigger y el cálculo de "más repetido" funcionan
+  correctamente. **Lección para la próxima sesión**: al probar un trigger `AFTER UPDATE`,
+  reproducir la secuencia exacta de operaciones que la app real hace (insert vs. update),
+  no solo el estado final deseado — un test que llega al mismo estado por un camino distinto
+  puede dar un resultado engañoso.
+
 ## Pendiente
 
 - No hay UI para editar nombre/ciudad/fechas de un festival ya creado desde el panel (solo
@@ -1686,17 +1784,24 @@ Storage:
     un patrón ya probado. El mecanismo de Storage/RLS subyacente sí se verificó a fondo (subida
     real de bytes vía API, no solo filas), pero la ruta completa "usuario toca botón → elige
     foto → sube → la ve en su álbum" necesita un dispositivo real o emulador disponible.
-  - **Backlog v2 — Recap anual y Match por historial siguen sin construir**, ahora
-    desbloqueados (dependían de tener asistencia real acumulada vía el álbum, que ya existe)
-    pero ninguno se construyó esta sesión — el prompt de esta sesión los dejó explícitamente
-    fuera, solo pedía la pieza base.
+  - ~~Backlog v2 — Recap anual sigue sin construir~~ — **resuelto en sesión 14**, ver esa
+    sección. **Match por historial compartido** sigue sin construir, es la última pieza
+    priorizada del Backlog v2.
   - **Backlog v2 — Seguridad/ubicación en vivo en squad** sigue sin construir y sin tocar,
     tal como está documentado en el spec (necesita una decisión de producto/legal explícita
     antes de cualquier código).
+- **Backlog v2 — Recap anual estilo Wrapped completo** (sesión 14): período de año
+  calendario, historial real de campeones del Torneo Sonoro (tabla nueva
+  `torneo_campeon_historial`, no existía antes), función `get_recap_anual(p_anio)`, carrusel
+  de slides en `RecapScreen` con tarjeta compartible de cierre. Ver sesión 14 para detalle
+  completo, incluyendo una lección sobre cómo probar triggers `AFTER UPDATE` correctamente.
+  - **Sigue pendiente**: el flujo de `expo-image-picker` de Álbum de conciertos (sesión 13)
+    — el prompt de esta sesión pedía aprovechar si el emulador estaba libre para cerrarlo,
+    pero seguía ocupado, así que sigue exactamente igual de pendiente.
 - Ninguna de las features de Sprint 5/6/Backlog v2 se verificó visualmente en emulador (otra
-  sesión de Claude Code seguía usando el emulador/Metro en las cuatro sesiones seguidas — ver
-  "Problemas de entorno" de las sesiones 10/11/12/13). Todo se verificó con cuentas de prueba
-  reales por REST/SQL/Storage API.
+  sesión de Claude Code seguía usando el emulador/Metro en las cinco sesiones seguidas — ver
+  "Problemas de entorno" de las sesiones 10/11/12/13/14). Todo se verificó con cuentas de
+  prueba reales por REST/SQL/Storage API.
 
 ## Decisiones técnicas tomadas en el camino (no estaban en el prompt original)
 
@@ -1865,29 +1970,32 @@ Storage:
    Insights (dashboard de patrocinios), Moderación — más la auditoría de RLS que precedió
    ese sprint (sin casos nuevos encontrados) y dos bugs reales en las funciones de insights
    (ver esa sección).
-   **Backlog v2, primera pieza (sesión 13): Álbum de conciertos completo** — tabla
-   `concert_album`, bucket privado `concert-album`, visibilidad dueño+squad (confirmada con
-   el usuario, verificada a fondo con cuentas reales en tabla y Storage), subida desde
-   `ConcertAlbumScreen`, consentimiento explícito, reportar + `/moderacion` con eliminación
-   real de fotos. **Desbloquea Recap anual y Match por historial** (ninguno construido
-   todavía). **Pendiente de verificación visual explícito**: el flujo de
-   `expo-image-picker`/`expo-file-system` desde la UI real — es código nuevo, no se pudo
-   probar en dispositivo esta sesión (ver esa sección).
+   **Backlog v2, piezas 1 y 2: Álbum de conciertos (sesión 13) y Recap anual (sesión 14)
+   completos.** Álbum: tabla `concert_album`, bucket privado `concert-album`, visibilidad
+   dueño+squad, subida desde `ConcertAlbumScreen`, consentimiento explícito, reportar +
+   `/moderacion` con eliminación real de fotos. Recap: historial real de campeones del
+   Torneo Sonoro (`torneo_campeon_historial`, no existía antes), función
+   `get_recap_anual(p_anio)` (año calendario), carrusel en `RecapScreen` con tarjeta
+   compartible de cierre. **Match por historial compartido es la última pieza priorizada del
+   Backlog v2** y sigue sin construir — ya desbloqueada (necesita datos reales de asistencia,
+   que el álbum y `festival_intent` ya proveen).
+   **Pendiente de verificación visual explícito, acumulado desde sesión 13**: el flujo de
+   `expo-image-picker`/`expo-file-system` desde la UI real del álbum de conciertos — es
+   código nuevo, cinco sesiones seguidas sin emulador disponible para probarlo.
    **Conexión en vivo (Spotify/Apple Music OAuth) sigue pausada** (el usuario debe confirmar
-   explícitamente antes de abrir esa beta). Del Backlog v2 quedan sin construir: **Recap
-   anual estilo Wrapped**, **Match por historial compartido** (ambos ya desbloqueados) y
-   **Seguridad/ubicación en vivo** (necesita decisión de producto/legal antes de tocarse).
-   **Siguiente foco: a decidir con el usuario.** Opciones razonables: (a) Recap anual o
-   Match por historial (ya desbloqueados por el álbum), (b) Seguridad/ubicación en vivo si
-   el usuario confirma que ya se resolvió la decisión de producto/legal que el spec pide,
-   (c) abrir la beta de conexión en vivo, o (d) cerrar los pendientes de verificación visual
-   acumulados por el emulador ocupado (ver "Pendiente") — el más urgente de estos es
-   probar la subida de fotos en un dispositivo real. El detalle exacto del spec **no está
-   guardado en este repo ni en el sistema de archivos** — se ha leído cinco veces (sesiones
-   9, 10, 11, 12, 13) desde un Artifact publicado que el usuario comparte por link en el
-   chat, y ese contenido no persiste entre sesiones. **Antes de construir cualquier cosa
-   nueva, pedirle al usuario el link del Artifact del spec de nuevo y confirmar el alcance
-   exacto** — no asumir a partir de lo que se infiere abajo.
+   explícitamente antes de abrir esa beta) y **Seguridad/ubicación en vivo** sigue sin
+   construir (necesita decisión de producto/legal antes de tocarse).
+   **Siguiente foco: a decidir con el usuario.** Opciones razonables: (a) Match por historial
+   compartido (última pieza priorizada del Backlog v2, ya desbloqueada), (b)
+   Seguridad/ubicación en vivo si el usuario confirma que ya se resolvió la decisión de
+   producto/legal que el spec pide, (c) abrir la beta de conexión en vivo, o (d) cerrar los
+   pendientes de verificación visual acumulados por el emulador ocupado (ver "Pendiente") —
+   el más urgente sigue siendo probar la subida de fotos del álbum en un dispositivo real. El
+   detalle exacto del spec **no está guardado en este repo ni en el sistema de archivos** —
+   se ha leído seis veces (sesiones 9-14) desde un Artifact publicado que el usuario comparte
+   por link en el chat, y ese contenido no persiste entre sesiones. **Antes de construir
+   cualquier cosa nueva, pedirle al usuario el link del Artifact del spec de nuevo y
+   confirmar el alcance exacto** — no asumir a partir de lo que se infiere abajo.
    - **Compañero ideal sigue sin definir**: no avanzar en código hasta que el usuario
      confirme o corrija la interpretación propuesta en la sesión 8 (compat_score más alto
      entre todos los usuarios de la app, no solo squadmates). No es parte de ningún sprint
@@ -2002,3 +2110,13 @@ Storage:
     normales, un objeto de Storage huérfano de una prueba no se puede limpiar con
     `apply_migration`; hay que autenticar una sesión real (anónima + flag `is_admin` si el
     objeto no es propio) y llamar `.storage.from(bucket).remove([...])`.
+19. **Backlog v2 — Recap anual (sesión 14)**: tabla `torneo_campeon_historial` (select
+    propia, sin insert/update/delete de cliente — todo pasa por el trigger
+    `track_torneo_campeon_historial()`, `AFTER UPDATE OF flavor ON music_profile`, que solo
+    registra cuando el `artistId` del campeón cambia). Función
+    `get_recap_anual(p_anio)` (`SECURITY DEFINER`, siempre sobre `auth.uid()`, sin parámetro
+    de usuario). Antes de tocar cualquiera de estas, revisar la sección de sesión 14
+    completa — incluye por qué el trigger es `AFTER UPDATE` y no `AFTER INSERT OR UPDATE`
+    (el flujo real de la app nunca fija el campeón en el insert inicial del perfil) y una
+    lección sobre cómo probar ese tipo de trigger correctamente (reproducir la secuencia
+    real insert-luego-updates, no solo el estado final).

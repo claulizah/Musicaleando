@@ -941,6 +941,44 @@ export type Database = {
           },
         ]
       }
+      torneo_campeon_historial: {
+        Row: {
+          artist_id: string
+          artist_imagen_url: string | null
+          artist_nombre: string
+          coronado_at: string
+          genero_id: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          artist_id: string
+          artist_imagen_url?: string | null
+          artist_nombre: string
+          coronado_at?: string
+          genero_id?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          artist_id?: string
+          artist_imagen_url?: string | null
+          artist_nombre?: string
+          coronado_at?: string
+          genero_id?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "torneo_campeon_historial_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       trends: {
         Row: {
           fecha: string
@@ -1118,6 +1156,7 @@ export type Database = {
         Returns: undefined
       }
       generate_trends_for_all: { Args: never; Returns: undefined }
+      get_recap_anual: { Args: { p_anio: number }; Returns: Json }
       insights_arquetipo_generos: {
         Args: { p_min_usuarios?: number }
         Returns: {

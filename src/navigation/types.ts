@@ -12,4 +12,5 @@ export type RootStackParamList = {
   SquadTorneo: { squadId: string };
   CommunityTrends: undefined;
   ConcertAlbum: undefined;
+  Recap: undefined;
 };

@@ -304,6 +304,11 @@ export function ProfileScreen({ navigation }: Props) {
           onPress={() => navigation.navigate('ConcertAlbum')}
         />
         <PrimaryButton
+          label={`🎁 Mi ${new Date().getFullYear()} en Musicaleando`}
+          variant="secondary"
+          onPress={() => navigation.navigate('Recap')}
+        />
+        <PrimaryButton
           label={importing ? 'Importando...' : 'Importar de Spotify / Apple Music'}
           variant="secondary"
           onPress={handleImport}
