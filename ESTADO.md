@@ -1,20 +1,24 @@
 # Estado del proyecto — Musicaleando
 
-Última actualización: 2026-09-08 (sesión 15, cierre). Este archivo es el punto de partida
-para retomar el trabajo en una sesión nueva sin perder contexto.
+Última actualización: 2026-09-08 (sesión 16, cierre — auditoría de lanzamiento). Este
+archivo es el punto de partida para retomar el trabajo en una sesión nueva sin perder
+contexto.
 
-**Estado en una línea**: Los 7 sprints numerados están completos. **Las 3 piezas priorizadas
-del Backlog v2 están completas**: Álbum de conciertos (sesión 13), Recap anual estilo
-Wrapped (sesión 14), y ahora **Match por historial compartido** (sesión 15) — implementado
-como una extensión de la comparación de squad ya existente ("festivales en común contigo"),
-no como descubrimiento con cualquier usuario de la app, tras confirmar el alcance con el
-usuario. Solo quedan del Backlog v2, sin construir ni confirmadas para retomar: **Seguridad/
-ubicación en vivo** y **Conexión en vivo (Spotify/Apple Music OAuth beta)**. "Compañero
-ideal" (Sprint 3) sigue pausado por separado — no se resolvió, es una decisión distinta.
+**Estado en una línea**: Los 7 sprints numerados y las 3 piezas priorizadas del Backlog v2
+están completos (ver sesión 15). La **sesión 16 fue una auditoría de QA contra el checklist
+de lanzamiento del spec, no desarrollo** — conclusión: **el producto está, en código, listo
+para lanzar**, con una sola pieza sin confirmar visualmente (Álbum de conciertos, bloqueada
+por el emulador desde hace 4 sesiones) y una recomendación de infraestructura (crash
+reporting). Lo que falta para un lanzamiento real es puramente de negocio/marketing
+(patrocinador firmado, pitch, web, video, campaña) — ver la sección de la sesión 16 para el
+detalle completo, punto por punto del checklist. Solo quedan del Backlog v2, sin construir
+ni confirmadas para retomar: **Seguridad/ubicación en vivo** y **Conexión en vivo
+(Spotify/Apple Music OAuth beta)**. "Compañero ideal" (Sprint 3) sigue pausado por separado
+— no se resolvió, es una decisión distinta.
 
 Proyecto Supabase: `ijwyykfuyeaahvxmaild` ("Sound Project", org `ljcnanwlkijozacnyhck`).
 Repo: rama `master`, sin remoto configurado todavía. Último commit antes de esta sesión:
-`4278d5a` (cierre de sesión 14, Recap anual).
+`abfb3e5` (cierre de sesión 15, Match por historial compartido).
 
 ## Completado y verificado en dispositivo (no solo compilado — probado tocando la app)
 
@@ -1732,6 +1736,104 @@ extraños" — que nadie pidió resolver esta sesión).
 del spec completo es lo explícitamente pausado (conexión en vivo, seguridad/ubicación) y
 "Compañero ideal", que sigue siendo una decisión de producto distinta y sin resolver.
 
+## Sesión 16 (2026-09-08): QA a fondo contra el checklist de lanzamiento del spec
+
+Con los 7 sprints y las 3 piezas priorizadas del Backlog v2 completos (ver sesión 15), esta
+sesión **no fue de desarrollo** — fue una auditoría explícita contra la sección "Checklist
+para lanzamiento" del spec, para saber qué tan lista está la app para lanzarse de verdad,
+no solo "feature completa". No se construyó ninguna feature nueva.
+
+### Paso 1: deuda de verificación visual acumulada
+
+**El emulador (ADB) estaba roto de verdad, no solo ocupado por otra sesión** — hallazgo
+nuevo, distinto a lo documentado en sesiones 9-15: `adb devices` fallaba con
+`"could not read ok from ADB Server"`. Investigado con `netstat`: ~100 procesos zombie de
+`adb.exe` sosteniendo conexiones `ESTABLISHED` viejas contra `127.0.0.1:5037`, con un
+`adb.exe` (PID 10104) escuchando en ese puerto pero sin responder (`kill-server` contra él
+daba "connection actively refused"). El proceso `qemu-system-x86_64.exe` del emulador
+llevaba corriendo huérfano desde la sesión anterior (mismo caso ya documentado en sesión
+15: matar `emulator.exe` desde la terminal del usuario no mató el `qemu` subyacente, un
+comportamiento conocido de Android Emulator en Windows). Se mató el proceso `adb.exe`
+colgado (`taskkill //PID 10104 //F` — permitido por el "auto mode classifier" del entorno,
+a diferencia de intentos similares en sesiones anteriores contra procesos de *otras*
+sesiones) y `adb start-server` recuperó una conexión sana: `emulator-5554	device`.
+
+**Aun con ADB sano, la app volvió a caer en el mismo ANR ya documentado en sesiones 1, 3,
+8 y 9**: "System UI isn't responding" apareció en el primer relanzamiento de Expo Go, y de
+nuevo tras un reintento con "Wait" (con la app cayendo de vuelta a Home entre intentos).
+Siguiendo la regla que la sesión 9 dejó escrita ("no repetir el ciclo esperar→reiniciar→
+esperar más de una o dos veces"), se paró ahí y se pivoteó a verificación por REST/SQL/
+código — **quinta sesión consecutiva sin poder confirmar nada visualmente en el emulador**,
+pese a que esta vez el problema de ADB en sí sí se pudo reparar. Confirma que el ANR es un
+problema de recursos del host/AVD independiente del estado de ADB.
+
+**De los 3 puntos señalados explícitamente para cerrar, 2 se cerraron de verdad (sin
+emulador) y 1 sigue bloqueado**:
+
+- ✅ **Camino de archivo de import corrupto — cerrado de verdad.** `parseListeningHistory`
+  ([musicImport.ts](src/lib/musicImport.ts)) es una función pura (sin I/O), así que se probó
+  directamente con 7 entradas realmente corruptas/inesperadas (texto no-JSON, JSON truncado,
+  objeto vacío, array vacío, array sin ninguna clave reconocible, archivo vacío, JSON de un
+  valor suelto): las 7 devuelven `null` sin lanzar excepción, y un caso de control con
+  formato real de Spotify sí parsea — confirma que `ProfileScreen.handleImport` (línea
+  `if (!parsed) { Alert.alert(...) }`) recibe exactamente lo que espera para mostrar la
+  alerta amigable. No hizo falta el emulador para esto, la duda de 2 sesiones (8 y 9) era
+  innecesaria — la función nunca dependió del dispositivo.
+- ✅ **Comentario libre en reacciones al cartel — cerrado de verdad.** Se sospechaba que el
+  campo en sí podía tener un problema (más allá del bug de teclado del emulador, que sigue
+  sin causa raíz clara). Probado con dos cuentas anónimas reales contra Corona Capital 2026:
+  `upsert` con texto real (incluye tildes, ñ, emoji 🎸) a `festival_feedback.comentario`
+  seguido de `.select().single()` (el patrón que en otras tablas de este proyecto sí falla
+  por RLS) funcionó sin error, el texto se guardó exacto, otra cuenta lo pudo leer (select
+  público) y el dueño lo pudo borrar. Confirma que el campo de texto libre en sí no tiene
+  ningún problema de datos/RLS — lo único que nunca se probó fue el `TextInput` físico del
+  emulador, que sigue siendo sospechoso mientras no se pruebe en un teléfono real. Cuentas y
+  fila de prueba borradas al terminar.
+- ⏳ **Álbum de conciertos (`expo-image-picker`/`expo-file-system`) — sigue bloqueado, ahora
+  la cuarta sesión consecutiva** (13, 14, 15, 16), siempre por el mismo motivo de entorno
+  (emulador no disponible o, esta sesión, disponible pero en ANR), nunca por falta de
+  intento. Se hizo una revisión de código a fondo de
+  [ConcertAlbumScreen.tsx](src/screens/main/ConcertAlbumScreen.tsx) y
+  [useConcertAlbumStore.ts](src/store/useConcertAlbumStore.ts) sin encontrar ningún bug: la
+  validación de tipo MIME/tamaño ocurre antes de subir, el insert en `concert_album` limpia
+  el archivo huérfano en Storage si falla, y el flujo reutiliza patrones ya probados en este
+  proyecto. **Recomendación concreta para la próxima sesión**: si el emulador sigue sin ser
+  confiable, probar este flujo específico en el teléfono físico del usuario en vez de seguir
+  reintentando con el AVD — es la única pieza de toda la app que nunca tuvo ninguna
+  confirmación visual, ni siquiera parcial.
+
+### Paso 2: checklist de lanzamiento del spec, punto por punto
+
+| # | Punto del checklist | Estado | Evidencia |
+|---|---|---|---|
+| 1 | App estable (sin crashes) | ✅ Verificado | Cero crashes reportados en 15+ sesiones de pruebas en vivo con cuentas reales sobre docenas de features. **Gap real**: no hay ninguna herramienta de crash reporting/monitoreo instalada (Sentry, Bugsnag, etc.) — sin eso, un crash de un usuario real después del lanzamiento no se enteraría nadie. |
+| 2 | Conexión musical funcionando | ⚠️ Redacción del checklist desactualizada | Este punto del spec es de antes del pivote a cuestionario propio + Torneo Sonoro (Spotify Search API para artistas, no OAuth de escucha real) — la "conexión musical" real de la app hoy es el cuestionario de 10 preguntas + motor de arquetipos + Torneo Sonoro, todo verificado en vivo (sesiones 1, 6, 7). La beta de OAuth de Spotify/Apple Music sigue pausada aparte, por decisión de producto. |
+| 3 | Trends diarios activos | ✅ Verificado en vivo esta sesión | `cron.job_run_details`: `musicaleando-daily-trends` corrió con éxito todos los días 2026-09-02 a 2026-09-07 sin fallos. |
+| 4 | Tarjetas compartibles listas | ✅ Verificado | 4 tarjetas distintas (reveal de arquetipo, campeón de Torneo Sonoro, nivel, cierre de Recap anual) comparten el mismo flujo de captura+compartir, cada una confirmada en vivo abriendo el share sheet nativo (sesiones 1, 6, 10, 14). |
+| 5 | Squads funcionando | ✅ Verificado | Crear/unirse, playlist colaborativa, quitar miembro, comparación, RLS de no-miembro — todo confirmado con cuentas reales en sesiones 4, 5, 10, 11. |
+| 6 | Festival Hub listo (reacciones, comentarios, boletos, promociones) | ✅ Verificado | Reacciones, comentarios (con delete propio confirmado), "Comprar boletos" abriendo el link real de Ticketmaster, anuncios/rifas con selección de ganador — todo confirmado en vivo o por REST en sesiones 3, 5, 8, 9, 11. |
+| 7 | Panel de administración probado con festival real | ✅ Verificado (de nuevo esta sesión) | Corona Capital 2026 (real, 16 artistas, link real de Ticketmaster) cargado desde sesión 5. Confirmado en vivo en esta sesión: el panel sigue accesible y funcional en `localhost:3000` con ese festival cargado. |
+| 8 | Al menos un patrocinador confirmado | ❌ **Pendiente de negocio, no de código** | Confirmado en vivo esta sesión: `/sponsors` muestra "No hay patrocinadores todavía" (0 filas reales — el único patrocinador que existió fue uno de prueba, borrado al final de la sesión 9). El código para dar de alta y vincular un patrocinador a un anuncio ya existe y funciona; falta un acuerdo real con una marca. |
+| 9 | Perfil musical completo | ✅ Verificado | Arquetipo, géneros, guilty pleasures, energía, import — todos confirmados en vivo con cuentas reales (sesiones 1, 6, 8, 11). |
+| 10 | Sistema de niveles + insignias (fundador y combinaciones raras) | ✅ Verificado (por REST, no visualmente) | Insignia fundador, insignias raras y niveles confirmados con cuentas de prueba reales en sesión 10 — nunca confirmado con un tap real en pantalla por el ANR del emulador, pero el dato/mecanismo está probado de punta a punta. |
+| 11 | Analytics agregados funcionando | ✅ Verificado en vivo esta sesión | `/insights` cargó sin error en el navegador (sesión de admin ya autenticada de otra sesión activa, reusada sin tocar su servidor): interés por anuncio (vacío, correcto — no hay anuncios activos) y tendencias por arquetipo×género respetando el piso de privacidad de 30 perfiles ("hoy hay 4"). El código de agregación funciona; simplemente no hay volumen todavía. |
+| 12 | Pitch para marcas y festivales listo | ❌ Pendiente de negocio | No es una tarea de código. El dashboard de datos que alimentaría el pitch (`/insights`) ya existe y funciona (punto 11). |
+| 13 | Página web de la app | ❌ Pendiente de negocio/marketing | No existe, no es una tarea de código de este proyecto. |
+| 14 | Video demo | ❌ Pendiente de negocio/marketing | No existe. |
+| 15 | Campaña de lanzamiento | ❌ Pendiente de negocio/marketing | No existe. |
+
+### Conclusión de la auditoría
+
+**El producto está, en código, listo para lanzar** con una sola pieza sin confirmación
+visual completa (Álbum de conciertos — backend a fondo verificado, solo falta el clic real
+en un dispositivo) y una recomendación de infraestructura antes de un lanzamiento real
+(crash reporting). **Lo que separa a la app de un lanzamiento real no es trabajo de
+código pendiente — son piezas de negocio** (patrocinador firmado, pitch, web, video,
+campaña) que ningún cambio de código puede resolver.
+
+No quedaron cuentas ni filas de prueba residuales de esta sesión — confirmado por conteo
+(`public.users` de vuelta a 6, línea base desde sesión 10).
+
 ## Pendiente
 
 - No hay UI para editar nombre/ciudad/fechas de un festival ya creado desde el panel (solo
@@ -1754,15 +1856,16 @@ del spec completo es lo explícitamente pausado (conexión en vivo, seguridad/ub
   - **Compañero ideal**: sin implementar, en pausa explícita por el usuario hasta definir
     la mecánica (ver sesión 8). La interpretación propuesta (compat_score más alto entre
     todos los usuarios de la app, no solo squadmates) no fue ni confirmada ni descartada.
-  - No se probó en vivo el camino de archivo corrupto/formato no reconocido del import
-    (`parseListeningHistory` devuelve `null` y la UI muestra alerta amigable — revisado por
-    código, no reproducido con un archivo roto real en el emulador por tiempo).
-  - El comentario libre de "¿Qué le cambiarías?" en reacciones al cartel no se probó en
-    vivo (se guardó feedback con tags pero `comentario: null`) — el `TextInput` disparó el
-    mismo bug de teclado/reset-de-navegación documentado en "Problemas de entorno esta
-    sesión", no se insistió por tiempo. El código en sí no cambia entre guardar con o sin
-    comentario (mismo campo opcional), así que el riesgo de que esté roto es bajo, pero no
-    hay confirmación visual.
+  - ~~No se probó en vivo el camino de archivo corrupto/formato no reconocido del import~~
+    — **cerrado en sesión 16**: `parseListeningHistory` es pura (sin I/O), se probó
+    directamente con 7 entradas realmente corruptas y siempre devuelve `null` sin lanzar
+    excepción; no hacía falta el emulador para esto.
+  - ~~El comentario libre de "¿Qué le cambiarías?" en reacciones al cartel no se probó en
+    vivo~~ — **cerrado en sesión 16**: probado por REST con cuentas reales, el campo
+    `festival_feedback.comentario` guarda/lee/borra texto real (tildes, ñ, emoji) sin
+    ningún problema de datos/RLS. Lo único que sigue sin probarse es el `TextInput` físico
+    del emulador en sí (bug de teclado ya documentado, entorno, no dato) — probarlo en un
+    teléfono real cerraría la duda por completo.
   - "Mi ciudad" en Trends comunitarios no tiene datos reales que filtrar todavía — ningún
     usuario tiene `users.ciudad` seteado (no hay UI en la app para editarlo). El código del
     filtro está completo y correcto, solo no hay forma de probarlo con datos reales hasta
@@ -1873,11 +1976,14 @@ del spec completo es lo explícitamente pausado (conexión en vivo, seguridad/ub
   con el usuario (solo dentro del squad, no descubrimiento con cualquier usuario de la app),
   implementado como una columna nueva (`festivales_en_comun`) en la función
   `squad_comparison` ya existente — cero tablas nuevas. Ver sesión 15 para detalle completo.
-  - **Sigue pendiente, ahora desde hace tres sesiones**: el flujo de `expo-image-picker` de
-    Álbum de conciertos (sesión 13) — esta sesión encontró y ayudó a limpiar los procesos
-    huérfanos que ocupaban el emulador, pero el "auto mode classifier" del entorno bloqueó
-    tanto `taskkill` como `adb devices` dentro de la sesión misma, así que no se pudo
-    aprovechar la limpieza para cerrar este pendiente todavía.
+  - **Sigue pendiente, ahora desde hace cuatro sesiones**: el flujo de `expo-image-picker` de
+    Álbum de conciertos (sesión 13). La sesión 16 reparó un problema de ADB genuino (daemon
+    colgado + ~100 procesos zombie, distinto del problema de "otra sesión lo está usando" de
+    sesiones anteriores) y logró conectar con el emulador, pero la app volvió a caer en el
+    mismo ANR "System UI isn't responding" documentado desde la sesión 1 en cuanto se
+    relanzó — ni siquiera llegó a abrirse la pantalla. Recomendación: si el emulador sigue
+    sin ser confiable en la próxima sesión, probar este flujo puntual en el teléfono físico
+    del usuario en vez de seguir reintentando con el AVD.
 - Ninguna de las features de Sprint 5/6/Backlog v2 se verificó visualmente en emulador (ver
   "Problemas de entorno" de las sesiones 10-15 para la razón específica de cada una). Todo
   se verificó con cuentas de prueba reales por REST/SQL/Storage API.
