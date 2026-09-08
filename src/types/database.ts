@@ -194,7 +194,6 @@ export type Database = {
       }
       concert_album: {
         Row: {
-          consentimiento_patrocinadores: boolean
           created_at: string
           festival_id: string
           foto_path: string
@@ -202,7 +201,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          consentimiento_patrocinadores?: boolean
           created_at?: string
           festival_id: string
           foto_path: string
@@ -210,7 +208,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          consentimiento_patrocinadores?: boolean
           created_at?: string
           festival_id?: string
           foto_path?: string

@@ -210,7 +210,6 @@ export type Database = {
           user_id: string;
           festival_id: string;
           foto_path: string;
-          consentimiento_patrocinadores: boolean;
           created_at: string;
         };
         Insert: Partial<Database['public']['Tables']['concert_album']['Row']>;

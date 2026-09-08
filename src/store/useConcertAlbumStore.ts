@@ -38,7 +38,6 @@ type ConcertAlbumState = {
     localUri: string,
     mimeType: string | null | undefined,
     fileSize: number | null | undefined,
-    consentimientoPatrocinadores: boolean,
   ) => Promise<void>;
   deletePhoto: (entryId: string, fotoPath: string) => Promise<void>;
   reportPhoto: (userId: string, entryId: string, motivo: ContentReportMotivo) => Promise<void>;
@@ -86,7 +85,7 @@ export const useConcertAlbumStore = create<ConcertAlbumState>((set, get) => ({
     set({ entries: withUrls, status: 'ready' });
   },
 
-  addPhoto: async (userId, festivalId, festivalNombre, localUri, mimeType, fileSize, consentimientoPatrocinadores) => {
+  addPhoto: async (userId, festivalId, festivalNombre, localUri, mimeType, fileSize) => {
     const mime = mimeType ?? 'image/jpeg';
     if (!ALLOWED_MIME.includes(mime)) {
       throw new Error('Formato no soportado — usa JPG, PNG o WEBP.');
@@ -110,7 +109,6 @@ export const useConcertAlbumStore = create<ConcertAlbumState>((set, get) => ({
         user_id: userId,
         festival_id: festivalId,
         foto_path: path,
-        consentimiento_patrocinadores: consentimientoPatrocinadores,
       })
       .select('*')
       .single();

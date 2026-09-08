@@ -1,30 +1,26 @@
 # Estado del proyecto — Musicaleando
 
-Última actualización: 2026-09-08 (sesión 18, cierre — verificación en teléfono físico). Este
-archivo es el punto de partida para retomar el trabajo en una sesión nueva sin perder
-contexto.
+Última actualización: 2026-09-08 (sesión 19, cierre — se quitó el consentimiento de
+patrocinios del Álbum de conciertos). Este archivo es el punto de partida para retomar el
+trabajo en una sesión nueva sin perder contexto.
 
 **Estado en una línea**: Los 7 sprints numerados y las 3 piezas priorizadas del Backlog v2
 están completos (ver sesión 15); el checklist de lanzamiento quedó auditado a fondo (ver
-sesión 16); Sentry quedó instalado en app móvil + panel admin (ver sesión 17, sin commitear
-todavía). La **sesión 18 probó en un teléfono Android físico real** (HONOR Magic7 Pro, vía
-Expo Go) los dos pendientes que llevaban varias sesiones bloqueados solo por el
-emulador: **Álbum de conciertos quedó cerrado de verdad** (`expo-image-picker` +
-`expo-file-system`, subida real confirmada en Storage y en la tabla) y **el ANR "System UI
-isn't responding" no se reprodujo en ningún momento** de una sesión de pruebas extensa,
-incluyendo los dos flujos de `TextInput` específicamente documentados como problemáticos en
-el emulador — sugiere fuertemente que era un problema del AVD, no de la app (con una
-salvedad importante sobre Sentry, ver sesión 18: Expo Go no incluye el módulo nativo, así
-que esta prueba no vino "verificada por Sentry", solo observada directamente). Solo quedan
-del Backlog v2, sin construir ni confirmadas para retomar: **Seguridad/ubicación en vivo** y
-**Conexión en vivo (Spotify/Apple Music OAuth beta)**. "Compañero ideal" (Sprint 3) sigue
-pausado por separado — no se resolvió, es una decisión distinta.
+sesión 16); Sentry quedó instalado y verificado en app móvil + panel admin, y en sesión 18
+se confirmó en un teléfono físico real que tanto el Álbum de conciertos como el ANR
+histórico ("System UI isn't responding") no son bugs de la app — el álbum quedó cerrado de
+verdad y el ANR no se reprodujo fuera del emulador (ver sesión 18 para el detalle y la
+salvedad sobre Sentry/Expo Go). La **sesión 19 quitó el paso de consentimiento para
+patrocinios** del flujo de subida del Álbum de conciertos (decisión de producto revertida —
+ver sesión 19) — cambio chico y acotado, sin tocar nada más. Solo quedan del Backlog v2, sin
+construir ni confirmadas para retomar: **Seguridad/ubicación en vivo** y **Conexión en vivo
+(Spotify/Apple Music OAuth beta)**. "Compañero ideal" (Sprint 3) sigue pausado por separado
+— no se resolvió, es una decisión distinta.
 
 Proyecto Supabase: `ijwyykfuyeaahvxmaild` ("Sound Project", org `ljcnanwlkijozacnyhck`).
 Proyecto Sentry: org `dragonflailabs`, proyectos `musicaleando-app` y `musicaleando-admin`.
 Repo: rama `master`, sin remoto configurado todavía. Último commit antes de esta sesión:
-`13ae4b9` (cierre de sesión 16 — la instalación de Sentry de la sesión 17 sigue sin
-commitear, ver "Cómo retomar" para el detalle de lo que queda staged).
+`fdc770e` (Sentry instalado + verificación en teléfono físico, sesiones 17-18).
 
 ## Completado y verificado en dispositivo (no solo compilado — probado tocando la app)
 
@@ -2054,6 +2050,45 @@ limpiado al terminar por SQL (`apply_migration`, en orden por dependencias de FK
 `squad_members`+`squads` (el squad de prueba "Hamster"), `festival_intent`,
 `festival_comments`, `festival_feedback`, `music_profile`, `public.users`, `auth.users`.
 Confirmado por conteo: `public.users` de vuelta a 6 (línea base).
+
+## Sesión 19 (2026-09-08): se quitó el consentimiento para patrocinios del Álbum de conciertos
+
+Cambio de producto acotado, sin relación con features nuevas. La decisión original (spec,
+ver sesión 13) pedía consentimiento explícito al subir cada foto para poder usarla como
+evidencia agregada de asistencia en reportes futuros a patrocinadores. Se revirtió: el
+álbum es 100% personal, no hay ningún caso de uso activo de patrocinios todavía, y pedir el
+permiso en cada subida solo agregaba fricción sin beneficio real hoy.
+
+- **[ConcertAlbumScreen.tsx](src/screens/main/ConcertAlbumScreen.tsx)**: se quitó el
+  `Alert.alert` de "¿Usar esta foto como evidencia para patrocinadores?" que aparecía tras
+  elegir la foto — ahora `handlePickFestival` llama `uploadPhoto` directo. También se quitó
+  la insignia "✓ Autorizada para reportes" que aparecía en la cuadrícula del álbum sobre
+  las fotos con consentimiento, y su estilo (`consentBadge`) ya sin uso.
+- **[useConcertAlbumStore.ts](src/store/useConcertAlbumStore.ts)**: `addPhoto` ya no recibe
+  el parámetro `consentimientoPatrocinadores` ni lo escribe en el `insert`.
+- **Columna eliminada de la base de datos**, no solo dejada sin usar: `concert_album.consentimiento_patrocinadores`
+  (migración `remove_concert_album_sponsor_consent`, `DROP COLUMN`). Se decidió eliminarla
+  en vez de solo dejar de escribirla porque la tabla estaba **completamente vacía (0 filas)**
+  en el momento del cambio — no había ningún dato real que preservar, así que no tenía
+  sentido dejar una columna muerta en el esquema. Tipos de TypeScript regenerados/editados en
+  ambos proyectos ([src/types/database.ts](src/types/database.ts) vía
+  `generate_typescript_types`, [admin/src/lib/database.types.ts](admin/src/lib/database.types.ts)
+  a mano, ya que ese archivo es manual — ver "Decisiones técnicas"). `tsc --noEmit` limpio en
+  ambos proyectos después del cambio.
+- **Panel de administración revisado, no tenía nada que quitar**: se buscó explícitamente
+  cualquier vista o filtro de "fotos con consentimiento para patrocinios" — no existía
+  ninguno (`moderacion/page.tsx` y `actions.ts` solo referencian `concert_album` para
+  reportar/eliminar fotos, sin tocar el campo de consentimiento en ningún punto).
+- **No se construyó la acción futura de "compartir foto"** mencionada en el spec para cuando
+  el tema de patrocinios esté activo — explícitamente fuera de alcance de esta sesión, tal
+  como pedía el prompt.
+- **Verificado con una cuenta desechable por REST** (no había dispositivo físico disponible
+  esta sesión — el pendiente del driver ADB de la sesión 18 sigue sin resolverse, y el
+  emulador sigue sin ser confiable): se replicó exactamente el flujo nuevo de `addPhoto`
+  (subida de bytes a Storage + insert en `concert_album` sin el campo de consentimiento) con
+  una cuenta anónima real marcada "voy" en Corona Capital 2026 — subida e insert exitosos,
+  la fila resultante confirma que la columna ya no existe. Cuenta y datos de prueba
+  limpiados al terminar (`public.users` de vuelta a 6).
 
 ## Pendiente
 

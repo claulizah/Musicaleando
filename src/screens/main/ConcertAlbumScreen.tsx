@@ -47,34 +47,18 @@ export function ConcertAlbumScreen({ navigation }: Props) {
     });
     if (result.canceled || !userId) return;
 
-    const asset = result.assets[0];
-
-    Alert.alert(
-      '¿Usar esta foto como evidencia para patrocinadores?',
-      'Si aceptas, esta foto puede contar (de forma agregada, nunca individual) como evidencia de asistencia real en reportes futuros para marcas y festivales. Puedes subir la foto de cualquier forma.',
-      [
-        {
-          text: 'No usar',
-          onPress: () => uploadPhoto(festivalId, festivalNombre, asset, false),
-        },
-        {
-          text: 'Sí, autorizo',
-          onPress: () => uploadPhoto(festivalId, festivalNombre, asset, true),
-        },
-      ],
-    );
+    await uploadPhoto(festivalId, festivalNombre, result.assets[0]);
   };
 
   const uploadPhoto = async (
     festivalId: string,
     festivalNombre: string,
     asset: ImagePicker.ImagePickerAsset,
-    consent: boolean,
   ) => {
     if (!userId) return;
     setUploading(true);
     try {
-      await addPhoto(userId, festivalId, festivalNombre, asset.uri, asset.mimeType, asset.fileSize, consent);
+      await addPhoto(userId, festivalId, festivalNombre, asset.uri, asset.mimeType, asset.fileSize);
     } catch (err) {
       Alert.alert('No se pudo subir la foto', err instanceof Error ? err.message : 'Intenta de nuevo.');
     } finally {
@@ -158,9 +142,6 @@ export function ConcertAlbumScreen({ navigation }: Props) {
               <Text style={styles.photoCaption} numberOfLines={1}>
                 {entry.festivalNombre}
               </Text>
-              {entry.consentimiento_patrocinadores && (
-                <Text style={styles.consentBadge}>✓ Autorizada para reportes</Text>
-              )}
             </Pressable>
           ))}
         </View>
@@ -241,9 +222,5 @@ const styles = StyleSheet.create({
   photoCaption: {
     ...type.caption,
     color: colors.textSecondary,
-  },
-  consentBadge: {
-    ...type.caption,
-    color: colors.accentPrimary,
   },
 });
