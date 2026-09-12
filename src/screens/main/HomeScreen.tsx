@@ -14,6 +14,7 @@ import { useProfileStore, readTorneoCampeon } from '../../store/useProfileStore'
 import { useTrendStore } from '../../store/useTrendStore';
 import { usePlaylistStore } from '../../store/usePlaylistStore';
 import { useMoodPlaylistStore } from '../../store/useMoodPlaylistStore';
+import { useContactsStore } from '../../store/useContactsStore';
 import { useRecommendationsStore } from '../../store/useRecommendationsStore';
 import { useRecommendationsV2Store } from '../../store/useRecommendationsV2Store';
 import { useAchievementsStore } from '../../store/useAchievementsStore';
@@ -47,6 +48,8 @@ export function HomeScreen({ navigation }: Props) {
   const trendHistory = useTrendStore((s) => s.history);
   const fetchTrendHistory = useTrendStore((s) => s.fetchHistory);
   const [showHistory, setShowHistory] = useState(false);
+  const bestMatch = useContactsStore((s) => s.bestMatch);
+  const fetchContacts = useContactsStore((s) => s.fetchAll);
   const festivalesConfirmados = useAchievementsStore((s) => s.festivalesConfirmados);
   const fetchAchievements = useAchievementsStore((s) => s.fetch);
   const [challenge, setChallenge] = useState<WeeklyChallenge | null>(null);
@@ -56,6 +59,7 @@ export function HomeScreen({ navigation }: Props) {
     fetchLatestMood(userId);
     if (profileStatus === 'idle') fetchProfile(userId);
     fetchAchievements(userId);
+    fetchContacts(userId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
@@ -124,6 +128,9 @@ export function HomeScreen({ navigation }: Props) {
             <Pressable style={styles.squadButton} onPress={() => navigation.navigate('Squads')}>
               <Text style={styles.squadButtonText}>👥</Text>
             </Pressable>
+            <Pressable style={styles.squadButton} onPress={() => navigation.navigate('Contacts')}>
+              <Text style={styles.squadButtonText}>🤝</Text>
+            </Pressable>
           </View>
         </View>
 
@@ -176,6 +183,14 @@ export function HomeScreen({ navigation }: Props) {
               {challenge.progress} / {challenge.target}
             </Text>
           </View>
+        )}
+
+        {bestMatch && (
+          <Pressable style={styles.matchCard} onPress={() => navigation.navigate('Contacts')}>
+            <Text style={styles.matchEyebrow}>COMPAÑERO IDEAL</Text>
+            <Text style={styles.matchName}>{bestMatch.nombre ?? 'Sin nombre'}</Text>
+            <Text style={styles.matchMeta}>{bestMatch.compat_score ?? 0}% compatible contigo</Text>
+          </Pressable>
         )}
 
         {trend && <TrendCard trend={formatTrend(trend)} />}
@@ -299,6 +314,25 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   profileHint: {
+    ...type.body,
+    color: colors.textSecondary,
+  },
+  matchCard: {
+    backgroundColor: colors.accentPrimaryMuted,
+    borderRadius: radii.lg,
+    padding: spacing.lg,
+    gap: spacing.xs,
+  },
+  matchEyebrow: {
+    ...type.label,
+    color: colors.accentPrimary,
+    letterSpacing: 1.5,
+  },
+  matchName: {
+    ...type.h2,
+    color: colors.textPrimary,
+  },
+  matchMeta: {
     ...type.body,
     color: colors.textSecondary,
   },

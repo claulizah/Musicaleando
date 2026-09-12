@@ -13,4 +13,5 @@ export type RootStackParamList = {
   CommunityTrends: undefined;
   ConcertAlbum: undefined;
   Recap: undefined;
+  Contacts: undefined;
 };

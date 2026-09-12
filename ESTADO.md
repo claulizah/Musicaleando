@@ -1,29 +1,23 @@
 # Estado del proyecto — Musicaleando
 
-Última actualización: 2026-09-12 (sesión 20 — Mood del día pasó de selector por género a
-mood-actividad/emoción homologado). Este archivo es el punto de partida para retomar el
-trabajo en una sesión nueva sin perder contexto.
+Última actualización: 2026-09-12 (sesión 21 — Red de conocidos + Squads por festival). Este
+archivo es el punto de partida para retomar el trabajo en una sesión nueva sin perder
+contexto.
 
 **Estado en una línea**: Los 7 sprints numerados y las 3 piezas priorizadas del Backlog v2
 están completos (ver sesión 15); el checklist de lanzamiento quedó auditado a fondo (ver
-sesión 16); Sentry quedó instalado y verificado en app móvil + panel admin, y en sesión 18
-se confirmó en un teléfono físico real que tanto el Álbum de conciertos como el ANR
-histórico ("System UI isn't responding") no son bugs de la app — el álbum quedó cerrado de
-verdad y el ANR no se reprodujo fuera del emulador (ver sesión 18 para el detalle y la
-salvedad sobre Sentry/Expo Go). La sesión 19 quitó el paso de consentimiento para
-patrocinios del flujo de subida del Álbum de conciertos (decisión de producto revertida).
-La **sesión 20 rehizo Mood del día** (spec actualizado, leído desde Artifact): selector
-homologado Feliz/Triste/Fiestero/Relajado/Activo/Peda vía tabla `mood_catalog` (no enum),
-bandeja de candidatos `mood_playlists` (manual/Last.fm, pendiente/aprobado) con panel admin
-en `/mood`, y sincronización opcional desde Last.fm `tag.getTopTracks` — ver sesión 20 para
-el detalle completo, incluyendo dos discrepancias reales encontradas entre el spec/prompt y
-el estado real del repo (Last.fm no estaba conectado a nada antes de esta sesión, y "tu
-semana en moods" nunca se construyó). Solo quedan del Backlog v2, sin construir ni
-confirmadas para retomar: **Seguridad/ubicación en vivo** y **Conexión en vivo
-(Spotify/Apple Music OAuth beta)**. "Compañero ideal" (Sprint 3) sigue pausado por separado
-— no se resolvió, es una decisión distinta. **Red de conocidos + Squads por festival** y el
-resto del Backlog v2 del spec actualizado (más allá de las 3 piezas ya completas) tampoco se
-tocaron esta sesión — el prompt de esta sesión pedía específicamente solo Mood del día.
+sesión 16); Sentry quedó instalado y verificado en app móvil + panel admin (ver sesión 18).
+Sesión 20 rehizo Mood del día como mood-actividad/emoción homologado (ver esa sección). La
+**sesión 21 separó "squad" en dos conceptos** como pedía el spec actualizado: **Red de
+conocidos** (tabla `contacts`, solicitud mutua, compat_score persistente, "Compañero ideal"
+por fin implementado) y **Squads por festival** (`squads.festival_id` ahora obligatorio para
+squads nuevos, los 2 squads existentes migrados a `festival_id = null` pendiente de elección
+manual del owner — ninguno tenía intención de asistencia compartida que migrar
+automáticamente). Ver sesión 21 para el detalle completo, incluyendo una tercera
+discrepancia real encontrada entre el spec/prompt y el repo (el botón "Compañero ideal" que
+el prompt decía que "ya existe en Home" no existía — se construyó desde cero). Solo quedan
+del Backlog v2, sin construir ni confirmadas para retomar: **Seguridad/ubicación en vivo** y
+**Conexión en vivo (Spotify/Apple Music OAuth beta)**.
 
 Proyecto Supabase: `ijwyykfuyeaahvxmaild` ("Sound Project", org `ljcnanwlkijozacnyhck`).
 Proyecto Sentry: org `dragonflailabs`, proyectos `musicaleando-app` y `musicaleando-admin`.
@@ -2286,8 +2280,138 @@ cuanto haya uno disponible.
 - Supabase: migraciones `mood_actividad_homologado` y `seed_mood_playlists_manual_curation`,
   Edge Function `lastfm-mood-sync`.
 
+## Sesión 21 (2026-09-12): Red de conocidos + Squads por festival — completo y verificado
+
+El prompt de continuación asumía cosas que no eran ciertas en el repo — igual que en la
+sesión 20, se verificaron antes de construir en vez de asumirlas:
+
+- **"El botón 'Compañero ideal' que ya existe en Home"**: no existía. Se grepeó
+  "Compañero"/"compañero" en todo `src/` y no hubo resultados — esa línea del spec (sección
+  "Flujo del usuario") es un wireframe de producto, nunca se construyó código. Se construyó
+  desde cero (tarjeta en `HomeScreen`, no solo "conectada").
+- Todo lo demás del prompt (modelo de datos `Contacts`/`Squads`, separación conceptual,
+  reglas de migración) sí coincidía con la sección "Red de conocidos + Squads por festival"
+  del spec, leída completa desde el Artifact antes de tocar código.
+
+### Prioridad 1 — `Contacts` + solicitud mutua + compat_score persistente: completo
+
+Migración `contacts_red_de_conocidos`:
+- Tabla `contacts` (`user_id`, `contact_id`, `status` pendiente/aceptado/rechazado,
+  `compat_score`, `created_at`, `responded_at`) — shape exacto del spec. Una sola fila por
+  par sin importar quién solicitó a quién (`unique index` sobre
+  `least(user_id,contact_id), greatest(user_id,contact_id)`). RLS: `select` propio en
+  cualquiera de los dos roles del par; **todo insert/update pasa por RPC**, no hay policy de
+  insert/update para el cliente — así la lógica de cooldown de rechazo (ver abajo) y "solo el
+  destinatario acepta/rechaza" vive en un solo lugar.
+- `send_contact_request(p_contact_id)`, `respond_contact_request(p_request_id, p_accept)`,
+  `best_contact_match()`, `contacts_feed()`, `search_users_by_name(p_query)` — todas
+  `SECURITY DEFINER`, mismo patrón que `is_squad_member`/`squad_members_with_profile`.
+- **Reutiliza el cálculo existente, no lo reescribe**: `compat_score` en aceptar una
+  solicitud y en el trigger de recompute llaman literalmente a
+  `public.cosine_similarity(public.music_vector(...), public.music_vector(...))` — las
+  mismas funciones que ya usaba `recompute_squad_compat`, solo aplicadas a un par de
+  `Contacts` en vez de a un squad completo.
+- **Recompute automático**: nuevo trigger `music_profile_recompute_contacts` (`AFTER INSERT
+  OR UPDATE OF generos, energia ON music_profile`), función
+  `trigger_recompute_contacts_for_user()` — mismo patrón que
+  `music_profile_recompute_compat`/`trigger_recompute_squads_for_user`, ahora hay dos
+  triggers independientes sobre la misma tabla/evento (uno para squads, uno para contacts),
+  no se modificó el trigger de squads existente.
+- **Caso límite decidido y documentado** (el spec pedía usar criterio propio): solicitud a
+  alguien que ya rechazó una antes — **cooldown de 30 días** desde `responded_at` antes de
+  poder reintentar (`send_contact_request` lo enforce, no es solo UI). Pasado ese plazo, el
+  mismo row se reutiliza (`update` en vez de `insert` nuevo) para no perder el historial de
+  cuándo se creó originalmente el par.
+- **"Compañero ideal" implementado de verdad**: `best_contact_match()` devuelve el conocido
+  aceptado con mayor `compat_score` — ya no es un botón decorativo, es una query real.
+- **Feed de conocidos, reducido a propósito** (el prompt permitía esto explícitamente): 
+  `contacts_feed()` devuelve nombre, arquetipo, géneros y último campeón del Torneo Sonoro —
+  **no incluye trends ni shares comunitarios compartidos**, para no ampliar el alcance de
+  esta sesión ya grande. Si se quiere ese nivel de detalle después, extender la función en
+  vez de crear una nueva.
+
+**Verificado de punta a punta con 4 cuentas anónimas reales desechables** (script Node con
+`@supabase/supabase-js`, mismo patrón de sesiones 5/9/11 — nunca solo revisión de código,
+como pedía explícitamente el prompt dado el historial de bugs de RLS en esta área):
+A envía solicitud a B → duplicado bloqueado → C (ajeno) no puede leer la solicitud pendiente
+(RLS) → C no puede responderla (solo el destinatario) → B acepta → `compat_score` calculado
+en 59 (perfiles reales distintos, no 0/100 degenerado) → `best_contact_match()` de A devuelve
+a B → `contacts_feed()` de A incluye a B → `search_users_by_name` excluye a B (ya conectado)
+→ A envía a D, D rechaza, A reintenta de inmediato → bloqueado por el cooldown de 30 días.
+Las 4 cuentas de prueba y sus filas de `contacts`/`music_profile` se borraron al terminar
+(`public.users` de vuelta a 6, `contacts` en 0).
+
+### Prioridad 2 — `festival_id` obligatorio en squads + migración: completo
+
+Migración `squads_por_festival`:
+- `squads.festival_id` (FK a `festivals`, nullable a nivel de columna — ver por qué abajo).
+- **`create_squad` reescrito** (`DROP FUNCTION` de la firma vieja de un solo parámetro para
+  que no quede un overload que permita crear squads sin festival por accidente): ahora exige
+  `p_festival_id`, valida que el festival exista, si no lanza excepción. **Verificado con
+  cuenta real**: crear sin festival → error "El squad necesita un festival asociado."; crear
+  con un festival real → éxito.
+- **Migración de los 2 squads existentes** ("Los Vi", "Hamster"): se buscó, para cada squad,
+  si ≥2 de sus miembros ya marcaban el mismo festival como voy/tal_vez (intención
+  compartida) — **ninguno de los dos la tenía** (confirmado por SQL antes de migrar), así
+  que **0 squads se migraron automáticamente y los 2 quedaron con `festival_id = null`**,
+  pendientes de que el owner elija manualmente — exactamente el comportamiento que pedía el
+  spec para ese caso, no un fallo de la migración.
+- **`squads.festival_id` sigue siendo nullable a nivel de esquema, a propósito**: no se pudo
+  poner `NOT NULL` porque los 2 squads existentes reales todavía no tienen festival. El
+  criterio de aceptación del spec ("un squad no puede existir sin festival una vez migrado
+  el modelo") se cumple por ahora a nivel de aplicación (`create_squad` lo exige para
+  cualquier squad *nuevo*) — agregar el `NOT NULL` real en una migración futura una vez que
+  "Los Vi" y "Hamster" tengan festival asignado.
+- **UI para que el owner elija** (el "notificación in-app o el mecanismo que uses" del
+  prompt): en `SquadsScreen`, cualquier squad sin `festival_id` cuyo owner sea el usuario
+  actual muestra un banner con un selector de festival inline — no se construyó un sistema
+  de notificaciones nuevo para esto, se optó por lo más simple que resuelve el caso.
+- **Migración NO tocó nada de squad_members/compat/playlist colaborativa** — sigue siendo la
+  misma lógica de siempre, ahora en contexto de un `festival_id` que puede ser null
+  temporalmente.
+
+### Prioridad 3 — Feed de conocidos: completo (ver arriba, dentro de Prioridad 1)
+
+### Prioridad 4 — "Compañero ideal" conectado: completo (ver arriba, dentro de Prioridad 1)
+
+Tarjeta "COMPAÑERO IDEAL" nueva en `HomeScreen` (antes no existía ninguna), navega a
+`ContactsScreen` (pantalla nueva, ruta `Contacts`) al tocarla. `ContactsScreen` también
+muestra la misma tarjeta arriba, más: solicitudes recibidas (aceptar/rechazar), solicitudes
+enviadas (esperando respuesta), buscador por nombre (`search_users_by_name`) con botón
+"Enviar solicitud", y la lista de conocidos aceptados con su `compat_score` y su último
+campeón del Torneo Sonoro si lo tienen.
+
+### Verificación de la app móvil — bloqueada, mismo motivo que sesión 20
+
+**No había emulador ni teléfono físico conectado esta sesión** (`adb` no está instalado en
+este entorno) — no se pudo verificar visualmente `ContactsScreen`, la tarjeta de Compañero
+ideal en Home, ni el banner de "elige festival" en `SquadsScreen`. Se verificó en su lugar:
+`npx tsc --noEmit` limpio (0 errores nuevos — los mismos 9 preexistentes de
+`CommunityTrendsScreen`/`useCommunityStore` de siempre, no relacionados, no tocados) y todo
+el backend (RLS + RPCs) con las 4 cuentas reales desechables descritas arriba. **Pendiente
+real**: confirmar visualmente el flujo completo (buscar → solicitar → aceptar → ver en
+Home/Contactos, y crear/migrar un squad) en un dispositivo real en cuanto haya uno
+disponible.
+
+### Archivos nuevos/cambiados
+
+- Móvil: `src/store/useContactsStore.ts` (nuevo), `src/screens/main/ContactsScreen.tsx`
+  (nuevo), `src/navigation/types.ts` (+`Contacts`), `App.tsx` (+`Stack.Screen`),
+  `src/screens/main/HomeScreen.tsx` (tarjeta Compañero ideal + botón 🤝), `src/store/useSquadStore.ts`
+  (`createSquad` ahora pide `festivalId`, +`setSquadFestival`), `src/screens/main/SquadsScreen.tsx`
+  (picker de festival al crear, banner de festival pendiente para el owner),
+  `src/types/database.ts` (regenerado + `ContactStatus`).
+- Supabase: migraciones `contacts_red_de_conocidos` y `squads_por_festival`.
+
 ## Pendiente
 
+- **Red de conocidos + Squads por festival (sesión 21)**: falta verificar visualmente en un
+  dispositivo real (buscar/solicitar/aceptar conocidos, tarjeta Compañero ideal, banner de
+  festival pendiente en squads) — sin emulador/teléfono disponible esta sesión, todo lo demás
+  se verificó por RLS/RPC con cuentas reales. Los squads "Los Vi" y "Hamster" siguen sin
+  festival asignado — pendiente de que sus owners lo elijan desde el banner nuevo en
+  `SquadsScreen` (o por SQL directo si se prefiere resolverlo ya). Una vez que ambos tengan
+  festival, agregar el `NOT NULL` real a `squads.festival_id` en una migración de cierre.
 - **Mood del día (sesión 20)**: falta agregar el secreto `LASTFM_API_KEY` en el dashboard de
   Supabase para que el botón "Traer de Last.fm" del panel `/mood` funcione (el código ya está
   verificado, solo falta el secreto). Falta también probar el selector nuevo y el fallback

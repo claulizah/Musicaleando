@@ -231,6 +231,51 @@ export type Database = {
           },
         ]
       }
+      contacts: {
+        Row: {
+          compat_score: number | null
+          contact_id: string
+          created_at: string
+          id: string
+          responded_at: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          compat_score?: number | null
+          contact_id: string
+          created_at?: string
+          id?: string
+          responded_at?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          compat_score?: number | null
+          contact_id?: string
+          created_at?: string
+          id?: string
+          responded_at?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contacts_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contacts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_reports: {
         Row: {
           content_id: string
@@ -969,6 +1014,7 @@ export type Database = {
       squads: {
         Row: {
           created_at: string
+          festival_id: string | null
           himno_artist_id: string | null
           himno_imagen_url: string | null
           himno_nombre: string | null
@@ -979,6 +1025,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          festival_id?: string | null
           himno_artist_id?: string | null
           himno_imagen_url?: string | null
           himno_nombre?: string | null
@@ -989,6 +1036,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          festival_id?: string | null
           himno_artist_id?: string | null
           himno_imagen_url?: string | null
           himno_nombre?: string | null
@@ -998,6 +1046,13 @@ export type Database = {
           owner_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "squads_festival_id_fkey"
+            columns: ["festival_id"]
+            isOneToOne: false
+            referencedRelation: "festivals"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "squads_owner_id_fkey"
             columns: ["owner_id"]
@@ -1173,14 +1228,35 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      best_contact_match: {
+        Args: never
+        Returns: {
+          arquetipo: string
+          compat_score: number
+          contact_user_id: string
+          nombre: string
+        }[]
+      }
+      contacts_feed: {
+        Args: never
+        Returns: {
+          arquetipo: string
+          contact_user_id: string
+          generos: Json
+          nombre: string
+          ultimo_campeon_fecha: string
+          ultimo_campeon_nombre: string
+        }[]
+      }
       cosine_similarity: {
         Args: { v1: number[]; v2: number[] }
         Returns: number
       }
       create_squad: {
-        Args: { p_nombre: string }
+        Args: { p_festival_id: string; p_nombre: string }
         Returns: {
           created_at: string
+          festival_id: string | null
           himno_artist_id: string | null
           himno_imagen_url: string | null
           himno_nombre: string | null
@@ -1232,6 +1308,7 @@ export type Database = {
         Args: { p_invite_code: string }
         Returns: {
           created_at: string
+          festival_id: string | null
           himno_artist_id: string | null
           himno_imagen_url: string | null
           himno_nombre: string | null
@@ -1256,12 +1333,55 @@ export type Database = {
         Returns: undefined
       }
       refresh_my_recommendations_v2: { Args: never; Returns: undefined }
+      respond_contact_request: {
+        Args: { p_accept: boolean; p_request_id: string }
+        Returns: {
+          compat_score: number | null
+          contact_id: string
+          created_at: string
+          id: string
+          responded_at: string | null
+          status: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "contacts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      search_users_by_name: {
+        Args: { p_query: string }
+        Returns: {
+          nombre: string
+          user_id: string
+        }[]
+      }
       select_raffle_winner: {
         Args: { p_announcement_id: string }
         Returns: {
           ganador_nombre: string
           ganador_user_id: string
         }[]
+      }
+      send_contact_request: {
+        Args: { p_contact_id: string }
+        Returns: {
+          compat_score: number | null
+          contact_id: string
+          created_at: string
+          id: string
+          responded_at: string | null
+          status: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "contacts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       squad_comparison: {
         Args: { p_squad_id: string }
@@ -1443,3 +1563,4 @@ export type ContentReportType = "festival_comment" | "community_share" | "concer
 export type ContentReportMotivo = "spam" | "ofensivo" | "otro"
 export type MoodPlaylistFuente = "manual" | "lastfm"
 export type MoodPlaylistEstado = "pendiente" | "aprobado"
+export type ContactStatus = "pendiente" | "aceptado" | "rechazado"

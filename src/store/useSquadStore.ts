@@ -37,10 +37,11 @@ type SquadState = {
   error: string | null;
   comparisonBySquad: Record<string, SquadComparisonRow[]>;
   fetchMySquads: (userId: string) => Promise<void>;
-  createSquad: (nombre: string) => Promise<void>;
+  createSquad: (nombre: string, festivalId: string) => Promise<void>;
   joinSquad: (code: string) => Promise<void>;
   leaveSquad: (squadId: string, userId: string) => Promise<void>;
   fetchComparison: (squadId: string) => Promise<void>;
+  setSquadFestival: (squadId: string, festivalId: string) => Promise<void>;
 };
 
 export const useSquadStore = create<SquadState>((set, get) => ({
@@ -116,9 +117,22 @@ export const useSquadStore = create<SquadState>((set, get) => ({
     set({ squads, status: 'ready' });
   },
 
-  createSquad: async (nombre) => {
-    const { error } = await supabase.rpc('create_squad', { p_nombre: nombre });
+  createSquad: async (nombre, festivalId) => {
+    const { error } = await supabase.rpc('create_squad', { p_nombre: nombre, p_festival_id: festivalId });
     if (error) throw error;
+  },
+
+  // squads_update_owner RLS already lets the owner update any column of
+  // their own squad — no RPC needed for this one, unlike create_squad which
+  // has extra validation (festival exists, name required) worth centralizing.
+  setSquadFestival: async (squadId, festivalId) => {
+    const { error } = await supabase.from('squads').update({ festival_id: festivalId }).eq('id', squadId);
+    if (error) throw error;
+    set({
+      squads: get().squads.map((s) =>
+        s.squad.id === squadId ? { ...s, squad: { ...s.squad, festival_id: festivalId } } : s,
+      ),
+    });
   },
 
   joinSquad: async (code) => {
