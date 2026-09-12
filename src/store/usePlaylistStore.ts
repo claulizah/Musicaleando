@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
-import { Mood, Tables } from '../types/database';
+import { Tables } from '../types/database';
 
 type Song = Tables<'songs'>;
 type Status = 'idle' | 'loading' | 'ready' | 'error';
@@ -9,17 +9,23 @@ type PlaylistState = {
   songs: Song[];
   status: Status;
   error: string | null;
-  fetch: (generos: string[], mood: Mood) => Promise<void>;
+  fetch: (generos: string[]) => Promise<void>;
 };
 
 const LIMIT = 8;
 
+// Generic "playlist del día basada en perfil musical" — the fallback used
+// when the active mood-actividad (see useMoodPlaylistStore) has no approved
+// candidates yet. No longer filtered by mood: the old genre-flavored moods
+// (fiesta/chill/electronica) this table's `mood` column used are unrelated
+// to the new mood-actividad/emoción selector, so this always widens straight
+// to genre-only.
 export const usePlaylistStore = create<PlaylistState>((set) => ({
   songs: [],
   status: 'idle',
   error: null,
 
-  fetch: async (generos, mood) => {
+  fetch: async (generos) => {
     set({ status: 'loading', error: null });
 
     if (generos.length === 0) {
@@ -31,7 +37,6 @@ export const usePlaylistStore = create<PlaylistState>((set) => ({
       .from('songs')
       .select('*')
       .in('genero', generos)
-      .eq('mood', mood)
       .order('orden')
       .limit(LIMIT);
 
@@ -40,24 +45,6 @@ export const usePlaylistStore = create<PlaylistState>((set) => ({
       return;
     }
 
-    if (data && data.length > 0) {
-      set({ songs: data, status: 'ready' });
-      return;
-    }
-
-    // Not enough curated songs for this exact mood — widen to genre only.
-    const { data: fallback, error: fallbackError } = await supabase
-      .from('songs')
-      .select('*')
-      .in('genero', generos)
-      .order('orden')
-      .limit(LIMIT);
-
-    if (fallbackError) {
-      set({ status: 'error', error: fallbackError.message });
-      return;
-    }
-
-    set({ songs: fallback ?? [], status: 'ready' });
+    set({ songs: data ?? [], status: 'ready' });
   },
 }));

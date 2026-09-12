@@ -573,6 +573,27 @@ export type Database = {
         }
         Relationships: []
       }
+      mood_catalog: {
+        Row: {
+          emoji: string
+          id: string
+          label: string
+          orden: number
+        }
+        Insert: {
+          emoji: string
+          id: string
+          label: string
+          orden?: number
+        }
+        Update: {
+          emoji?: string
+          id?: string
+          label?: string
+          orden?: number
+        }
+        Relationships: []
+      }
       mood_logs: {
         Row: {
           fecha: string
@@ -594,10 +615,58 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "mood_logs_mood_fkey"
+            columns: ["mood"]
+            isOneToOne: false
+            referencedRelation: "mood_catalog"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "mood_logs_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mood_playlists: {
+        Row: {
+          artista: string
+          created_at: string
+          estado: string
+          fuente: string
+          genero: string | null
+          id: string
+          mood_id: string
+          titulo: string
+        }
+        Insert: {
+          artista: string
+          created_at?: string
+          estado?: string
+          fuente: string
+          genero?: string | null
+          id?: string
+          mood_id: string
+          titulo: string
+        }
+        Update: {
+          artista?: string
+          created_at?: string
+          estado?: string
+          fuente?: string
+          genero?: string | null
+          id?: string
+          mood_id?: string
+          titulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mood_playlists_mood_id_fkey"
+            columns: ["mood_id"]
+            isOneToOne: false
+            referencedRelation: "mood_catalog"
             referencedColumns: ["id"]
           },
         ]
@@ -1063,23 +1132,15 @@ export type Database = {
       }
     }
     Views: {
-      // A view over community_shares LEFT JOIN community_share_votes GROUP BY
-      // share id — share_id/user_id/song_ids/vote_count are never actually
-      // null (confirmed against the view definition), but the type generator
-      // can't infer that for a view and marks every column nullable. Narrowed
-      // back to match reality, same as the hand-written version this replaced.
-      // security_invoker on this view means it also inherits community_shares'
-      // RLS — hidden (oculto) shares disappear from it automatically for
-      // non-admins, no extra filter needed here.
       community_share_stats: {
         Row: {
           caption: string | null
           ciudad: string | null
-          created_at: string
-          share_id: string
-          song_ids: string[]
-          user_id: string
-          vote_count: number
+          created_at: string | null
+          share_id: string | null
+          song_ids: string[] | null
+          user_id: string | null
+          vote_count: number | null
         }
         Relationships: [
           {
@@ -1207,7 +1268,7 @@ export type Database = {
         Returns: {
           energia: number
           festivales_confirmados: number
-          festivales_en_comun: number | null
+          festivales_en_comun: number
           generos_count: number
           nombre: string
           user_id: string
@@ -1365,8 +1426,11 @@ export const Constants = {
   },
 } as const
 
-// App-level unions the DB only enforces via CHECK constraints.
-export type Mood = "fiesta" | "chill" | "electronica"
+// App-level unions the DB only enforces via CHECK constraints (or, for Mood,
+// via a real table `mood_catalog` — this union exists only for client-side
+// type safety/autocomplete; adding a new mood at runtime is a data row in
+// `mood_catalog`, not a schema change).
+export type Mood = "feliz" | "triste" | "fiestero" | "relajado" | "activo" | "peda"
 export type ProfileOrigen = "quiz" | "import" | "live"
 export type TrendTipo = "energia_vs_ciudad" | "dato_arquetipo" | "genero_dominante"
 export type FestivalStatus = "voy" | "tal_vez" | "no_voy"
@@ -1377,3 +1441,5 @@ export type SurveyVolveria = "si" | "no" | "tal_vez"
 export type RecommendationFuente = "v1_contenido" | "v2_colaborativo"
 export type ContentReportType = "festival_comment" | "community_share" | "concert_photo"
 export type ContentReportMotivo = "spam" | "ofensivo" | "otro"
+export type MoodPlaylistFuente = "manual" | "lastfm"
+export type MoodPlaylistEstado = "pendiente" | "aprobado"

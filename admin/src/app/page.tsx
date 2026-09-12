@@ -37,6 +37,9 @@ export default async function DashboardPage() {
           <Link href="/moderacion" className="text-sm underline">
             Moderación
           </Link>
+          <Link href="/mood" className="text-sm underline">
+            Mood playlists
+          </Link>
           <Link
             href="/festivals/new"
             className="rounded-md bg-black px-3 py-2 text-sm text-white"

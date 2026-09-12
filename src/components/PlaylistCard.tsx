@@ -1,20 +1,27 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Tables } from '../types/database';
 import { colors, radii, spacing, type } from '../theme';
 
-type Song = Tables<'songs'>;
+// Shared by the generic profile-based playlist (`songs`) and the mood-actividad
+// playlist (`mood_playlists`) — both have these three fields, no need to
+// force one table's full row shape onto the other.
+type Song = {
+  id: string;
+  titulo: string;
+  artista: string;
+};
 
 type Props = {
   songs: Song[];
+  title?: string;
 };
 
-export function PlaylistCard({ songs }: Props) {
+export function PlaylistCard({ songs, title = 'TU PLAYLIST DE HOY' }: Props) {
   if (songs.length === 0) return null;
 
   return (
     <View style={styles.card}>
-      <Text style={styles.eyebrow}>TU PLAYLIST DE HOY</Text>
+      <Text style={styles.eyebrow}>{title}</Text>
       <View style={styles.list}>
         {songs.map((song, i) => (
           <View key={song.id} style={styles.row}>

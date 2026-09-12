@@ -1,25 +1,29 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MotiView } from 'moti';
 import * as Haptics from 'expo-haptics';
 import { colors, radii, spacing, type } from '../theme';
 import { Mood } from '../types/database';
-
-const MOODS: { id: Mood; label: string; emoji: string }[] = [
-  { id: 'fiesta', label: 'Fiesta', emoji: '🎉' },
-  { id: 'chill', label: 'Chill', emoji: '🌙' },
-  { id: 'electronica', label: 'Electrónica', emoji: '🎧' },
-];
+import { useMoodCatalogStore } from '../store/useMoodCatalogStore';
 
 type Props = {
   value: Mood | null;
   onChange: (mood: Mood) => void;
 };
 
+// Options come from mood_catalog (a table, not a hardcoded enum) so adding a
+// 7th mood-actividad later is a data row, not a code change here.
 export function MoodSelector({ value, onChange }: Props) {
+  const moods = useMoodCatalogStore((s) => s.moods);
+  const fetchCatalog = useMoodCatalogStore((s) => s.fetch);
+
+  useEffect(() => {
+    fetchCatalog();
+  }, [fetchCatalog]);
+
   return (
     <View style={styles.row}>
-      {MOODS.map((mood) => {
+      {moods.map((mood) => {
         const selected = value === mood.id;
         return (
           <Pressable
@@ -27,7 +31,7 @@ export function MoodSelector({ value, onChange }: Props) {
             onPress={() => {
               if (selected) return;
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              onChange(mood.id);
+              onChange(mood.id as Mood);
             }}
             style={styles.pressable}
           >
@@ -52,10 +56,12 @@ export function MoodSelector({ value, onChange }: Props) {
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
   },
   pressable: {
-    flex: 1,
+    minWidth: '30%',
+    flexGrow: 1,
   },
   pill: {
     borderRadius: radii.lg,

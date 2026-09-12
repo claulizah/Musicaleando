@@ -204,6 +204,43 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['songs']['Row']>;
         Relationships: [];
       };
+      mood_catalog: {
+        Row: { id: string; label: string; emoji: string; orden: number };
+        Insert: Database['public']['Tables']['mood_catalog']['Row'];
+        Update: Partial<Database['public']['Tables']['mood_catalog']['Row']>;
+        Relationships: [];
+      };
+      mood_playlists: {
+        Row: {
+          id: string;
+          mood_id: string;
+          titulo: string;
+          artista: string;
+          genero: string | null;
+          fuente: string;
+          estado: string;
+          created_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['mood_playlists']['Row'],
+          'id' | 'created_at' | 'estado' | 'genero'
+        > & {
+          id?: string;
+          created_at?: string;
+          estado?: string;
+          genero?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['mood_playlists']['Row']>;
+        Relationships: [
+          {
+            foreignKeyName: 'mood_playlists_mood_id_fkey';
+            columns: ['mood_id'];
+            isOneToOne: false;
+            referencedRelation: 'mood_catalog';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       concert_album: {
         Row: {
           id: string;

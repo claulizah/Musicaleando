@@ -13,6 +13,7 @@ import { useMoodStore } from '../../store/useMoodStore';
 import { useProfileStore, readTorneoCampeon } from '../../store/useProfileStore';
 import { useTrendStore } from '../../store/useTrendStore';
 import { usePlaylistStore } from '../../store/usePlaylistStore';
+import { useMoodPlaylistStore } from '../../store/useMoodPlaylistStore';
 import { useRecommendationsStore } from '../../store/useRecommendationsStore';
 import { useRecommendationsV2Store } from '../../store/useRecommendationsV2Store';
 import { useAchievementsStore } from '../../store/useAchievementsStore';
@@ -35,8 +36,10 @@ export function HomeScreen({ navigation }: Props) {
   const fetchProfile = useProfileStore((s) => s.fetch);
   const trend = useTrendStore((s) => s.trend);
   const fetchTrend = useTrendStore((s) => s.fetch);
-  const songs = usePlaylistStore((s) => s.songs);
-  const fetchPlaylist = usePlaylistStore((s) => s.fetch);
+  const genericSongs = usePlaylistStore((s) => s.songs);
+  const fetchGenericPlaylist = usePlaylistStore((s) => s.fetch);
+  const moodSongs = useMoodPlaylistStore((s) => s.songs);
+  const fetchMoodPlaylist = useMoodPlaylistStore((s) => s.fetch);
   const recommended = useRecommendationsStore((s) => s.artists);
   const fetchRecommended = useRecommendationsStore((s) => s.fetch);
   const recommendedV2 = useRecommendationsV2Store((s) => s.recommendations);
@@ -92,12 +95,13 @@ export function HomeScreen({ navigation }: Props) {
     if (!userId || !archetype || !profile) return;
     fetchTrend(userId);
     fetchTrendHistory(userId);
-    fetchPlaylist(profile.generos as string[], today ?? 'fiesta');
+    fetchGenericPlaylist(profile.generos as string[]);
+    if (today) fetchMoodPlaylist(today, profile.generos as string[]);
     const champion = readTorneoCampeon((profile.flavor as Record<string, unknown>) ?? {});
     fetchRecommended((profile.generos as string[]) ?? [], champion?.generoId);
     fetchRecommendedV2(userId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, archetype, profile?.generos, profile?.flavor]);
+  }, [userId, archetype, profile?.generos, profile?.flavor, today]);
 
   return (
     <Screen>
@@ -204,7 +208,11 @@ export function HomeScreen({ navigation }: Props) {
           </View>
         )}
 
-        {songs.length > 0 && <PlaylistCard songs={songs} />}
+        {moodSongs.length > 0 ? (
+          <PlaylistCard songs={moodSongs} title="TU PLAYLIST DE HOY" />
+        ) : (
+          genericSongs.length > 0 && <PlaylistCard songs={genericSongs} />
+        )}
         <RecommendedArtistCard artists={recommended} />
         <CollaborativeArtistCard recommendations={recommendedV2} />
       </ScrollView>

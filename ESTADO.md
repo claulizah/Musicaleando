@@ -1,7 +1,7 @@
 # Estado del proyecto — Musicaleando
 
-Última actualización: 2026-09-08 (sesión 19, cierre — se quitó el consentimiento de
-patrocinios del Álbum de conciertos). Este archivo es el punto de partida para retomar el
+Última actualización: 2026-09-12 (sesión 20 — Mood del día pasó de selector por género a
+mood-actividad/emoción homologado). Este archivo es el punto de partida para retomar el
 trabajo en una sesión nueva sin perder contexto.
 
 **Estado en una línea**: Los 7 sprints numerados y las 3 piezas priorizadas del Backlog v2
@@ -10,12 +10,20 @@ sesión 16); Sentry quedó instalado y verificado en app móvil + panel admin, y
 se confirmó en un teléfono físico real que tanto el Álbum de conciertos como el ANR
 histórico ("System UI isn't responding") no son bugs de la app — el álbum quedó cerrado de
 verdad y el ANR no se reprodujo fuera del emulador (ver sesión 18 para el detalle y la
-salvedad sobre Sentry/Expo Go). La **sesión 19 quitó el paso de consentimiento para
-patrocinios** del flujo de subida del Álbum de conciertos (decisión de producto revertida —
-ver sesión 19) — cambio chico y acotado, sin tocar nada más. Solo quedan del Backlog v2, sin
-construir ni confirmadas para retomar: **Seguridad/ubicación en vivo** y **Conexión en vivo
+salvedad sobre Sentry/Expo Go). La sesión 19 quitó el paso de consentimiento para
+patrocinios del flujo de subida del Álbum de conciertos (decisión de producto revertida).
+La **sesión 20 rehizo Mood del día** (spec actualizado, leído desde Artifact): selector
+homologado Feliz/Triste/Fiestero/Relajado/Activo/Peda vía tabla `mood_catalog` (no enum),
+bandeja de candidatos `mood_playlists` (manual/Last.fm, pendiente/aprobado) con panel admin
+en `/mood`, y sincronización opcional desde Last.fm `tag.getTopTracks` — ver sesión 20 para
+el detalle completo, incluyendo dos discrepancias reales encontradas entre el spec/prompt y
+el estado real del repo (Last.fm no estaba conectado a nada antes de esta sesión, y "tu
+semana en moods" nunca se construyó). Solo quedan del Backlog v2, sin construir ni
+confirmadas para retomar: **Seguridad/ubicación en vivo** y **Conexión en vivo
 (Spotify/Apple Music OAuth beta)**. "Compañero ideal" (Sprint 3) sigue pausado por separado
-— no se resolvió, es una decisión distinta.
+— no se resolvió, es una decisión distinta. **Red de conocidos + Squads por festival** y el
+resto del Backlog v2 del spec actualizado (más allá de las 3 piezas ya completas) tampoco se
+tocaron esta sesión — el prompt de esta sesión pedía específicamente solo Mood del día.
 
 Proyecto Supabase: `ijwyykfuyeaahvxmaild` ("Sound Project", org `ljcnanwlkijozacnyhck`).
 Proyecto Sentry: org `dragonflailabs`, proyectos `musicaleando-app` y `musicaleando-admin`.
@@ -2090,8 +2098,168 @@ permiso en cada subida solo agregaba fricción sin beneficio real hoy.
   la fila resultante confirma que la columna ya no existe. Cuenta y datos de prueba
   limpiados al terminar (`public.users` de vuelta a 6).
 
+## Sesión 20 (2026-09-12): Mood del día pasó de género a mood-actividad/emoción — completo y verificado
+
+El prompt de continuación asumía que esta era "probablemente" la tarea en curso de la sesión
+anterior, pero **no lo era**: se releyó `ESTADO.md` completo al empezar (siguiendo el
+protocolo de reconexión) y no había ninguna mención de mood homologado, `MoodPlaylists` ni
+Last.fm en ningún punto del historial — la sesión 19 había cerrado con un tema no
+relacionado (consentimiento de patrocinios). Se confirmó esto con el usuario antes de tocar
+nada, se pidió el link del Artifact del spec actualizado (no vive en el repo, se leyó desde
+ahí), y se procedió sobre la sección "Mood del día" de ese spec.
+
+**Antes de construir, se revisó el código existente** (`MoodSelector.tsx`,
+`useMoodStore.ts`, `MoodPickScreen.tsx`, `usePlaylistStore.ts`): el "Mood del día" del
+Sprint 1 era un selector fijo de 3 chips por género/energía (Fiesta/Chill/Electrónica,
+`mood_logs.mood` con `CHECK` hardcodeado), sin ninguna relación con mood-actividad/emoción
+ni con Last.fm — se reconstruyó desde cero como pedía el prompt, no se encontró nada parcial
+que reutilizar del set nuevo.
+
+### Dos discrepancias reales encontradas contra el spec/prompt (documentadas, no asumidas)
+
+- **Last.fm no estaba conectado a nada en este proyecto.** El prompt decía "la misma API que
+  ya usamos para `artist.getSimilar`" — falso: se revisó todo `src/`, `supabase/functions/`
+  y los secretos de Edge Functions, y la única integración de similitud de artistas existente
+  es Spotify (`spotify-artists`, sesión 7). No se asumió que ya estaba conectado; se avisó al
+  usuario antes de construir la sincronización.
+- **"Tu semana en moods" (histórico de mood en el perfil) nunca se construyó.** El criterio
+  de aceptación del prompt decía que debía "seguir funcionando con el set nuevo", pero no
+  existe ningún componente/pantalla de historial de mood en ningún punto del código — se
+  grepeó `mood_logs`/`semana`/`MoodHistory` sin resultados. Como el prompt pedía
+  explícitamente no conectar esto con features nuevas fuera de lo descrito, **no se construyó
+  esta sesión** (sería una feature nueva, no una regresión que verificar) — queda como
+  pendiente real, no como algo verificado.
+
+### Catálogo de moods como tabla, no enum (migración `mood_actividad_homologado`)
+
+- **`mood_catalog`** nueva (`id` text PK, `label`, `emoji`, `orden`), sembrada con los 6
+  moods pedidos (feliz/triste/fiestero/relajado/activo/peda). RLS: `select` público, sin
+  policy de escritura para clientes — agregar un 7º mood es un insert directo (por SQL o,
+  si se quiere después, una pantalla admin), nunca una migración de esquema ni un release.
+- **`mood_logs.mood`**: se quitó el `CHECK` viejo (`fiesta`/`chill`/`electronica`) y se
+  reemplazó por un `FOREIGN KEY` a `mood_catalog(id)` — coherente con "tabla, no enum".
+  **Migración de datos existentes** (11 filas en producción al momento del cambio, decisión
+  documentada aquí porque el prompt pedía decidir y documentar): `fiesta→fiestero`,
+  `chill→relajado`, `electronica→activo`. Es un mapeo de conveniencia, no semántico exacto
+  (el set viejo era género/energía, el nuevo es actividad/emoción — no hay una
+  correspondencia perfecta posible), elegido para mantener las 3 categorías distintas en vez
+  de colapsarlas todas a una.
+- **`songs`** (el catálogo genérico del Sprint 2) **no se tocó** — su columna `mood` sigue
+  con los 3 valores viejos, pero ahora es un detalle interno sin relación con el selector
+  visible al usuario: `usePlaylistStore.fetch` se simplificó para ya no filtrar por mood en
+  absoluto (antes intentaba `genero+mood exacto` con fallback a `genero` solo; ahora siempre
+  es `genero` solo), porque el mood exacto que usaba ya no significa nada para el usuario.
+  Esto es, literalmente, el fallback genérico que pide el spec cuando un mood-actividad no
+  tiene candidatos aprobados — no hizo falta construir un fallback aparte.
+
+### Bandeja de candidatos `mood_playlists` (mismo patrón que otras bandejas del proyecto)
+
+- Tabla nueva: `mood_id` (FK a `mood_catalog`), `titulo`, `artista`, `genero` (nullable, para
+  priorizar por perfil musical), `fuente` (`manual`/`lastfm`), `estado`
+  (`pendiente`/`aprobado`). RLS: `select` público solo ve `estado='aprobado'` (admin ve todo),
+  `insert`/`update`/`delete` solo admin — mismo patrón `EXISTS (... users u ... is_admin)` ya
+  usado en `festivals`/`content_reports`. **Verificado con REST sin sesión** (anon key
+  pelado, sin JWT de usuario): un `select` solo devuelve las aprobadas, un `insert` da `401`.
+- **`useMoodPlaylistStore`** (app): trae aprobadas para el mood activo, prioriza
+  client-side las que su `genero` está en `MusicProfile.generos` del usuario, límite 8.
+  Si viene vacío, `HomeScreen` cae a `usePlaylistStore` (genérico por perfil) — nunca pantalla
+  vacía, cumple el caso límite del spec.
+- **Curación manual sembrada para los 6 moods** (18 canciones reales, 3 por mood, `fuente:
+  manual`, `estado: aprobado` desde el arranque) — necesario porque la key de Last.fm que
+  compartió el usuario primero estaba suspendida (`error 26` de la API, confirmado con curl
+  directo contra `ws.audioscrobbler.com`, no un bug propio) y no se quiso bloquear el
+  criterio de aceptación de "cada mood con al menos una canción" a que se resolviera eso.
+
+### Last.fm: probado con la API real antes de construir la sincronización completa
+
+El usuario proveyó una segunda key que sí funciona. Se probaron los 6 tags candidatos
+directo contra `tag.getTopTracks` (curl, fuera de cualquier código propio) antes de construir
+nada, tal como pedía el prompt:
+
+| Mood | Tag usado | Calidad observada |
+|---|---|---|
+| Feliz | `happy` | Buena — Rusted Root, Toploader, Jason Mraz, temas alegres reales. |
+| Triste | `sad` | Buena — Jeff Buckley, Lana Del Rey, Ariana Grande. |
+| Fiestero | `party` | Buena — Far East Movement, Flo Rida, Pitbull. |
+| Relajado | `chill` | Buena — The Neighbourhood, Mac Miller, Kavinsky. |
+| Activo | `workout` → **`gym`** | `workout` rindió mal (Gidropony, LazyTown "Bing Bang" — temas irrelevantes). `gym` rindió bien (Amaranthe, Halestorm, Spiritbox) — se usó `gym` como sugerido por defecto en el panel. |
+| Peda | `drinking` | Mediocre — resultados reales y temáticamente correctos (Merle Haggard, Earl Sweatshirt) pero sesgados a country/folk, no al ambiente de fiesta/"peda" mexicano. No es basura, pero se dejó como el candidato más débil — la curación manual es la fuente principal para este mood, tal como el prompt autorizaba explícitamente. |
+
+Ninguno de los 6 tags quedó completamente inservible, así que los 6 quedaron habilitados en
+el panel (no se descartó ninguno) — pero "Peda" se apoya más en curación manual que en
+Last.fm por la razón de arriba.
+
+### Edge Function `lastfm-mood-sync` (nueva, desplegada y verificada)
+
+- Código en
+  [supabase/functions/lastfm-mood-sync/index.ts](supabase/functions/lastfm-mood-sync/index.ts),
+  mismo patrón de despliegue que `spotify-artists`/`import-listening-history` (MCP de
+  Supabase, no CLI local). **Admin-only**: valida el JWT del caller contra `users.is_admin`
+  (primera función de este proyecto que gatea por admin en vez de por usuario autenticado
+  cualquiera) antes de llamar a Last.fm — no escribe nada en la base, solo devuelve
+  candidatos; el insert real (con dedupe por `titulo+artista` ya existente para ese mood) lo
+  hace la server action del panel admin con la sesión real del admin, mismo patrón de "el
+  cliente humano/admin hace el insert final" que el resto del proyecto.
+- **Requiere el secreto `LASTFM_API_KEY`** en el dashboard de Supabase (Edge Functions →
+  Manage secrets) — pendiente de que el usuario lo agregue. **Verificado que el código está
+  bien** aunque el secreto no estuviera puesto todavía: se probó el botón real en el panel
+  admin (sesión de admin real en navegador) y devolvió `500` con el mensaje esperado
+  ("Falta el secreto LASTFM_API_KEY"), confirmado también en `function_edge_logs` vía
+  `query_logs` del MCP — no es un bug, es el comportamiento correcto a falta del secreto.
+  **Sin el secreto puesto, el botón "Traer de Last.fm" no sirve todavía** — la curación
+  manual (ya sembrada) es lo único que alimenta la app mientras tanto.
+
+### Panel de administración — `/mood` (nuevo, verificado en navegador con sesión real de admin)
+
+- Página server-rendered (`requireAdmin()`, mismo gate que el resto del panel) con: lista de
+  los 6 moods y su conteo de aprobadas, bandeja de pendientes por mood con botones
+  Aprobar/Descartar, botón "Traer de Last.fm" por mood (tag editable, con el tag sugerido de
+  la tabla de arriba precargado), y un formulario para agregar canciones curadas a mano
+  directo en `aprobado` sin pasar por Last.fm.
+- **Verificado de punta a punta con la sesión real del admin** (contraseña reseteada
+  temporalmente por SQL con autorización explícita del usuario, mismo patrón de sesiones
+  5/9 — cambiarla desde Supabase Auth): formulario manual insertó una canción real
+  (`estado: aprobado`, confirmado por SQL), Aprobar cambió `pendiente→aprobado` en una fila
+  de prueba (confirmado por SQL), Descartar borró una fila de prueba (confirmado por SQL,
+  `count = 0`). Datos de prueba limpiados al terminar.
+
+### Verificación de la app móvil — bloqueada, mismo motivo documentado en sesiones anteriores
+
+**No había emulador ni teléfono físico conectado esta sesión** (`adb` ni siquiera está
+instalado en este entorno) — no se pudo verificar visualmente el selector nuevo, el
+cambio de mood actualizando la playlist en <2s, ni el fallback genérico dentro de la app.
+Se verificó en su lugar: `npx tsc --noEmit` limpio en `src/` (0 errores nuevos — se
+confirmó además, revirtiendo temporalmente `database.ts` con `git stash`, que los 9 errores
+de tipos preexistentes en `CommunityTrendsScreen.tsx`/`useCommunityStore.ts` ya existían
+antes de esta sesión y no tienen relación con Mood — no se tocaron, quedan como deuda técnica
+preexistente para otra sesión), y RLS de `mood_playlists` confirmada por REST sin sesión
+(ver arriba). **Pendiente real**: probar el selector y el fallback en un dispositivo real en
+cuanto haya uno disponible.
+
+### Archivos nuevos/cambiados
+
+- Móvil: `src/store/useMoodCatalogStore.ts` (nuevo), `src/store/useMoodPlaylistStore.ts`
+  (nuevo), `src/store/usePlaylistStore.ts` (simplificado), `src/components/MoodSelector.tsx`
+  (ahora lee `mood_catalog` en vez de un array hardcodeado), `src/components/PlaylistCard.tsx`
+  (prop `songs` generalizada a `{id,titulo,artista}` para servir tanto al catálogo genérico
+  como a `mood_playlists`), `src/screens/main/HomeScreen.tsx` (prioriza playlist por mood,
+  cae al genérico), `src/types/database.ts` (regenerado + tipos nuevos).
+- Admin: `admin/src/app/mood/page.tsx`, `actions.ts`, `candidate-actions.tsx`,
+  `add-manual-form.tsx`, `sync-button.tsx` (todos nuevos), link agregado en
+  `admin/src/app/page.tsx`, `admin/src/lib/database.types.ts` (tablas nuevas agregadas a
+  mano, ese archivo no se regenera automáticamente).
+- Supabase: migraciones `mood_actividad_homologado` y `seed_mood_playlists_manual_curation`,
+  Edge Function `lastfm-mood-sync`.
+
 ## Pendiente
 
+- **Mood del día (sesión 20)**: falta agregar el secreto `LASTFM_API_KEY` en el dashboard de
+  Supabase para que el botón "Traer de Last.fm" del panel `/mood` funcione (el código ya está
+  verificado, solo falta el secreto). Falta también probar el selector nuevo y el fallback
+  genérico en un dispositivo real (sin emulador/teléfono disponible esta sesión). "Tu semana
+  en moods" (histórico de mood en el perfil) **nunca se construyó** — no es una regresión de
+  esta sesión, es una feature que el spec asume que existe pero no existe en ningún lado del
+  código; deliberadamente no se construyó esta sesión por estar fuera del alcance pedido.
 - No hay UI para editar nombre/ciudad/fechas de un festival ya creado desde el panel (solo
   alta y edición del link de boletos), ni para **eliminarlo** (se necesitó SQL directo esta
   sesión para quitar los 3 festivales de ejemplo) — si hace falta, agregar ambos al detalle
