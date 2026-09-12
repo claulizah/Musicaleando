@@ -1,7 +1,12 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ['/login', '/signup'];
+const PUBLIC_PATHS = ['/login', '/signup', '/forgot-password', '/reset-password'];
+// A password-recovery link logs the visitor in via a short-lived recovery
+// session before they've set a new password — unlike /login or /signup,
+// being authenticated here is the expected state, not a reason to bounce
+// them to '/'.
+const SKIP_LOGGED_IN_REDIRECT = ['/reset-password'];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -37,7 +42,9 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && isPublicPath) {
+  const skipLoggedInRedirect = SKIP_LOGGED_IN_REDIRECT.some((p) => request.nextUrl.pathname.startsWith(p));
+
+  if (user && isPublicPath && !skipLoggedInRedirect) {
     const url = request.nextUrl.clone();
     url.pathname = '/';
     return NextResponse.redirect(url);

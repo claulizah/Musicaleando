@@ -43,6 +43,11 @@ export default function LoginPage() {
         </button>
       </form>
       <p className="text-sm text-gray-500">
+        <Link href="/forgot-password" className="underline">
+          Olvidé mi contraseña
+        </Link>
+      </p>
+      <p className="text-sm text-gray-500">
         ¿No tienes cuenta?{' '}
         <Link href="/signup" className="underline">
           Crear cuenta

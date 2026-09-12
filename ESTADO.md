@@ -2209,6 +2209,41 @@ Last.fm por la razón de arriba.
   **Sin el secreto puesto, el botón "Traer de Last.fm" no sirve todavía** — la curación
   manual (ya sembrada) es lo único que alimenta la app mientras tanto.
 
+### Recuperación de contraseña del panel admin (agregada a pedido, fuera del scope original de Mood)
+
+La cuenta admin bootstrap no tiene forma de recuperar su contraseña si se pierde entre
+sesiones (viene pasando desde la sesión 2 — cada vez que hace falta, alguien tiene que
+resetearla por SQL con autorización explícita). Se agregó el flujo estándar de Supabase Auth:
+
+- **`/forgot-password`** (nueva, pública): pide el email, llama
+  `supabase.auth.resetPasswordForEmail(email, { redirectTo: <host>/reset-password })` desde
+  un server action ([admin/src/app/forgot-password/actions.ts](admin/src/app/forgot-password/actions.ts)).
+  Siempre responde "si ese email tiene cuenta, te llegó un link" sin confirmar/negar
+  existencia — así responde Supabase por diseño, no es un bug.
+- **`/reset-password`** (nueva, pública en `src/proxy.ts` pero exenta de la regla "usuario
+  logueado en ruta pública → redirigir a `/`": el link de recuperación autentica con una
+  sesión de recuperación de corta duración *antes* de que el usuario haya puesto la
+  contraseña nueva, así que estar "logueado" ahí es el estado esperado). Client component:
+  detecta la sesión de recuperación vía `onAuthStateChange`/`getSession()` (el browser client
+  de `@supabase/ssr` procesa el token del link automáticamente), y si no hay sesión válida
+  muestra "link expirado" en vez de un formulario que fallaría. El cambio de contraseña
+  (`supabase.auth.updateUser({ password })`) es 100% client-side, sin round-trip al servidor
+  — evita el caso límite de que el middleware redirija a mitad del flujo.
+- Login (`/login`) ahora enlaza a `/forgot-password`.
+- **Verificado en navegador de punta a punta hasta donde se pudo sin gastar el límite de
+  correos**: se llenó el formulario real con `clauliz.acosta@gmail.com` y Supabase respondió
+  `email rate limit exceeded` — confirma que el flujo llega hasta la API real de Supabase
+  (no es un bug del código, es el límite del servicio de correo gratuito de Supabase, muy
+  bajo). **No se pudo verificar visualmente `/reset-password` con un link real** por el mismo
+  límite — revisado por lectura de código y por el patrón estándar de Supabase Auth, pero
+  falta la confirmación visual de clic-en-el-link-real cuando el límite se libere o si se
+  configura SMTP propio para el proyecto (recomendado si esto se va a usar seguido).
+- **Límite conocido, no arreglado esta sesión**: si alguien refresca `/reset-password` después
+  de que la sesión de recuperación ya quedó guardada en cookies (por ejemplo, recargando la
+  página en vez de solo enviar el formulario), el middleware lo redirige a `/` porque ya está
+  "logueado" en una ruta pública — normalmente no pasa porque el cambio de contraseña no
+  recarga la página, pero queda documentado por si alguien lo reporta.
+
 ### Panel de administración — `/mood` (nuevo, verificado en navegador con sesión real de admin)
 
 - Página server-rendered (`requireAdmin()`, mismo gate que el resto del panel) con: lista de
