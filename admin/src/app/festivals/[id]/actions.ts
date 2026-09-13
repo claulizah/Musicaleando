@@ -152,6 +152,134 @@ export async function deleteAnnouncement(
   return {};
 }
 
+export type LineupCandidate = {
+  id: string;
+  batch_id: string;
+  dia_label: string | null;
+  escenario: string | null;
+  artista: string;
+  hora_inicio: string | null;
+  hora_fin: string | null;
+  confianza: string;
+  nota: string | null;
+};
+
+// Sends the image to Claude (vision, via the extract-lineup-image Edge
+// Function) and stores whatever it returns as pendiente candidates — nothing
+// touches festival_lineup here. Real cost per call (Anthropic billing), so
+// this only runs when the admin explicitly uploads an image, never in bulk.
+export async function extractLineupFromImage(
+  festivalId: string,
+  imageBase64: string,
+  mediaType: string,
+): Promise<{ error?: string; batchId?: string; count?: number; esHorarioConTiempos?: boolean }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) return { error: 'No autorizado.' };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.functions.invoke<{
+    es_horario_con_tiempos: boolean;
+    dia_label: string | null;
+    bloques: {
+      escenario: string | null;
+      artista: string;
+      hora_inicio: string | null;
+      hora_fin: string | null;
+      confianza: string;
+      nota: string | null;
+    }[];
+    error?: string;
+  }>('extract-lineup-image', { body: { image_base64: imageBase64, media_type: mediaType } });
+
+  if (error) return { error: error.message };
+  if (data?.error) return { error: data.error };
+
+  const bloques = data?.bloques ?? [];
+  if (bloques.length === 0) {
+    return { error: 'No se detectó ningún artista en la imagen.', esHorarioConTiempos: data?.es_horario_con_tiempos };
+  }
+
+  const batchId = crypto.randomUUID();
+  const { error: insertError } = await supabase.from('festival_lineup_candidates').insert(
+    bloques.map((b) => ({
+      festival_id: festivalId,
+      batch_id: batchId,
+      dia_label: data?.dia_label ?? null,
+      escenario: b.escenario,
+      artista: b.artista,
+      hora_inicio: b.hora_inicio,
+      hora_fin: b.hora_fin,
+      confianza: (['alta', 'media', 'baja'].includes(b.confianza) ? b.confianza : 'baja') as
+        | 'alta'
+        | 'media'
+        | 'baja',
+      nota: b.nota,
+    })),
+  );
+
+  if (insertError) return { error: insertError.message };
+
+  revalidatePath(`/festivals/${festivalId}`);
+  return { batchId, count: bloques.length, esHorarioConTiempos: data?.es_horario_con_tiempos };
+}
+
+export async function approveLineupCandidate(
+  festivalId: string,
+  candidateId: string,
+  values: { artista: string; escenario: string | null; horario: string | null },
+): Promise<{ error?: string }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) return { error: 'No autorizado.' };
+
+  const artista = values.artista.trim();
+  if (!artista) return { error: 'Falta el nombre del artista.' };
+
+  const supabase = await createClient();
+  const { error: insertError } = await supabase.from('festival_lineup').insert({
+    festival_id: festivalId,
+    artista,
+    escenario: values.escenario?.trim() || null,
+    horario: values.horario || null,
+  });
+  if (insertError) return { error: insertError.message };
+
+  const { error: deleteError } = await supabase
+    .from('festival_lineup_candidates')
+    .delete()
+    .eq('id', candidateId);
+  if (deleteError) return { error: deleteError.message };
+
+  revalidatePath(`/festivals/${festivalId}`);
+  return {};
+}
+
+export async function discardLineupCandidate(
+  festivalId: string,
+  candidateId: string,
+): Promise<{ error?: string }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) return { error: 'No autorizado.' };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from('festival_lineup_candidates').delete().eq('id', candidateId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/festivals/${festivalId}`);
+  return {};
+}
+
+export async function discardLineupBatch(festivalId: string, batchId: string): Promise<{ error?: string }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) return { error: 'No autorizado.' };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from('festival_lineup_candidates').delete().eq('batch_id', batchId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/festivals/${festivalId}`);
+  return {};
+}
+
 // The image itself is uploaded client-side straight to Storage (see
 // map-uploader.tsx) — this action only persists the resulting public URL,
 // so it stays consistent with every other write in this app going through

@@ -204,6 +204,40 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['songs']['Row']>;
         Relationships: [];
       };
+      festival_lineup_candidates: {
+        Row: {
+          id: string;
+          festival_id: string;
+          batch_id: string;
+          dia_label: string | null;
+          escenario: string | null;
+          artista: string;
+          hora_inicio: string | null;
+          hora_fin: string | null;
+          confianza: string;
+          nota: string | null;
+          estado: string;
+          created_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['festival_lineup_candidates']['Row'],
+          'id' | 'created_at' | 'estado'
+        > & {
+          id?: string;
+          created_at?: string;
+          estado?: string;
+        };
+        Update: Partial<Database['public']['Tables']['festival_lineup_candidates']['Row']>;
+        Relationships: [
+          {
+            foreignKeyName: 'festival_lineup_candidates_festival_id_fkey';
+            columns: ['festival_id'];
+            isOneToOne: false;
+            referencedRelation: 'festivals';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       mood_catalog: {
         Row: { id: string; label: string; emoji: string; orden: number };
         Insert: Database['public']['Tables']['mood_catalog']['Row'];

@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 import { requireAdmin } from '@/lib/admin';
 import { createClient } from '@/lib/supabase/server';
 import { LineupImporter } from './lineup-importer';
+import { LineupImageImporter } from './lineup-image-importer';
+import type { LineupCandidate } from './actions';
 import { LinkBoletosForm } from './link-boletos-form';
 import { DeleteLineupRowButton } from './delete-lineup-row-button';
 import { AnnouncementForm } from './announcement-form';
@@ -63,6 +65,22 @@ export default async function FestivalDetailPage({
 
   const { data: sponsors } = await supabase.from('sponsors').select('nombre').order('nombre');
 
+  const { data: lineupCandidates } = await supabase
+    .from('festival_lineup_candidates')
+    .select('id, batch_id, dia_label, escenario, artista, hora_inicio, hora_fin, confianza, nota')
+    .eq('festival_id', id)
+    .order('created_at', { ascending: true });
+
+  const pendingByBatch = Object.values(
+    (lineupCandidates ?? []).reduce<
+      Record<string, { batchId: string; diaLabel: string | null; candidates: LineupCandidate[] }>
+    >((acc, c) => {
+      if (!acc[c.batch_id]) acc[c.batch_id] = { batchId: c.batch_id, diaLabel: c.dia_label, candidates: [] };
+      acc[c.batch_id].candidates.push(c);
+      return acc;
+    }, {}),
+  );
+
   const { data: mapPins } = await supabase
     .from('festival_map_pins')
     .select('id, escenario, x_pct, y_pct')
@@ -110,6 +128,14 @@ export default async function FestivalDetailPage({
         </ul>
 
         <LineupImporter festivalId={festival.id} />
+
+        <div className="mt-4">
+          <LineupImageImporter
+            festivalId={festival.id}
+            fechaInicio={festival.fecha_inicio}
+            pendingByBatch={pendingByBatch}
+          />
+        </div>
       </section>
 
       <section className="mt-8">
