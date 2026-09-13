@@ -116,7 +116,10 @@ Deno.serve(async (req: Request) => {
       },
       body: JSON.stringify({
         model: ANTHROPIC_MODEL,
-        max_tokens: 4096,
+        // Dense grids/posters can have 40-60+ blocks — 4096 was cutting the
+        // JSON off mid-string on real festival images (confirmed against
+        // Corona Capital/Tecate Pa'l Norte test images, see ESTADO.md).
+        max_tokens: 16000,
         messages: [
           {
             role: "user",

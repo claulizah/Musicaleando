@@ -1,8 +1,13 @@
 # Estado del proyecto — Musicaleando
 
-Última actualización: 2026-09-12 (sesión 21 — Red de conocidos + Squads por festival). Este
-archivo es el punto de partida para retomar el trabajo en una sesión nueva sin perder
-contexto.
+Última actualización: 2026-09-13 (sesión 22 — Importar horario desde imagen en el panel
+admin). Este archivo es el punto de partida para retomar el trabajo en una sesión nueva sin
+perder contexto.
+
+**Pausado indefinidamente por decisión explícita** (sesión 22, no tocar sin confirmación):
+Compañero ideal, Seguridad/ubicación en vivo, conexión en vivo Spotify/Apple Music OAuth. La
+Red de conocidos (Contacts) que se construyó en la sesión 21 **ya estaba completa y
+verificada antes de esta pausa** — no es trabajo a medias, ver sesión 21.
 
 **Estado en una línea**: Los 7 sprints numerados y las 3 piezas priorizadas del Backlog v2
 están completos (ver sesión 15); el checklist de lanzamiento quedó auditado a fondo (ver
@@ -2403,7 +2408,81 @@ disponible.
   `src/types/database.ts` (regenerado + `ContactStatus`).
 - Supabase: migraciones `contacts_red_de_conocidos` y `squads_por_festival`.
 
+## Sesión 22 (2026-09-13): Importar horario desde imagen en el panel admin — completo y verificado con 3 imágenes reales
+
+El prompt de esta sesión decía explícitamente que la bandeja de candidatos de Ticketmaster
+"ya estaba en progreso de otra sesión" — se verificó primero (`ESTADO.md`, código del panel
+admin, tabla `candidates` en la base) y **no existe en ningún lado**, igual que las
+discrepancias de sesiones anteriores. No se construyó (no era el foco de esta sesión, solo
+se documenta aquí para que la próxima sesión no vuelva a asumir que existe).
+
+### Qué se construyó
+
+- **Tabla `festival_lineup_candidates`** (migración `festival_lineup_candidates`):
+  `festival_id`, `batch_id` (agrupa los bloques de una misma imagen subida), `dia_label`,
+  `escenario`, `artista`, `hora_inicio`, `hora_fin` (texto tal como aparece en la imagen, sin
+  convertir a AM/PM), `confianza` (alta/media/baja), `nota`, `estado`
+  (pendiente/aprobado/descartado). RLS admin-only en las 4 operaciones — mismo patrón
+  `EXISTS (... is_admin)` que `mood_playlists`/`content_reports`.
+- **Edge Function `extract-lineup-image`** (nueva, desplegada): admin-only (mismo gate por
+  JWT que `lastfm-mood-sync`), recibe una imagen en base64 y la manda a la API de Anthropic
+  (`claude-sonnet-5`, confirmado el ID exacto con el skill `claude-api` antes de escribir
+  código — no se adivinó) con un prompt que pide JSON estructurado y **explícitamente prohíbe
+  inventar datos que no se puedan leer con confianza** (mismo principio que ya se usó en
+  Last.fm/candidatos de mood). No escribe nada a la base — solo devuelve la extracción, el
+  insert real como `pendiente` lo hace la server action del panel con la sesión del admin.
+- **Bug real encontrado y arreglado durante la prueba**: `max_tokens` estaba en 4096, muy
+  bajo para carteles con 50+ bloques — el JSON se cortaba a la mitad y el parseo fallaba
+  siempre (confirmado en `function_logs`: el JSON parcial capturado en el log es correcto y
+  se corta literalmente a la mitad de una palabra). Subido a 16000, las 3 pruebas pasaron
+  limpias después.
+- **Panel admin** (`festivals/[id]`): sección nueva "Importar horario desde imagen" —sube una
+  imagen, muestra los bloques extraídos agrupados por lote (una imagen = un lote, para
+  soportar festivales con horario por día sin que se mezclen entre subidas), cada bloque es
+  editable (artista, escenario, fecha, hora) antes de aprobar, con la confianza y nota de la
+  IA visibles. Aprobar un bloque lo inserta en `festival_lineup` real y borra el candidato;
+  descartar borra sin publicar (uno por uno o el lote completo).
+
+### Verificación real con las 3 imágenes que mandó el usuario (no simulada)
+
+Las imágenes llegaron pegadas en el chat, no como archivos — no hay forma de tomar contenido
+pegado en la conversación y pasárselo a una API externa desde una Edge Function, así que se
+le pidió explícitamente al usuario que las guardara como archivos reales en `Downloads`
+antes de poder probar. Con los archivos ya en disco, se creó una cuenta de prueba anónima
+desechable, se le dio `is_admin = true` temporalmente por SQL, se llamó la Edge Function
+real (no un mock) leyendo los 3 PNG del disco y codificándolos a base64:
+
+| Imagen | `es_horario_con_tiempos` | Bloques | Precisión (comparado artista por artista contra la imagen) |
+|---|---|---|---|
+| Corona Capital cartel general (solo nombres agrupados por día, sin grid de horarios) | `false` (correcto) | 71/71 artistas | Exacta — el caso límite "esto no es un horario" funcionó como se esperaba, sin inventar horarios que no existen en la imagen. |
+| Tecate Pa'l Norte, Viernes 4 (grid real de 8 escenarios) | `true` | 57 bloques | Coincide hora por hora contra la imagen. Un nombre estilizado ("Ca7riel & Paco Amoroso") se leyó como "Cazriel & Paco Amoroso" con confianza **media** y nota explícita de que no estaba claro — comportamiento correcto, no lo marcó como seguro. |
+| Corona Capital, Domingo 16 (grid real de 5 escenarios) | `true` | 23 bloques | Coincide. Manejó bien las celdas que visualmente cruzan dos columnas del grid (ej. Deftones/Of Monsters and Men comparten un bloque de horario) separándolas en dos filas con confianza **media** y nota "inferida por posición" en vez de fingir certeza. |
+
+**Hallazgo a vigilar, no bloqueante**: en el grid de Tecate, "Julian Casablancas" salió como
+"Jullian Cartablancas" marcado con confianza **alta** — un posible error de lectura real que
+el modelo no detectó como dudoso. La curación manual (el curador revisa cada bloque antes de
+aprobar) es la red de seguridad para esto, tal como está diseñado el flujo — pero confirma
+que "confianza alta" es la propia autoevaluación del modelo, no una garantía absoluta.
+
+**Limpieza**: la cuenta de prueba se borró (`auth.users` de vuelta a 6) — como la prueba
+llamó la Edge Function directo (no la server action del panel), no se insertó ningún
+`festival_lineup_candidates` de prueba que limpiar; nunca se tocó `festival_lineup` real.
+
+### Archivos nuevos/cambiados
+
+- Admin: `admin/src/app/festivals/[id]/lineup-image-importer.tsx` (nuevo),
+  `admin/src/app/festivals/[id]/actions.ts` (+`extractLineupFromImage`,
+  `approveLineupCandidate`, `discardLineupCandidate`, `discardLineupBatch`),
+  `admin/src/app/festivals/[id]/page.tsx` (carga y agrupa candidatos pendientes),
+  `admin/src/lib/database.types.ts` (+`festival_lineup_candidates`).
+- Supabase: migración `festival_lineup_candidates`, Edge Function `extract-lineup-image`.
+
 ## Pendiente
+
+- **Importar horario desde imagen (sesión 22)**: funciona y quedó verificado con las 3
+  imágenes reales — no hay pendiente de código. Sí queda pendiente construir la bandeja de
+  candidatos de Ticketmaster que el spec describe (nunca se empezó, ver arriba) si se
+  retoma ese foco.
 
 - **Red de conocidos + Squads por festival (sesión 21)**: falta verificar visualmente en un
   dispositivo real (buscar/solicitar/aceptar conocidos, tarjeta Compañero ideal, banner de
