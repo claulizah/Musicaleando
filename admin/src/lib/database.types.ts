@@ -246,6 +246,59 @@ export type Database = {
           },
         ];
       };
+      event_candidates: {
+        Row: {
+          id: string;
+          source: string;
+          source_id: string;
+          nombre: string;
+          ciudad: string | null;
+          venue: string | null;
+          fecha_inicio: string | null;
+          fecha_fin: string | null;
+          lineup: string[];
+          price_min: number | null;
+          price_max: number | null;
+          price_currency: string | null;
+          link_boletos: string | null;
+          raw_payload: Record<string, unknown>;
+          completo: boolean;
+          estado: string;
+          possible_duplicate_of: string | null;
+          festival_id: string | null;
+          created_at: string;
+          updated_at: string;
+          last_seen_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['event_candidates']['Row'],
+          'id' | 'created_at' | 'updated_at' | 'last_seen_at' | 'estado' | 'completo'
+        > & {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+          last_seen_at?: string;
+          estado?: string;
+          completo?: boolean;
+        };
+        Update: Partial<Database['public']['Tables']['event_candidates']['Row']>;
+        Relationships: [
+          {
+            foreignKeyName: 'event_candidates_possible_duplicate_of_fkey';
+            columns: ['possible_duplicate_of'];
+            isOneToOne: false;
+            referencedRelation: 'festivals';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'event_candidates_festival_id_fkey';
+            columns: ['festival_id'];
+            isOneToOne: false;
+            referencedRelation: 'festivals';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       mood_catalog: {
         Row: { id: string; label: string; emoji: string; orden: number };
         Insert: Database['public']['Tables']['mood_catalog']['Row'];
