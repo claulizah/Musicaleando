@@ -31,6 +31,7 @@ import { CommunityTrendsScreen } from './src/screens/main/CommunityTrendsScreen'
 import { ConcertAlbumScreen } from './src/screens/main/ConcertAlbumScreen';
 import { RecapScreen } from './src/screens/main/RecapScreen';
 import { ContactsScreen } from './src/screens/main/ContactsScreen';
+import { SettingsScreen } from './src/screens/main/SettingsScreen';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -126,6 +127,7 @@ function App() {
           <Stack.Screen name="ConcertAlbum" component={ConcertAlbumScreen} />
           <Stack.Screen name="Recap" component={RecapScreen} />
           <Stack.Screen name="Contacts" component={ContactsScreen} />
+          <Stack.Screen name="Settings" component={SettingsScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </GestureHandlerRootView>

@@ -14,4 +14,5 @@ export type RootStackParamList = {
   ConcertAlbum: undefined;
   Recap: undefined;
   Contacts: undefined;
+  Settings: undefined;
 };

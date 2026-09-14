@@ -1,12 +1,17 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-const PUBLIC_PATHS = ['/login', '/signup', '/forgot-password', '/reset-password'];
+// '/' is the exact-match public marketing landing (see app/page.tsx) — the
+// admin dashboard itself lives at '/admin'. Exact-match it separately below
+// since `pathname.startsWith('/')` would otherwise match every route.
+const PUBLIC_EXACT_PATHS = ['/'];
+const PUBLIC_PREFIX_PATHS = ['/login', '/signup', '/forgot-password', '/reset-password', '/privacidad', '/terminos'];
 // A password-recovery link logs the visitor in via a short-lived recovery
 // session before they've set a new password — unlike /login or /signup,
 // being authenticated here is the expected state, not a reason to bounce
-// them to '/'.
-const SKIP_LOGGED_IN_REDIRECT = ['/reset-password'];
+// them away. Same for the public marketing/legal pages — a logged-in admin
+// browsing them isn't a reason to redirect either.
+const SKIP_LOGGED_IN_REDIRECT = ['/reset-password', '/', '/privacidad', '/terminos'];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -34,7 +39,9 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isPublicPath = PUBLIC_PATHS.some((p) => request.nextUrl.pathname.startsWith(p));
+  const pathname = request.nextUrl.pathname;
+  const isPublicPath =
+    PUBLIC_EXACT_PATHS.includes(pathname) || PUBLIC_PREFIX_PATHS.some((p) => pathname.startsWith(p));
 
   if (!user && !isPublicPath) {
     const url = request.nextUrl.clone();
@@ -42,11 +49,13 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  const skipLoggedInRedirect = SKIP_LOGGED_IN_REDIRECT.some((p) => request.nextUrl.pathname.startsWith(p));
+  const skipLoggedInRedirect = SKIP_LOGGED_IN_REDIRECT.some(
+    (p) => pathname === p || (p !== '/' && pathname.startsWith(p)),
+  );
 
   if (user && isPublicPath && !skipLoggedInRedirect) {
     const url = request.nextUrl.clone();
-    url.pathname = '/';
+    url.pathname = '/admin';
     return NextResponse.redirect(url);
   }
 

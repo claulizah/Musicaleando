@@ -24,7 +24,7 @@ export default async function SponsorsPage() {
     <main className="mx-auto max-w-lg px-4 py-10">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Patrocinadores</h1>
-        <Link href="/" className="text-sm underline">
+        <Link href="/admin" className="text-sm underline">
           ← Festivales
         </Link>
       </div>

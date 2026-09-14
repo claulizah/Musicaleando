@@ -34,7 +34,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full flex flex-col bg-gray-50 text-gray-900">
         {user && (
           <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-3">
-            <Link href="/" className="font-semibold">
+            <Link href="/admin" className="font-semibold">
               Musicaleando admin
             </Link>
             <div className="flex items-center gap-4 text-sm text-gray-500">

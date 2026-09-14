@@ -1,9 +1,13 @@
 'use client';
 
-import { useActionState, useState } from 'react';
-import { createAnnouncement } from './actions';
+import { useActionState, useState, useTransition } from 'react';
+import { createAnnouncement, estimateSegmentAudience } from './actions';
 
 const initialState = { error: '' };
+
+// Mismo orden de géneros que usa el perfil musical en la app (src/lib/compat.ts)
+// — mantener sincronizado si esa lista cambia.
+const GENEROS = ['rock', 'electronica', 'pop', 'latin', 'indie', 'lofi', 'jazz', 'metal'];
 
 export function AnnouncementForm({
   festivalId,
@@ -13,6 +17,10 @@ export function AnnouncementForm({
   sponsorNames: string[];
 }) {
   const [tipo, setTipo] = useState<'simple' | 'rifa' | 'descuento'>('simple');
+  const [targetCiudad, setTargetCiudad] = useState('');
+  const [targetGenero, setTargetGenero] = useState('');
+  const [audience, setAudience] = useState<number | null>(null);
+  const [estimating, startEstimating] = useTransition();
   const [state, formAction, pending] = useActionState(
     async (_: typeof initialState, formData: FormData) => {
       const result = await createAnnouncement(festivalId, formData);
@@ -20,6 +28,13 @@ export function AnnouncementForm({
     },
     initialState,
   );
+
+  const handleEstimate = () => {
+    startEstimating(async () => {
+      const res = await estimateSegmentAudience(targetCiudad, targetGenero);
+      setAudience(res.count ?? null);
+    });
+  };
 
   return (
     <form action={formAction} className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-white p-4">
@@ -64,6 +79,58 @@ export function AnnouncementForm({
           <input name="codigo_descuento" className="rounded-md border border-gray-300 px-3 py-2" />
         </label>
       )}
+
+      <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
+        <p className="text-xs font-medium text-gray-600">
+          Segmentar audiencia (opcional) — deja vacío para mostrar a todos
+        </p>
+        <div className="mt-2 flex gap-2">
+          <input
+            name="target_ciudad"
+            value={targetCiudad}
+            onChange={(e) => {
+              setTargetCiudad(e.target.value);
+              setAudience(null);
+            }}
+            placeholder="Ciudad (ej. Ciudad de México)"
+            className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm"
+          />
+          <select
+            name="target_genero"
+            value={targetGenero}
+            onChange={(e) => {
+              setTargetGenero(e.target.value);
+              setAudience(null);
+            }}
+            className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+          >
+            <option value="">Cualquier género</option>
+            {GENEROS.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
+          </select>
+        </div>
+        {(targetCiudad || targetGenero) && (
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleEstimate}
+              disabled={estimating}
+              className="text-xs underline disabled:opacity-50"
+            >
+              {estimating ? 'Calculando…' : 'Estimar alcance'}
+            </button>
+            {audience !== null && (
+              <span className={`text-xs ${audience < 30 ? 'text-red-600' : 'text-gray-500'}`}>
+                {audience} usuarios{audience < 30 ? ' — por debajo del mínimo de 30, no se podrá publicar' : ''}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
       {state.error && <p className="text-sm text-red-600">{state.error}</p>}
       <button
         type="submit"

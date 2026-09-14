@@ -23,5 +23,5 @@ export async function signup(
     };
   }
 
-  redirect('/');
+  redirect('/admin');
 }

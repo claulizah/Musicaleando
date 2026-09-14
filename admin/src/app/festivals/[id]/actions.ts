@@ -73,6 +73,28 @@ export async function deleteLineupRow(festivalId: string, rowId: string): Promis
   return {};
 }
 
+// Mínimo de agregación ya definido en el spec para cualquier reporte/segmento
+// vendible a patrocinadores (alineado con LFPDPPP) — se reutiliza aquí como
+// piso para publicar un anuncio segmentado, no solo para reportes.
+const MIN_SEGMENT_SIZE = 30;
+
+export async function estimateSegmentAudience(
+  ciudad: string,
+  genero: string,
+): Promise<{ error?: string; count?: number }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) return { error: 'No autorizado.' };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('count_segment_audience', {
+    p_ciudad: ciudad.trim() || null,
+    p_genero: genero.trim() || null,
+  });
+
+  if (error) return { error: error.message };
+  return { count: data ?? 0 };
+}
+
 export async function createAnnouncement(
   festivalId: string,
   formData: FormData,
@@ -85,6 +107,8 @@ export async function createAnnouncement(
   const descripcion = String(formData.get('descripcion') ?? '').trim() || null;
   const sponsor_nombre = String(formData.get('sponsor_nombre') ?? '').trim() || null;
   const codigo_descuento = String(formData.get('codigo_descuento') ?? '').trim() || null;
+  const target_ciudad = String(formData.get('target_ciudad') ?? '').trim() || null;
+  const target_genero = String(formData.get('target_genero') ?? '').trim() || null;
 
   if (!['simple', 'rifa', 'descuento'].includes(tipo)) {
     return { error: 'Tipo de anuncio inválido.' };
@@ -92,6 +116,22 @@ export async function createAnnouncement(
   if (!titulo) return { error: 'El anuncio necesita un título.' };
 
   const supabase = await createClient();
+
+  // Un anuncio sin ciudad/género es para toda la audiencia — el mínimo de
+  // agregación solo aplica cuando de verdad se está acotando un segmento.
+  if (target_ciudad || target_genero) {
+    const { data: audienceCount, error: countError } = await supabase.rpc('count_segment_audience', {
+      p_ciudad: target_ciudad,
+      p_genero: target_genero,
+    });
+    if (countError) return { error: countError.message };
+    if ((audienceCount ?? 0) < MIN_SEGMENT_SIZE) {
+      return {
+        error: `Este segmento tiene solo ${audienceCount ?? 0} usuarios — el mínimo para publicar un anuncio acotado es ${MIN_SEGMENT_SIZE}. Amplía el segmento o quita el filtro.`,
+      };
+    }
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -104,6 +144,8 @@ export async function createAnnouncement(
     sponsor_nombre,
     codigo_descuento: tipo === 'descuento' ? codigo_descuento : null,
     created_by: user?.id ?? null,
+    target_ciudad,
+    target_genero,
   });
 
   if (error) return { error: error.message };

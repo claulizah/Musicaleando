@@ -154,7 +154,7 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
       return;
     }
 
-    const { data: announcementRows, error: announcementErr } = await supabase
+    const { data: rawAnnouncementRows, error: announcementErr } = await supabase
       .from('announcements')
       .select('*')
       .in('festival_id', festivalIds)
@@ -165,7 +165,25 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
       return;
     }
 
-    const announcementIds = (announcementRows ?? []).map((a) => a.id);
+    // Segmentación básica: un anuncio con target_ciudad/target_genero solo
+    // se muestra a quien califica — el filtro real (mínimo de agregación)
+    // ya se aplicó al publicarlo desde el panel admin, esto es solo "¿me
+    // toca verlo a mí?". Own row reads only (RLS select-own), nunca se leen
+    // otros usuarios aquí.
+    const [{ data: myUserRow }, { data: myProfileRow }] = await Promise.all([
+      supabase.from('users').select('ciudad').eq('id', userId).maybeSingle(),
+      supabase.from('music_profile').select('generos').eq('user_id', userId).maybeSingle(),
+    ]);
+    const myCiudad = myUserRow?.ciudad ?? null;
+    const myGeneros = (myProfileRow?.generos as string[] | null) ?? [];
+
+    const announcementRows = (rawAnnouncementRows ?? []).filter((a) => {
+      if (a.target_ciudad && a.target_ciudad !== myCiudad) return false;
+      if (a.target_genero && !myGeneros.includes(a.target_genero)) return false;
+      return true;
+    });
+
+    const announcementIds = announcementRows.map((a) => a.id);
     const { data: interestRows, error: interestErr } =
       announcementIds.length > 0
         ? await supabase.from('announcement_interest').select('*').in('announcement_id', announcementIds)

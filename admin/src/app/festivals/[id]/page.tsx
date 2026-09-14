@@ -51,7 +51,7 @@ export default async function FestivalDetailPage({
   const { data: announcements } = await supabase
     .from('announcements')
     .select(
-      'id, tipo, titulo, descripcion, sponsor_nombre, codigo_descuento, created_at, ganador_user_id, ganador_nombre',
+      'id, tipo, titulo, descripcion, sponsor_nombre, codigo_descuento, created_at, ganador_user_id, ganador_nombre, target_ciudad, target_genero',
     )
     .eq('festival_id', id)
     .order('created_at', { ascending: false });
@@ -163,6 +163,8 @@ export default async function FestivalDetailPage({
                     {a.sponsor_nombre && `${a.sponsor_nombre} · `}
                     {a.tipo === 'descuento' && a.codigo_descuento && `código: ${a.codigo_descuento} · `}
                     {interest} interesado{interest === 1 ? '' : 's'}
+                    {(a.target_ciudad || a.target_genero) &&
+                      ` · segmentado: ${[a.target_ciudad, a.target_genero].filter(Boolean).join(' · ')}`}
                   </p>
                   {a.tipo === 'rifa' && (
                     a.ganador_nombre ? (

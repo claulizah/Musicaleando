@@ -14,5 +14,5 @@ export async function login(formData: FormData): Promise<{ error: string } | nev
     return { error: error.message };
   }
 
-  redirect('/');
+  redirect('/admin');
 }

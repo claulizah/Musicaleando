@@ -17,6 +17,10 @@ export type Database = {
         Args: Record<string, never>;
         Returns: number;
       };
+      count_segment_audience: {
+        Args: { p_ciudad: string | null; p_genero: string | null };
+        Returns: number;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
@@ -120,15 +124,19 @@ export type Database = {
           created_at: string;
           ganador_user_id: string | null;
           ganador_nombre: string | null;
+          target_ciudad: string | null;
+          target_genero: string | null;
         };
         Insert: Omit<
           Database['public']['Tables']['announcements']['Row'],
-          'id' | 'created_at' | 'ganador_user_id' | 'ganador_nombre'
+          'id' | 'created_at' | 'ganador_user_id' | 'ganador_nombre' | 'target_ciudad' | 'target_genero'
         > & {
           id?: string;
           created_at?: string;
           ganador_user_id?: string | null;
           ganador_nombre?: string | null;
+          target_ciudad?: string | null;
+          target_genero?: string | null;
         };
         Update: Partial<Database['public']['Tables']['announcements']['Row']>;
         Relationships: [

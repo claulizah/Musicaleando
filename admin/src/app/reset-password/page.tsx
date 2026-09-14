@@ -59,7 +59,7 @@ export default function ResetPasswordPage() {
       setError(updateError.message);
       return;
     }
-    router.push('/');
+    router.push('/admin');
   };
 
   return (

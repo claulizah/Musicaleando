@@ -8,9 +8,13 @@
     "userInterfaceStyle": "dark",
     "backgroundColor": "#14111F",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.musicaleando.app",
+      "buildNumber": "1"
     },
     "android": {
+      "package": "com.musicaleando.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#14111F",
         "foregroundImage": "./assets/android-icon-foreground.png",

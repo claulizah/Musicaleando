@@ -1,13 +1,16 @@
 # Estado del proyecto — Musicaleando
 
-Última actualización: 2026-09-13 (sesión 22 — Importar horario desde imagen en el panel
-admin). Este archivo es el punto de partida para retomar el trabajo en una sesión nueva sin
+Última actualización: 2026-09-13 (sesión 23, en curso — cerrar alcance V1 para Android +
+iOS). Este archivo es el punto de partida para retomar el trabajo en una sesión nueva sin
 perder contexto.
 
-**Pausado indefinidamente por decisión explícita** (sesión 22, no tocar sin confirmación):
-Compañero ideal, Seguridad/ubicación en vivo, conexión en vivo Spotify/Apple Music OAuth. La
-Red de conocidos (Contacts) que se construyó en la sesión 21 **ya estaba completa y
-verificada antes de esta pausa** — no es trabajo a medias, ver sesión 21.
+**Pausado indefinidamente por decisión explícita** (sesión 22/23, no tocar sin confirmación):
+Compañero ideal, Seguridad/ubicación en vivo, conexión en vivo Spotify/Apple Music OAuth,
+bandeja unificada de candidatos (V2), formulario público `/publicar-evento`, Red de
+conocidos/rediseño de Squads más allá de lo ya construido en sesión 21, todo el Backlog v2,
+gamificación de Sprint 7 más allá de lo ya construido. La Red de conocidos (Contacts) que se
+construyó en la sesión 21 **ya estaba completa y verificada antes de esta pausa** — no es
+trabajo a medias, ver sesión 21.
 
 **Estado en una línea**: Los 7 sprints numerados y las 3 piezas priorizadas del Backlog v2
 están completos (ver sesión 15); el checklist de lanzamiento quedó auditado a fondo (ver
@@ -2476,6 +2479,95 @@ llamó la Edge Function directo (no la server action del panel), no se insertó 
   `admin/src/app/festivals/[id]/page.tsx` (carga y agrupa candidatos pendientes),
   `admin/src/lib/database.types.ts` (+`festival_lineup_candidates`).
 - Supabase: migración `festival_lineup_candidates`, Edge Function `extract-lineup-image`.
+
+## Sesión 23 (2026-09-13, en curso): cerrar alcance V1 para Android + iOS
+
+### Auditoría inicial contra el alcance de V1 (antes de escribir código)
+
+No se asumió nada completado — se revisó `ESTADO.md` y el código real punto por punto:
+
+| Punto de V1 | Estado antes de esta sesión |
+|---|---|
+| Perfil musical express (10 preguntas + arquetipo + Torneo) | ✅ Hecho |
+| Mood del día | ✅ Hecho (sesión 20) |
+| Música Trends | ✅ Hecho |
+| Squads básicos + Festival Hub | ✅ Hecho (squads ahora por festival, sesión 21) |
+| Catálogo real — candidatos Ticketmaster | ❌ Sin empezar (confirmado de nuevo, ver sesión 22) |
+| Importar horario desde imagen | ✅ Hecho (sesión 22) |
+| Panel admin (alta manual + CSV + revisión candidatos) | 🟡 A medias — falta la mitad de Ticketmaster |
+| Segmentación de audiencia (ciudad/género, mínimo 30-50) | ❌ Sin empezar |
+| Sitio público mínimo (landing, /privacidad, /terminos) | ❌ Sin empezar |
+| `eas.json`/`app.json` con identificadores definitivos | ❌ `eas.json` no existía; `app.json` sin `bundleIdentifier` ni `package` |
+| Login solo email/contraseña (sin requisito de Sign in with Apple) | ✅ Confirmado — cero dependencias de login social instaladas |
+| Moderación (reportar + ocultar) | ✅ Hecho (sesión 12) |
+
+### Construido esta sesión (en orden)
+
+**1. Configuración de build para ambas tiendas** — bundle identifier y package
+name definitivos confirmados explícitamente con el usuario (no se inventaron): **`com.musicaleando.app`**
+para ambas plataformas. `app.json`: agregado `ios.bundleIdentifier`, `ios.buildNumber: "1"`,
+`android.package`, `android.versionCode: 1`. `eas.json` nuevo desde cero con perfiles
+`development`/`preview`/`production` para Android (apk en preview, app-bundle en production)
+e iOS. **Pendiente real, no es trabajo de código**: no existe proyecto EAS todavía (`eas
+whoami` sin CLI instalado) — hace falta que Claudia corra `eas init` con su propia cuenta de
+Expo para que se genere `extra.eas.projectId` en `app.json`; no es algo que yo pueda hacer
+por ella (requiere su login). Tampoco se verificó que los tamaños exactos de ícono/splash
+cumplan los píxeles exactos que exige cada tienda (Apple es estricto) — queda como pendiente
+de revisión dedicada, no se asumió que están bien.
+
+**2. Sitio público mínimo** (`admin` es el mismo portal Next.js que sirve musicaleando.com):
+el dashboard de administración se movió de `/` a `/admin` (necesitaba dejar `/` libre para
+una landing real). `/` ahora es una landing pública simple con la propuesta de valor y links
+a `/privacidad` y `/terminos` (ambas nuevas, estructura estándar con secciones marcadas
+explícitamente como **borrador pendiente de redacción legal final** — el placeholder técnico
+es mío, el copy legal no, tal como pedía el prompt). `proxy.ts` (middleware de auth) tenía un
+bug latente que se arregló de paso: `pathname.startsWith(p)` con `p = '/'` habría sido
+`true` para *cualquier* ruta — nunca se disparó porque `/` nunca había estado en
+`PUBLIC_PATHS` hasta ahora; se separó en exact-match para `/` y prefix-match para el resto.
+Verificado en navegador: `/`, `/privacidad`, `/terminos` → 200 sin sesión; `/admin` → 307 a
+`/login` sin sesión, como debe ser. **`/privacidad` se reemplazó después con el copy final
+real que dio el usuario** (aviso conforme a LFPDPPP, 9 secciones) — los campos que dependen
+de entidad legal/RFC y correo de contacto se dejaron como `[PLACEHOLDER]` resaltados en
+ámbar, sin inventar ningún valor. **`/terminos` recibió el mismo tratamiento después**, con su
+propio copy final real (12 secciones) — el texto original traía un link externo roto a
+`https://claude.ai/privacidad` (artefacto de dónde se redactó el documento), corregido a un
+link interno real hacia `/privacidad`. Ambas páginas verificadas renderizando en el navegador.
+**La landing en `/` también se reemplazó con el copy final real** que dio el usuario (hero,
+4 tarjetas de features, sección para marcas/patrocinadores, footer) — botones de tienda como
+placeholders deshabilitados con tooltip "Próximamente" (no había ficha publicada, tal como
+pedían las notas de implementación) en vez de links rotos; el CTA de contacto a
+patrocinadores quedó como texto con `[PLACEHOLDER]` en vez de un `mailto:` roto con el
+placeholder literal como dirección.
+
+**3. Segmentación básica de audiencia para anuncios**: migración `announcement_audience_segmentation`
+agrega `announcements.target_ciudad`/`target_genero` y la función `count_segment_audience`
+(SECURITY DEFINER, admin-only, cuenta usuarios que matchean sin exponer ninguna fila
+individual — el patrocinador solo ve el número). "Género dominante" se define pragmáticamente
+como "el usuario tiene ese género en `music_profile.generos`" (no existe un campo de
+ranking/peso por género en el perfil real; se documenta aquí la decisión por si se refina
+después). `createAnnouncement` bloquea la publicación si el segmento resultante tiene menos
+de 30 usuarios — mismo mínimo de agregación ya definido en el spec para reportes. El panel
+admin (`AnnouncementForm`) tiene un botón "Estimar alcance" antes de publicar. **La app móvil
+también filtra**: `useFestivalStore.fetch` ahora lee la ciudad y géneros propios del usuario
+(lecturas RLS select-own, nunca de otros) y oculta anuncios cuya segmentación no matchea —
+sin este filtro del lado de la app, la segmentación del admin no habría tenido ningún efecto
+real para el usuario final.
+
+**Verificado con cuentas de prueba reales** (4 cuentas anónimas desechables, una con
+`is_admin` temporal): usuario no-admin intentando `count_segment_audience` → error "Solo
+administradores" (confirmado); conteo de segmento por ciudad → 2 (los 2 usuarios de prueba
+en esa ciudad, ni más ni menos); conteo cruzando ciudad+género → 2; conteo de un cruce sin
+coincidencias → 0; insert de un anuncio segmentado real → exitoso. Las 4 cuentas y el anuncio
+de prueba se borraron al terminar (`public.users` de vuelta a 6).
+
+### Pendiente dentro de esta misma sesión (no se ha construido todavía)
+
+- **Catálogo real — candidatos Ticketmaster**: es la pieza más grande que falta de V1. Antes
+  de construirla hace falta pedirle a Claudia una API key de Ticketmaster Discovery API v2
+  (gratuita, self-serve) — mismo patrón que Last.fm/Anthropic esta sesión no la ha pedido
+  todavía porque se priorizó primero lo que no dependía de credenciales externas.
+- Verificación visual en dispositivo real de todo lo de esta sesión — sin emulador/teléfono
+  disponible.
 
 ## Pendiente
 

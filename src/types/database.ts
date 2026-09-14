@@ -61,6 +61,8 @@ export type Database = {
           ganador_user_id: string | null
           id: string
           sponsor_nombre: string | null
+          target_ciudad: string | null
+          target_genero: string | null
           tipo: string
           titulo: string
         }
@@ -74,6 +76,8 @@ export type Database = {
           ganador_user_id?: string | null
           id?: string
           sponsor_nombre?: string | null
+          target_ciudad?: string | null
+          target_genero?: string | null
           tipo: string
           titulo: string
         }
@@ -87,6 +91,8 @@ export type Database = {
           ganador_user_id?: string | null
           id?: string
           sponsor_nombre?: string | null
+          target_ciudad?: string | null
+          target_genero?: string | null
           tipo?: string
           titulo?: string
         }
@@ -1236,6 +1242,10 @@ export type Database = {
           contact_user_id: string
           nombre: string
         }[]
+      }
+      count_segment_audience: {
+        Args: { p_ciudad: string; p_genero: string }
+        Returns: number
       }
       contacts_feed: {
         Args: never

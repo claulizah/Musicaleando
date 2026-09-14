@@ -174,7 +174,9 @@ export function ProfileScreen({ navigation }: Props) {
             <Text style={styles.back}>‹</Text>
           </Pressable>
           <Text style={styles.headerTitle}>Tu perfil musical</Text>
-          <View style={styles.headerSpacer} />
+          <Pressable hitSlop={12} onPress={() => navigation.navigate('Settings')}>
+            <Text style={styles.settingsIcon}>⚙️</Text>
+          </Pressable>
         </View>
 
         <ArchetypeCard
@@ -354,8 +356,10 @@ const styles = StyleSheet.create({
     ...type.h2,
     color: colors.textPrimary,
   },
-  headerSpacer: {
+  settingsIcon: {
+    fontSize: 20,
     width: 32,
+    textAlign: 'right',
   },
   section: {
     gap: spacing.sm,
