@@ -6,10 +6,9 @@ export const metadata: Metadata = {
   description: 'Términos y condiciones de uso de la aplicación Musicaleando.',
 };
 
-// Contenido final de producto (no un placeholder técnico) — provisto
-// completo salvo los campos [PLACEHOLDER] que dependen de entidad
-// legal/RFC, edad mínima y correo de contacto definitivos. No reemplazar
-// esos marcadores con valores inventados; solo Claudia los completa.
+// Contenido final de producto (no un placeholder técnico). Todos los datos
+// legales/de contacto ya están llenos salvo la ruta de eliminar cuenta,
+// pendiente a propósito hasta que esa función exista en producción.
 // Nota: el texto original traía un link externo roto a
 // "https://claude.ai/privacidad" (artefacto de dónde se redactó) — se
 // corrigió a un link interno real hacia /privacidad.
@@ -18,18 +17,15 @@ export default function TerminosPage() {
     <main className="mx-auto max-w-2xl px-4 py-16 text-sm leading-relaxed text-gray-700">
       <h1 className="text-2xl font-semibold text-gray-900">Términos y Condiciones — Musicaleando</h1>
       <p className="mt-1 text-gray-500">
-        Última actualización: <span className="text-amber-600">[PLACEHOLDER: fecha de publicación]</span>
+        Última actualización: 14 de septiembre de 2026
       </p>
 
       <div className="mt-8 flex flex-col gap-6">
         <section>
           <h2 className="font-medium text-gray-900">1. Aceptación de los términos</h2>
           <p className="mt-1">
-            Al crear una cuenta o usar Musicaleando (&quot;la App&quot;), operada por{' '}
-            <span className="text-amber-600">
-              [PLACEHOLDER: nombre de la persona física o razón social]
-            </span>
-            , aceptas estos Términos y Condiciones y nuestro{' '}
+            Al crear una cuenta o usar Musicaleando (&quot;la App&quot;), operada por Claudia
+            Acosta Hernández, aceptas estos Términos y Condiciones y nuestro{' '}
             <Link href="/privacidad" className="underline">
               Aviso de Privacidad
             </Link>
@@ -51,11 +47,7 @@ export default function TerminosPage() {
           <h2 className="font-medium text-gray-900">3. Requisitos para usar la App</h2>
           <ul className="mt-2 list-disc pl-5">
             <li>
-              Debes contar con al menos{' '}
-              <span className="text-amber-600">
-                [PLACEHOLDER: edad mínima, ej. 13 o 18 años según decisión de producto]
-              </span>{' '}
-              años para crear una cuenta.
+              Debes contar con al menos 18 años para crear una cuenta.
             </li>
             <li>
               Eres responsable de mantener la confidencialidad de tu contraseña y de toda
@@ -130,11 +122,8 @@ export default function TerminosPage() {
         <section>
           <h2 className="font-medium text-gray-900">7. Propiedad intelectual</h2>
           <p className="mt-1">
-            El contenido, marca, logotipos y diseño de Musicaleando son propiedad de{' '}
-            <span className="text-amber-600">
-              [PLACEHOLDER: nombre de la persona física o razón social]
-            </span>{' '}
-            o de sus licenciantes. El contenido que tú publiques (como tu mood del día) sigue
+            El contenido, marca, logotipos y diseño de Musicaleando son propiedad de Claudia
+            Acosta Hernández o de sus licenciantes. El contenido que tú publiques (como tu mood del día) sigue
             siendo tuyo, pero nos otorgas una licencia limitada para mostrarlo dentro de la App
             conforme a su funcionalidad normal.
           </p>
@@ -157,8 +146,8 @@ export default function TerminosPage() {
             Podemos suspender o cancelar tu cuenta si violas estos términos. Tú puedes eliminar
             tu cuenta en cualquier momento desde{' '}
             <span className="text-amber-600">
-              [PLACEHOLDER: ruta/menú de eliminar cuenta, o &quot;escribiéndonos a [correo]&quot;
-              si aún no existe la opción en la app]
+              [PENDIENTE: se documentará una vez publicada la pantalla de Configuración/Cuenta con
+              la opción de eliminar cuenta]
             </span>
             .
           </p>
@@ -184,7 +173,10 @@ export default function TerminosPage() {
           <h2 className="font-medium text-gray-900">12. Contacto</h2>
           <p className="mt-1">
             Dudas sobre estos términos:{' '}
-            <span className="text-amber-600">[PLACEHOLDER: correo de contacto]</span>.
+            <a href="mailto:clauliz.acosta@gmail.com" className="underline">
+              clauliz.acosta@gmail.com
+            </a>
+            .
           </p>
         </section>
       </div>

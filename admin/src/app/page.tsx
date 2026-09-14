@@ -89,16 +89,14 @@ export default function LandingPage() {
           anuncios segmentados por ciudad o por género musical — siempre con reportes agregados
           y anónimos. Nunca compartimos listas de usuarios ni datos individuales.
         </p>
-        {/* mailto real pendiente de correo de contacto definitivo — un href
-            con el placeholder literal produciría un link roto */}
         <p className="mt-6 inline-block rounded-md bg-white px-5 py-2 text-sm font-medium text-gray-900">
-          Contáctanos: <span className="text-amber-600">[PLACEHOLDER: correo de contacto para patrocinadores]</span>
+          Contáctanos: <a href="mailto:clauliz.acosta@gmail.com" className="underline">clauliz.acosta@gmail.com</a>
         </p>
       </section>
 
       {/* Footer */}
       <footer className="flex flex-col items-center gap-3 border-t border-gray-200 pt-8 text-sm text-gray-500">
-        <p className="font-medium text-gray-700">[PLACEHOLDER: logo/nombre de marca]</p>
+        <p className="font-medium text-gray-700">Musicaleando</p>
         <div className="flex gap-4">
           <Link href="/privacidad" className="underline">
             Aviso de Privacidad
@@ -110,8 +108,8 @@ export default function LandingPage() {
             Panel de administración
           </Link>
         </div>
-        <p>[PLACEHOLDER: correo de contacto general]</p>
-        <p>© [PLACEHOLDER: año] Musicaleando. Todos los derechos reservados.</p>
+        <p><a href="mailto:clauliz.acosta@gmail.com" className="underline">clauliz.acosta@gmail.com</a></p>
+        <p>© {new Date().getFullYear()} Musicaleando. Todos los derechos reservados.</p>
       </footer>
     </main>
   );

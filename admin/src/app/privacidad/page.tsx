@@ -6,31 +6,26 @@ export const metadata: Metadata = {
   description: 'Cómo Musicaleando recaba, usa y protege tus datos personales.',
 };
 
-// Contenido final de producto (no un placeholder técnico) — provisto
-// completo salvo los campos [PLACEHOLDER] que dependen de entidad
-// legal/RFC y correo de contacto definitivos. No reemplazar esos
-// marcadores con valores inventados; solo Claudia los completa.
+// Contenido final de producto (no un placeholder técnico). Todos los datos
+// legales/de contacto ya están llenos salvo la ruta de eliminar cuenta,
+// pendiente a propósito hasta que esa función exista en producción.
 export default function PrivacidadPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 py-16 text-sm leading-relaxed text-gray-700">
       <h1 className="text-2xl font-semibold text-gray-900">Aviso de Privacidad — Musicaleando</h1>
       <p className="mt-1 text-gray-500">
-        Última actualización: <span className="text-amber-600">[PLACEHOLDER: fecha de publicación]</span>
+        Última actualización: 14 de septiembre de 2026
       </p>
 
       <div className="mt-8 flex flex-col gap-6">
         <section>
           <h2 className="font-medium text-gray-900">1. Quiénes somos</h2>
           <p className="mt-1">
-            Musicaleando es operado por{' '}
-            <span className="text-amber-600">
-              [PLACEHOLDER: nombre de la persona física o razón social]
-            </span>
-            . Para cualquier duda sobre este aviso de privacidad o sobre tus datos personales,
-            puedes contactarnos en{' '}
-            <span className="text-amber-600">
-              [PLACEHOLDER: correo de contacto de privacidad, ej. privacidad@musicaleando.com]
-            </span>
+            Musicaleando es operado por Claudia Acosta Hernández. Para cualquier duda sobre este
+            aviso de privacidad o sobre tus datos personales, puedes contactarnos en{' '}
+            <a href="mailto:clauliz.acosta@gmail.com" className="underline">
+              clauliz.acosta@gmail.com
+            </a>
             .
           </p>
           <p className="mt-2">
@@ -147,14 +142,16 @@ export default function PrivacidadPage() {
             Tienes derecho a Acceder, Rectificar, Cancelar u Oponerte (derechos ARCO) al
             tratamiento de tus datos personales, así como a revocar tu consentimiento en
             cualquier momento. Para ejercer estos derechos, escríbenos a{' '}
-            <span className="text-amber-600">[PLACEHOLDER: correo de contacto de privacidad]</span>{' '}
+            <a href="mailto:clauliz.acosta@gmail.com" className="underline">
+              clauliz.acosta@gmail.com
+            </a>{' '}
             indicando tu solicitud; te responderemos en los plazos que marca la LFPDPPP.
           </p>
           <p className="mt-2">
             También puedes eliminar tu cuenta directamente desde la app en{' '}
             <span className="text-amber-600">
-              [PLACEHOLDER: ruta/menú donde vive la opción de eliminar cuenta, si ya existe — o
-              &quot;próximamente&quot; si aún no está construida]
+              [PENDIENTE: se documentará una vez publicada la pantalla de Configuración/Cuenta con
+              la opción de eliminar cuenta]
             </span>
             .
           </p>
@@ -182,7 +179,10 @@ export default function PrivacidadPage() {
           <h2 className="font-medium text-gray-900">9. Contacto</h2>
           <p className="mt-1">
             Para dudas, solicitudes o quejas relacionadas con tus datos personales:{' '}
-            <span className="text-amber-600">[PLACEHOLDER: correo de contacto de privacidad]</span>.
+            <a href="mailto:clauliz.acosta@gmail.com" className="underline">
+              clauliz.acosta@gmail.com
+            </a>
+            .
           </p>
         </section>
       </div>
