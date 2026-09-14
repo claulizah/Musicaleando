@@ -79,6 +79,7 @@ export async function deleteLineupRow(festivalId: string, rowId: string): Promis
 const MIN_SEGMENT_SIZE = 30;
 
 export async function estimateSegmentAudience(
+  festivalId: string,
   ciudad: string,
   genero: string,
 ): Promise<{ error?: string; count?: number }> {
@@ -87,6 +88,7 @@ export async function estimateSegmentAudience(
 
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('count_segment_audience', {
+    p_festival_id: festivalId,
     p_ciudad: ciudad.trim() || null,
     p_genero: genero.trim() || null,
   });
@@ -121,6 +123,7 @@ export async function createAnnouncement(
   // agregación solo aplica cuando de verdad se está acotando un segmento.
   if (target_ciudad || target_genero) {
     const { data: audienceCount, error: countError } = await supabase.rpc('count_segment_audience', {
+      p_festival_id: festivalId,
       p_ciudad: target_ciudad,
       p_genero: target_genero,
     });
@@ -148,6 +151,49 @@ export async function createAnnouncement(
     target_genero,
   });
 
+  if (error) return { error: error.message };
+
+  revalidatePath(`/festivals/${festivalId}`);
+  return {};
+}
+
+// Cubre el caso de "anuncio ya activo al que se le reduce el segmento
+// después" — un anuncio publicado no tiene estado borrador/activo (insertar
+// = publicar), así que la única forma de que su segmento cambie es editando
+// target_ciudad/target_genero ya con el anuncio existiendo. Revalida con la
+// misma regla que crear, nunca se permite guardar un segmento angosto.
+export async function updateAnnouncementSegment(
+  festivalId: string,
+  announcementId: string,
+  targetCiudadInput: string,
+  targetGeneroInput: string,
+): Promise<{ error?: string }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) return { error: 'No autorizado.' };
+
+  const target_ciudad = targetCiudadInput.trim() || null;
+  const target_genero = targetGeneroInput.trim() || null;
+
+  const supabase = await createClient();
+
+  if (target_ciudad || target_genero) {
+    const { data: audienceCount, error: countError } = await supabase.rpc('count_segment_audience', {
+      p_festival_id: festivalId,
+      p_ciudad: target_ciudad,
+      p_genero: target_genero,
+    });
+    if (countError) return { error: countError.message };
+    if ((audienceCount ?? 0) < MIN_SEGMENT_SIZE) {
+      return {
+        error: `Este segmento tiene solo ${audienceCount ?? 0} usuarios — el mínimo para mantener un anuncio acotado es ${MIN_SEGMENT_SIZE}. Amplía el segmento o quita el filtro.`,
+      };
+    }
+  }
+
+  const { error } = await supabase
+    .from('announcements')
+    .update({ target_ciudad, target_genero })
+    .eq('id', announcementId);
   if (error) return { error: error.message };
 
   revalidatePath(`/festivals/${festivalId}`);

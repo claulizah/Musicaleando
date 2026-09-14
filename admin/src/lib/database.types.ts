@@ -18,7 +18,7 @@ export type Database = {
         Returns: number;
       };
       count_segment_audience: {
-        Args: { p_ciudad: string | null; p_genero: string | null };
+        Args: { p_festival_id: string; p_ciudad: string | null; p_genero: string | null };
         Returns: number;
       };
     };

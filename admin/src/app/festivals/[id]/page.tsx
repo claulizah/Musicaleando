@@ -7,6 +7,7 @@ import type { LineupCandidate } from './actions';
 import { LinkBoletosForm } from './link-boletos-form';
 import { DeleteLineupRowButton } from './delete-lineup-row-button';
 import { AnnouncementForm } from './announcement-form';
+import { AnnouncementSegment } from './announcement-segment';
 import { DeleteAnnouncementButton } from './delete-announcement-button';
 import { SelectWinnerButton } from './select-winner-button';
 import { MapUploader } from './map-uploader';
@@ -163,8 +164,12 @@ export default async function FestivalDetailPage({
                     {a.sponsor_nombre && `${a.sponsor_nombre} · `}
                     {a.tipo === 'descuento' && a.codigo_descuento && `código: ${a.codigo_descuento} · `}
                     {interest} interesado{interest === 1 ? '' : 's'}
-                    {(a.target_ciudad || a.target_genero) &&
-                      ` · segmentado: ${[a.target_ciudad, a.target_genero].filter(Boolean).join(' · ')}`}
+                    <AnnouncementSegment
+                      festivalId={festival.id}
+                      announcementId={a.id}
+                      targetCiudad={a.target_ciudad}
+                      targetGenero={a.target_genero}
+                    />
                   </p>
                   {a.tipo === 'rifa' && (
                     a.ganador_nombre ? (
