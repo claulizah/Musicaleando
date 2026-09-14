@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs/config";
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
 const nextConfig: NextConfig = {
   turbopack: {
@@ -16,3 +17,8 @@ export default withSentryConfig(nextConfig, {
   project: "musicaleando-admin",
   silent: !process.env.CI,
 });
+
+// Lets `npm run dev` (next dev) resolve Cloudflare bindings the same way the
+// deployed Worker will, instead of only finding out about a missing/misused
+// binding at deploy time.
+initOpenNextCloudflareForDev();
