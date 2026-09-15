@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #1a0b2e;
+  --bg-soft: #26123f;
+  --card: #2e1650;
+  --magenta: #ff3e9a;
+  --cyan: #00e5cc;
+  --gold: #ffc93c;
+  --ink: #f5f0ff;
+  --ink-dim: #b7a8d9;
+  --line: rgba(245, 240, 255, 0.12);
+}
+
+body {
+  background:
+    radial-gradient(circle at 15% 10%, rgba(255, 62, 154, 0.18), transparent 45%),
+    radial-gradient(circle at 85% 85%, rgba(0, 229, 204, 0.14), transparent 45%),
+    var(--bg);
+  color: var(--ink);
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+}
