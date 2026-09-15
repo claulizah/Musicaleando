@@ -29,6 +29,26 @@ export async function updateLinkBoletos(
   return {};
 }
 
+export async function updateTipo(
+  festivalId: string,
+  tipo: string,
+): Promise<{ error?: string }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) return { error: 'No autorizado.' };
+
+  if (tipo !== 'festival' && tipo !== 'concierto') {
+    return { error: 'Tipo inválido.' };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from('festivals').update({ tipo }).eq('id', festivalId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath(`/festivals/${festivalId}`);
+  return {};
+}
+
 export async function importLineup(
   festivalId: string,
   rows: LineupRow[],

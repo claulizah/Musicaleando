@@ -601,6 +601,7 @@ export type Database = {
           link_boletos: string | null
           mapa_url: string | null
           nombre: string
+          tipo: string
         }
         Insert: {
           ciudad: string
@@ -611,6 +612,7 @@ export type Database = {
           link_boletos?: string | null
           mapa_url?: string | null
           nombre: string
+          tipo?: string
         }
         Update: {
           ciudad?: string
@@ -621,6 +623,7 @@ export type Database = {
           link_boletos?: string | null
           mapa_url?: string | null
           nombre?: string
+          tipo?: string
         }
         Relationships: []
       }

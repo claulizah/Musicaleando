@@ -38,6 +38,45 @@ Responde ÚNICAMENTE con un JSON válido (sin texto antes ni después, sin bloqu
 
 Si la imagen no contiene ningún artista identificable de un festival, responde con "bloques": [] y "es_horario_con_tiempos": false.`;
 
+// Same image, richer ask: used when the curator is adding a brand-new event
+// (not yet in the catalog) from a poster/flyer/line-up announcement, so the
+// event-level fields (nombre, tipo, fechas, ciudad/venue) matter as much as
+// the lineup blocks. Kept as a second prompt rather than always asking for
+// "evento" so the existing per-festival lineup-import call (which already
+// has a known festival_id and doesn't need event metadata) stays unchanged.
+const EVENT_EXTRACTION_PROMPT = `Esta imagen es un póster/flyer/anuncio de un concierto o festival de música (puede o no traer un grid de horarios).
+
+Extrae SOLO lo que puedas leer con confianza real — nunca inventes ni adivines un dato que no esté claramente legible en la imagen (nombre, fecha, ciudad/venue, precio). Es preferible dejar un campo en null que adivinar.
+
+Para "tipo": infiere "festival" si el póster muestra un line-up con varios artistas (aunque no todos tengan el mismo peso visual), o "concierto" si es claramente un solo artista/acto principal sin otros nombres de line-up. Si no está claro (por ejemplo, solo un logo/nombre de evento sin lista de artistas), deja "tipo" en null — no adivines a ciegas.
+
+Responde ÚNICAMENTE con un JSON válido (sin texto antes ni después, sin bloques de código markdown) con esta forma exacta:
+
+{
+  "evento": {
+    "nombre": string | null,
+    "tipo": "festival" | "concierto" | null,
+    "fecha_inicio": string | null,  // formato YYYY-MM-DD si se puede inferir el año con confianza (ej. el póster trae el año completo); si solo hay día/mes sin año, deja null
+    "fecha_fin": string | null,
+    "ciudad": string | null,
+    "venue": string | null
+  },
+  "es_horario_con_tiempos": boolean,
+  "dia_label": string | null,
+  "bloques": [
+    {
+      "escenario": string | null,
+      "artista": string,
+      "hora_inicio": string | null,
+      "hora_fin": string | null,
+      "confianza": "alta" | "media" | "baja",
+      "nota": string | null
+    }
+  ]
+}
+
+Si la imagen no es un póster de evento reconocible, responde con "evento" con todos los campos en null, "bloques": [] y "es_horario_con_tiempos": false.`;
+
 type ExtractedBlock = {
   escenario: string | null;
   artista: string;
@@ -100,6 +139,7 @@ Deno.serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const imageBase64 = typeof body.image_base64 === "string" ? body.image_base64 : "";
     const mediaType = typeof body.media_type === "string" ? body.media_type : "image/png";
+    const extractEventInfo = Boolean(body.extract_event_info);
     if (!imageBase64) {
       return new Response(JSON.stringify({ error: "Falta la imagen." }), {
         status: 400,
@@ -125,7 +165,7 @@ Deno.serve(async (req: Request) => {
             role: "user",
             content: [
               { type: "image", source: { type: "base64", media_type: mediaType, data: imageBase64 } },
-              { type: "text", text: EXTRACTION_PROMPT },
+              { type: "text", text: extractEventInfo ? EVENT_EXTRACTION_PROMPT : EXTRACTION_PROMPT },
             ],
           },
         ],
@@ -148,7 +188,19 @@ Deno.serve(async (req: Request) => {
     // defensively in case it wraps the response anyway.
     const cleaned = textBlock.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
 
-    let parsed: { es_horario_con_tiempos?: boolean; dia_label?: string | null; bloques?: ExtractedBlock[] };
+    let parsed: {
+      es_horario_con_tiempos?: boolean;
+      dia_label?: string | null;
+      bloques?: ExtractedBlock[];
+      evento?: {
+        nombre?: string | null;
+        tipo?: string | null;
+        fecha_inicio?: string | null;
+        fecha_fin?: string | null;
+        ciudad?: string | null;
+        venue?: string | null;
+      };
+    };
     try {
       parsed = JSON.parse(cleaned);
     } catch {
@@ -164,6 +216,16 @@ Deno.serve(async (req: Request) => {
         es_horario_con_tiempos: Boolean(parsed.es_horario_con_tiempos),
         dia_label: parsed.dia_label ?? null,
         bloques: Array.isArray(parsed.bloques) ? parsed.bloques : [],
+        evento: extractEventInfo
+          ? {
+              nombre: parsed.evento?.nombre ?? null,
+              tipo: parsed.evento?.tipo === 'festival' || parsed.evento?.tipo === 'concierto' ? parsed.evento.tipo : null,
+              fecha_inicio: parsed.evento?.fecha_inicio ?? null,
+              fecha_fin: parsed.evento?.fecha_fin ?? null,
+              ciudad: parsed.evento?.ciudad ?? null,
+              venue: parsed.evento?.venue ?? null,
+            }
+          : undefined,
       }),
       { headers: { "Content-Type": "application/json" } },
     );

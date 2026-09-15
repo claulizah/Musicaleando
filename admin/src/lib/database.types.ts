@@ -36,16 +36,21 @@ export type Database = {
           id: string;
           nombre: string;
           ciudad: string;
+          tipo: string;
           fecha_inicio: string;
           fecha_fin: string;
           link_boletos: string | null;
           mapa_url: string | null;
           created_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['festivals']['Row'], 'id' | 'created_at' | 'mapa_url'> & {
+        Insert: Omit<
+          Database['public']['Tables']['festivals']['Row'],
+          'id' | 'created_at' | 'mapa_url' | 'tipo'
+        > & {
           id?: string;
           created_at?: string;
           mapa_url?: string | null;
+          tipo?: string;
         };
         Update: Partial<Database['public']['Tables']['festivals']['Row']>;
         Relationships: [];
@@ -252,11 +257,16 @@ export type Database = {
           source: string;
           source_id: string;
           nombre: string;
+          tipo: string | null;
           ciudad: string | null;
           venue: string | null;
           fecha_inicio: string | null;
           fecha_fin: string | null;
-          lineup: string[];
+          // Ticketmaster rows are a flat string[] (artist names only); rows
+          // sourced from a poster image are richer objects with
+          // escenario/horario when the image had them — both shapes coexist
+          // since this is a jsonb column with no DB-level constraint on it.
+          lineup: (string | { artista: string; escenario: string | null; horario: string | null })[];
           price_min: number | null;
           price_max: number | null;
           price_currency: string | null;
@@ -272,7 +282,7 @@ export type Database = {
         };
         Insert: Omit<
           Database['public']['Tables']['event_candidates']['Row'],
-          'id' | 'created_at' | 'updated_at' | 'last_seen_at' | 'estado' | 'completo'
+          'id' | 'created_at' | 'updated_at' | 'last_seen_at' | 'estado' | 'completo' | 'tipo'
         > & {
           id?: string;
           created_at?: string;
@@ -280,6 +290,7 @@ export type Database = {
           last_seen_at?: string;
           estado?: string;
           completo?: boolean;
+          tipo?: string | null;
         };
         Update: Partial<Database['public']['Tables']['event_candidates']['Row']>;
         Relationships: [

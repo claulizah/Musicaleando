@@ -8,6 +8,24 @@ const ESTADO_LABEL: Record<string, string> = {
   desaparecido: 'Desaparecido de la fuente',
 };
 
+const SOURCE_LABEL: Record<string, string> = {
+  ticketmaster: 'Ticketmaster',
+  poster_image: '📷 Póster',
+};
+
+const TIPO_LABEL: Record<string, string> = {
+  festival: '🎪 Festival',
+  concierto: '🎤 Concierto',
+};
+
+function formatLineupItem(item: string | { artista: string; escenario: string | null; horario: string | null }): string {
+  if (typeof item === 'string') return item;
+  const parts = [item.artista];
+  if (item.escenario) parts.push(item.escenario);
+  if (item.horario) parts.push(item.horario);
+  return parts.join(' · ');
+}
+
 export default async function CandidatosPage() {
   const admin = await requireAdmin();
   if (!admin.authorized) {
@@ -58,11 +76,19 @@ export default async function CandidatosPage() {
             <li key={c.id} className="rounded-lg border border-gray-200 bg-white p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="font-medium">{c.nombre}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-medium">{c.nombre}</p>
+                    {c.tipo && (
+                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                        {TIPO_LABEL[c.tipo] ?? c.tipo}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm text-gray-500">
                     {c.ciudad ?? 'Sin ciudad'} · {c.fecha_inicio ?? 'Sin fecha'}
                     {c.venue ? ` · ${c.venue}` : ''}
                   </p>
+                  <p className="text-xs text-gray-400">Fuente: {SOURCE_LABEL[c.source] ?? c.source}</p>
                   {c.price_min != null && (
                     <p className="text-xs text-gray-400">
                       Desde {c.price_min} {c.price_currency ?? ''}
@@ -71,7 +97,7 @@ export default async function CandidatosPage() {
                   )}
                   {Array.isArray(c.lineup) && c.lineup.length > 0 && (
                     <p className="mt-1 text-xs text-gray-500">
-                      Line-up: {(c.lineup as string[]).slice(0, 6).join(', ')}
+                      Line-up: {c.lineup.slice(0, 6).map(formatLineupItem).join(', ')}
                       {c.lineup.length > 6 ? '…' : ''}
                     </p>
                   )}
@@ -86,7 +112,7 @@ export default async function CandidatosPage() {
                   </span>
                   {c.link_boletos && (
                     <a href={c.link_boletos} target="_blank" rel="noreferrer" className="text-xs underline">
-                      Ver en Ticketmaster
+                      Ver boletos
                     </a>
                   )}
                 </div>
@@ -104,6 +130,7 @@ export default async function CandidatosPage() {
                 completo={c.completo}
                 defaults={{
                   nombre: c.nombre,
+                  tipo: c.tipo ?? '',
                   ciudad: c.ciudad ?? '',
                   fecha_inicio: c.fecha_inicio ?? '',
                   fecha_fin: c.fecha_fin ?? '',

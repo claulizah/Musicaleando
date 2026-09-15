@@ -12,7 +12,9 @@ type Props = {
 export function CandidateActions({ candidateId, completo, defaults }: Props) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [editing, setEditing] = useState(!completo);
+  // También se abre editando si el tipo no vino confirmado — no queremos que
+  // "Aprobar" default en silencio a festival sin que el curador lo vea.
+  const [editing, setEditing] = useState(!completo || !defaults.tipo);
   const [form, setForm] = useState(defaults);
 
   const handleApprove = () => {
@@ -53,7 +55,19 @@ export function CandidateActions({ candidateId, completo, defaults }: Props) {
             />
           </label>
           <label className="flex flex-col gap-1">
-            Link de boletos
+            Tipo
+            <select
+              className="rounded border border-gray-300 px-2 py-1"
+              value={form.tipo}
+              onChange={(e) => setForm({ ...form, tipo: e.target.value })}
+            >
+              <option value="">Sin confirmar</option>
+              <option value="festival">Festival</option>
+              <option value="concierto">Concierto</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            Link de boletos (opcional)
             <input
               className="rounded border border-gray-300 px-2 py-1"
               value={form.link_boletos}
