@@ -1,41 +1,12 @@
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin';
 import { createClient } from '@/lib/supabase/server';
-import { CandidateActions } from './candidate-actions';
+import { CandidatosList } from './candidatos-list';
 
 const ESTADO_LABEL: Record<string, string> = {
   cancelado: 'Cancelado en la fuente',
   desaparecido: 'Desaparecido de la fuente',
 };
-
-const SOURCE_LABEL: Record<string, string> = {
-  ticketmaster: 'Ticketmaster',
-  poster_image: '📷 Póster (admin)',
-  sumision_publica: '🌐 Sumisión pública',
-  link: '🔗 Link',
-};
-
-const TIPO_LABEL: Record<string, string> = {
-  festival: '🎪 Festival',
-  concierto: '🎤 Concierto',
-};
-
-function formatLineupItem(item: string | { artista: string; escenario: string | null; horario: string | null }): string {
-  if (typeof item === 'string') return item;
-  const parts = [item.artista];
-  if (item.escenario) parts.push(item.escenario);
-  if (item.horario) parts.push(item.horario);
-  return parts.join(' · ');
-}
-
-function rawPayloadExtras(raw: unknown): { submittedLink: string | null; posterUrl: string | null } {
-  if (!raw || typeof raw !== 'object') return { submittedLink: null, posterUrl: null };
-  const obj = raw as Record<string, unknown>;
-  return {
-    submittedLink: typeof obj.submitted_link === 'string' ? obj.submitted_link : null,
-    posterUrl: typeof obj.poster_url === 'string' ? obj.poster_url : null,
-  };
-}
 
 export default async function CandidatosPage() {
   const admin = await requireAdmin();
@@ -81,95 +52,7 @@ export default async function CandidatosPage() {
         </Link>
       </div>
 
-      <ul className="flex flex-col gap-3">
-        {(pending ?? []).map((c) => {
-          const duplicateName = c.possible_duplicate_of ? festivalNameById.get(c.possible_duplicate_of) : null;
-          const { submittedLink, posterUrl } = rawPayloadExtras(c.raw_payload);
-          return (
-            <li key={c.id} className="rounded-lg border border-gray-200 bg-white p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium">{c.nombre}</p>
-                    {c.tipo && (
-                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                        {TIPO_LABEL[c.tipo] ?? c.tipo}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-500">
-                    {c.ciudad ?? 'Sin ciudad'} · {c.fecha_inicio ?? 'Sin fecha'}
-                    {c.venue ? ` · ${c.venue}` : ''}
-                  </p>
-                  <p className="text-xs text-gray-400">Fuente: {SOURCE_LABEL[c.source] ?? c.source}</p>
-                  {posterUrl && (
-                    <a href={posterUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">
-                      Ver póster adjunto
-                    </a>
-                  )}
-                  {submittedLink && (
-                    <p className="text-xs text-gray-400">
-                      Link de la fuente:{' '}
-                      <a href={submittedLink} target="_blank" rel="noreferrer" className="underline">
-                        {submittedLink}
-                      </a>
-                    </p>
-                  )}
-                  {c.price_min != null && (
-                    <p className="text-xs text-gray-400">
-                      Desde {c.price_min} {c.price_currency ?? ''}
-                      {c.price_max != null ? ` hasta ${c.price_max}` : ''}
-                    </p>
-                  )}
-                  {Array.isArray(c.lineup) && c.lineup.length > 0 && (
-                    <p className="mt-1 text-xs text-gray-500">
-                      Line-up: {c.lineup.slice(0, 6).map(formatLineupItem).join(', ')}
-                      {c.lineup.length > 6 ? '…' : ''}
-                    </p>
-                  )}
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs ${
-                      c.completo ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-                    }`}
-                  >
-                    {c.completo ? 'Completo' : 'Incompleto'}
-                  </span>
-                  {c.link_boletos && (
-                    <a href={c.link_boletos} target="_blank" rel="noreferrer" className="text-xs underline">
-                      Ver boletos
-                    </a>
-                  )}
-                </div>
-              </div>
-
-              {duplicateName && (
-                <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  Posible duplicado de un festival ya cargado: <strong>{duplicateName}</strong>. Revisa antes de
-                  aprobar — no se fusiona automáticamente.
-                </p>
-              )}
-
-              <CandidateActions
-                candidateId={c.id}
-                completo={c.completo}
-                defaults={{
-                  nombre: c.nombre,
-                  tipo: c.tipo ?? '',
-                  ciudad: c.ciudad ?? '',
-                  fecha_inicio: c.fecha_inicio ?? '',
-                  fecha_fin: c.fecha_fin ?? '',
-                  link_boletos: c.link_boletos ?? '',
-                }}
-              />
-            </li>
-          );
-        })}
-        {(pending ?? []).length === 0 && (
-          <p className="text-sm text-gray-500">No hay candidatos pendientes.</p>
-        )}
-      </ul>
+      <CandidatosList candidates={pending ?? []} festivalNameById={festivalNameById} />
 
       {(flagged ?? []).length > 0 && (
         <div className="mt-10">
