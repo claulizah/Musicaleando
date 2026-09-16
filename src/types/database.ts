@@ -1218,6 +1218,10 @@ export type Database = {
       }
     }
     Functions: {
+      delete_own_account: {
+        Args: { p_anon_id: string }
+        Returns: undefined
+      }
       advance_squad_tournament: {
         Args: { p_squad_id: string }
         Returns: {
