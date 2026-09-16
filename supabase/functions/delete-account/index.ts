@@ -12,32 +12,33 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // JWT (via supabase.auth.getUser() below), never an id from the request
 // body, so a user can never delete anyone but themselves.
 //
-// STATUS: auth check is real; the actual deletion is not implemented yet.
-// It's pending a live inspection of the ijwyykfuyeaahvxmaild project's real
-// FK delete rules (CASCADE/RESTRICT/SET NULL) before writing table-by-table
-// DELETE/UPDATE statements — guessing here risks either an existing cascade
-// silently wiping content that should be anonymized instead, or leaving
-// orphaned rows behind. Until that inspection happens, this returns 501 so
-// the client's error handling can be built and tested against a real
-// endpoint shape.
-//
-// Planned data handling (from product decisions already made — see
-// ESTADO.md/conversation history once this lands there):
-//   - Anonymize (reassign to a sentinel "usuario eliminado" users row, keep
-//     the row so squad/community context isn't broken): festival_comments,
-//     festival_reactions, squad_playlist.added_by, community_shares.
-//   - Delete entirely: music_profile, mood_logs, squad_members (this
-//     user's memberships), contacts (both directions), announcement_interest,
-//     community_share_votes, concert_album (+ its storage objects),
-//     recommendation_cache, torneo_campeon_historial, user_badges, trends,
-//     squad_tournament_votes, then the users row and finally auth.users.
-//   - Squads this user owns: reassign owner_id to the longest-tenured
-//     remaining member, or delete the squad if no members remain.
-//   - Null out announcements.created_by / ganador_user_id (already
-//     nullable; ganador_nombre stays as the historical record).
+// Most of the actual deletion work lives in the public.delete_own_account()
+// Postgres function (see the matching migration) so it runs as one atomic
+// transaction — this function is a thin orchestrator around it:
+//   1. Read this user's concert-album Storage object paths (before the RPC
+//      deletes the rows that name them — Storage isn't reachable from SQL).
+//   2. Create a fresh throwaway anonymous auth user to back the "Usuario
+//      eliminado" identity the RPC reassigns public content to.
+//      public.users.id turned out to have a real FK to auth.users.id (found
+//      by testing, not by the earlier schema inspection — a first version
+//      of this tried inserting that row with a bare gen_random_uuid() and
+//      hit "violates foreign key constraint users_id_fkey" live), so the
+//      anonymized identity needs an actual auth user behind it. Reusing the
+//      app's own anonymous sign-in is the simplest way to get one.
+//   3. Call the RPC as the caller's own session (respects the SECURITY
+//      DEFINER function's internal auth.uid() check; no service role
+//      needed for this part) with that id.
+//   4. Remove the Storage objects found in step 1.
+//   5. Delete the actual auth identity via the admin API — Supabase's
+//      supported way to do this, not a raw SQL delete against auth.users
+//      (that risks missing internal GoTrue bookkeeping this function has
+//      no visibility into). Needs the service role key.
+// The FK graph and the delete-vs-anonymize decisions this is built on are
+// documented in the migration, not duplicated here.
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
+const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") {
@@ -48,7 +49,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const authHeader = req.headers.get("Authorization");
-  if (!authHeader || !SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  if (!authHeader || !SUPABASE_URL || !SUPABASE_ANON_KEY || !SERVICE_ROLE_KEY) {
     return new Response(JSON.stringify({ error: "No autorizado." }), {
       status: 401,
       headers: { "Content-Type": "application/json" },
@@ -56,32 +57,61 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    // Acts as the caller for both identifying them AND running the RPC —
+    // delete_own_account() is SECURITY DEFINER but self-scoped to
+    // auth.uid(), so this never needs the service role key.
+    const callerClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     });
-
     const {
       data: { user },
-    } = await supabase.auth.getUser();
+    } = await callerClient.auth.getUser();
     if (!user) {
       return new Response(JSON.stringify({ error: "No autorizado." }), {
         status: 401,
         headers: { "Content-Type": "application/json" },
       });
     }
+    const userId = user.id;
 
-    return new Response(
-      JSON.stringify({
-        error:
-          "El borrado de cuenta todavía no está implementado del lado del servidor. No se eliminó ningún dato.",
-      }),
-      { status: 501, headers: { "Content-Type": "application/json" } },
-    );
+    // Storage isn't reachable from the SQL function — read paths first
+    // using the caller's own session (RLS already lets a user read their
+    // own concert_album rows).
+    const { data: photos, error: photosError } = await callerClient
+      .from("concert_album")
+      .select("foto_path")
+      .eq("user_id", userId);
+    if (photosError) throw photosError;
+
+    const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+    const { data: ghostAuth, error: ghostError } = await admin.auth.signInAnonymously();
+    if (ghostError) throw ghostError;
+    const anonId = ghostAuth.user!.id;
+
+    const { error: rpcError } = await callerClient.rpc("delete_own_account", { p_anon_id: anonId });
+    if (rpcError) throw rpcError;
+
+    if (photos && photos.length > 0) {
+      const { error: storageError } = await callerClient.storage
+        .from("concert-album")
+        .remove(photos.map((p) => p.foto_path));
+      // The rows (and this user's access to them) are already gone — a
+      // stray Storage object left behind isn't worth failing the whole
+      // deletion over at this point.
+      if (storageError) console.error("No se pudieron borrar fotos del álbum de conciertos:", storageError);
+    }
+
+    // Removing the auth identity itself — delete_own_account() already
+    // confirmed this user's own data is gone.
+    const { error: authDeleteError } = await admin.auth.admin.deleteUser(userId);
+    if (authDeleteError) throw authDeleteError;
+
+    return new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json" } });
   } catch (err) {
     console.error(err);
-    return new Response(JSON.stringify({ error: String(err) }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: "No se pudo eliminar la cuenta. Intenta de nuevo." }),
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    );
   }
 });

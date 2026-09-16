@@ -21,6 +21,18 @@ import { useSquadStore } from '../../store/useSquadStore';
 import { colors, radii, spacing, type } from '../../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Festivals'>;
+type TipoFilter = 'todos' | 'festival' | 'concierto';
+
+const TIPO_FILTER_OPTIONS: { id: TipoFilter; label: string }[] = [
+  { id: 'todos', label: 'Todos' },
+  { id: 'festival', label: 'Festivales' },
+  { id: 'concierto', label: 'Conciertos' },
+];
+
+const TIPO_BADGE: Record<string, string> = {
+  festival: '🎪 Festival',
+  concierto: '🎤 Concierto',
+};
 
 const STATUS_OPTIONS: { id: FestivalStatus; label: string }[] = [
   { id: 'voy', label: 'Voy' },
@@ -47,7 +59,8 @@ function formatRange(inicio: string, fin: string): string {
   return inicio === fin ? fmt(inicio) : `${fmt(inicio)} – ${fmt(fin)}`;
 }
 
-export function FestivalHubScreen({ navigation }: Props) {
+export function FestivalHubScreen({ navigation, route }: Props) {
+  const highlightFestivalId = route.params?.highlightFestivalId;
   const userId = useSessionStore((s) => s.userId);
   const generos = useProfileStore((s) => (s.profile?.generos as string[] | undefined) ?? []);
   const festivals = useFestivalStore((s) => s.festivals);
@@ -64,6 +77,7 @@ export function FestivalHubScreen({ navigation }: Props) {
   const reportComment = useFestivalStore((s) => s.reportComment);
   const squads = useSquadStore((s) => s.squads);
   const fetchMySquads = useSquadStore((s) => s.fetchMySquads);
+  const [tipoFilter, setTipoFilter] = useState<TipoFilter>('todos');
 
   useEffect(() => {
     if (userId) fetchFestivals(userId);
@@ -81,6 +95,9 @@ export function FestivalHubScreen({ navigation }: Props) {
     squads.flatMap((s) => s.members).map((m) => [m.user_id, m.arquetipo]),
   );
 
+  const filteredFestivals =
+    tipoFilter === 'todos' ? festivals : festivals.filter((e) => e.festival.tipo === tipoFilter);
+
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -88,26 +105,48 @@ export function FestivalHubScreen({ navigation }: Props) {
           <Pressable hitSlop={12} onPress={() => navigation.goBack()}>
             <Text style={styles.back}>‹</Text>
           </Pressable>
-          <Text style={styles.headerTitle}>Festivales</Text>
+          <Text style={styles.headerTitle}>Conciertos y festivales</Text>
           <View style={styles.headerSpacer} />
         </View>
 
+        <View style={styles.tipoFilterRow}>
+          {TIPO_FILTER_OPTIONS.map((option) => {
+            const selected = tipoFilter === option.id;
+            return (
+              <Pressable
+                key={option.id}
+                style={[styles.tipoFilterChip, selected && styles.tipoFilterChipSelected]}
+                onPress={() => setTipoFilter(option.id)}
+              >
+                <Text style={[styles.tipoFilterChipText, selected && styles.tipoFilterChipTextSelected]}>
+                  {option.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
         {status === 'loading' && festivals.length === 0 && (
-          <Text style={styles.hint}>Cargando festivales...</Text>
+          <Text style={styles.hint}>Cargando eventos...</Text>
         )}
         {status === 'ready' && festivals.length === 0 && (
-          <Text style={styles.hint}>Todavía no hay festivales cargados.</Text>
+          <Text style={styles.hint}>Todavía no hay eventos cargados.</Text>
+        )}
+        {status === 'ready' && festivals.length > 0 && filteredFestivals.length === 0 && (
+          <Text style={styles.hint}>No hay eventos de este tipo todavía.</Text>
         )}
         {status === 'error' && (
           <Text style={styles.errorHint}>
-            No se pudieron cargar los festivales{error ? `: ${error}` : '.'}
+            No se pudieron cargar los eventos{error ? `: ${error}` : '.'}
           </Text>
         )}
 
-        {festivals.map((entry) => (
+        {filteredFestivals.map((entry) => (
           <FestivalCard
             key={entry.festival.id}
             entry={entry}
+            navigation={navigation}
+            highlighted={entry.festival.id === highlightFestivalId}
             onSetStatus={(s) => userId && setFestivalStatus(userId, entry.festival.id, s)}
             onSetReaction={(r) => userId && setReaction(userId, entry.festival.id, r)}
             onSubmitFeedback={(tags, comentario) =>
@@ -138,6 +177,8 @@ export function FestivalHubScreen({ navigation }: Props) {
 
 function FestivalCard({
   entry,
+  navigation,
+  highlighted,
   onSetStatus,
   onSetReaction,
   onSubmitFeedback,
@@ -151,6 +192,8 @@ function FestivalCard({
   squadmateArchetypeById,
 }: {
   entry: FestivalWithIntent;
+  navigation: Props['navigation'];
+  highlighted: boolean;
   onSetStatus: (status: FestivalStatus) => void;
   onSetReaction: (reaction: FestivalReactionType) => void;
   onSubmitFeedback: (tags: string[], comentario: string | null) => Promise<void>;
@@ -176,7 +219,7 @@ function FestivalCard({
     mapPins,
     survey,
   } = entry;
-  const [showLineup, setShowLineup] = useState(false);
+  const [showLineup, setShowLineup] = useState(highlighted);
   const [showSquadGoing, setShowSquadGoing] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [selectedEscenario, setSelectedEscenario] = useState<string | null>(null);
@@ -191,6 +234,7 @@ function FestivalCard({
   const [loadingPersonalized, setLoadingPersonalized] = useState(false);
   const [surveyCalificacion, setSurveyCalificacion] = useState<SurveyCalificacion | null>(null);
   const [savingSurvey, setSavingSurvey] = useState(false);
+  const [expanded, setExpanded] = useState(highlighted);
 
   const handlePersonalize = async () => {
     if (generos.length === 0 || lineup.length === 0) return;
@@ -252,18 +296,58 @@ function FestivalCard({
   };
 
   return (
-    <View style={styles.card}>
-      <Text style={styles.nombre}>{festival.nombre}</Text>
+    <View style={[styles.card, highlighted && styles.cardHighlighted]}>
+      <View style={styles.cardHeaderRow}>
+        <Text style={styles.nombre}>{festival.nombre}</Text>
+        <Text style={styles.tipoBadge}>{TIPO_BADGE[festival.tipo] ?? '🎪 Festival'}</Text>
+      </View>
       <Text style={styles.meta}>
         {festival.ciudad} · {formatRange(festival.fecha_inicio, festival.fecha_fin)}
       </Text>
 
       {squadGoingCount > 0 && (
+        <Text style={styles.squadHint}>
+          👥 {squadGoingCount} {squadGoingCount === 1 ? 'de tu squad va' : 'de tu squad van'}
+        </Text>
+      )}
+
+      <View style={styles.statusRow}>
+        {STATUS_OPTIONS.map((option) => {
+          const selected = myStatus === option.id;
+          return (
+            <Pressable
+              key={option.id}
+              style={[styles.statusPill, selected && styles.statusPillSelected]}
+              onPress={() => onSetStatus(option.id)}
+            >
+              <Text style={[styles.statusPillText, selected && styles.statusPillTextSelected]}>
+                {option.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {festival.link_boletos && (
+        <Pressable
+          style={styles.ticketsButton}
+          onPress={() => Linking.openURL(festival.link_boletos!)}
+        >
+          <Text style={styles.ticketsButtonText}>Comprar boletos ↗</Text>
+        </Pressable>
+      )}
+
+      <Pressable onPress={() => setExpanded((v) => !v)}>
+        <Text style={styles.expandToggle}>{expanded ? '▴ Ver menos' : '▾ Ver más'}</Text>
+      </Pressable>
+
+      {expanded && (
+        <>
+      {squadGoingCount > 0 && (
         <View>
           <Pressable onPress={() => setShowSquadGoing((v) => !v)}>
             <Text style={styles.squadHint}>
-              👥 {squadGoingCount} {squadGoingCount === 1 ? 'de tu squad va' : 'de tu squad van'}{' '}
-              {showSquadGoing ? '▾' : '▸'}
+              Detalle del squad {showSquadGoing ? '▾' : '▸'}
             </Text>
           </Pressable>
           {showSquadGoing && (
@@ -291,18 +375,27 @@ function FestivalCard({
       )}
       {showLineup &&
         lineup.map((artist) => (
-          <Text key={artist.id} style={styles.lineupRow}>
-            {artist.artista}
-            {artist.escenario ? ` · ${artist.escenario}` : ''}
-            {artist.horario
-              ? ` · ${new Date(artist.horario).toLocaleString('es-MX', {
-                  day: 'numeric',
-                  month: 'short',
-                  hour: 'numeric',
-                  minute: '2-digit',
-                })}`
-              : ''}
-          </Text>
+          <Pressable
+            key={artist.id}
+            disabled={!artist.artist_id}
+            onPress={() =>
+              artist.artist_id &&
+              navigation.navigate('ArtistDetail', { artistId: artist.artist_id, artistName: artist.artista })
+            }
+          >
+            <Text style={styles.lineupRow}>
+              {artist.artista}
+              {artist.escenario ? ` · ${artist.escenario}` : ''}
+              {artist.horario
+                ? ` · ${new Date(artist.horario).toLocaleString('es-MX', {
+                    day: 'numeric',
+                    month: 'short',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                  })}`
+                : ''}
+            </Text>
+          </Pressable>
         ))}
 
       {festival.mapa_url && (
@@ -333,9 +426,15 @@ function FestivalCard({
               {lineup
                 .filter((l) => l.escenario === selectedEscenario)
                 .map((l) => (
-                  <Text key={l.id} style={styles.lineupRow}>
-                    {l.artista}
-                  </Text>
+                  <Pressable
+                    key={l.id}
+                    disabled={!l.artist_id}
+                    onPress={() =>
+                      l.artist_id && navigation.navigate('ArtistDetail', { artistId: l.artist_id, artistName: l.artista })
+                    }
+                  >
+                    <Text style={styles.lineupRow}>{l.artista}</Text>
+                  </Pressable>
                 ))}
               {lineup.filter((l) => l.escenario === selectedEscenario).length === 0 && (
                 <Text style={styles.hint}>No hay artistas cargados para este escenario.</Text>
@@ -375,23 +474,6 @@ function FestivalCard({
         </View>
       )}
 
-      <View style={styles.statusRow}>
-        {STATUS_OPTIONS.map((option) => {
-          const selected = myStatus === option.id;
-          return (
-            <Pressable
-              key={option.id}
-              style={[styles.statusPill, selected && styles.statusPillSelected]}
-              onPress={() => onSetStatus(option.id)}
-            >
-              <Text style={[styles.statusPillText, selected && styles.statusPillTextSelected]}>
-                {option.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
       {survey.due && (
         <View style={styles.surveyCard}>
           <Text style={styles.surveyTitle}>¿Qué tal estuvo {festival.nombre}?</Text>
@@ -426,15 +508,6 @@ function FestivalCard({
             </>
           )}
         </View>
-      )}
-
-      {festival.link_boletos && (
-        <Pressable
-          style={styles.ticketsButton}
-          onPress={() => Linking.openURL(festival.link_boletos!)}
-        >
-          <Text style={styles.ticketsButtonText}>Comprar boletos ↗</Text>
-        </Pressable>
       )}
 
       {announcements.length > 0 && (
@@ -576,6 +649,8 @@ function FestivalCard({
           </View>
         </View>
       )}
+        </>
+      )}
     </View>
   );
 }
@@ -603,6 +678,29 @@ const styles = StyleSheet.create({
   headerSpacer: {
     width: 32,
   },
+  tipoFilterRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  tipoFilterChip: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.bgElevated,
+  },
+  tipoFilterChipSelected: {
+    backgroundColor: colors.accentPrimary,
+    borderColor: colors.accentPrimary,
+  },
+  tipoFilterChipText: {
+    ...type.label,
+    color: colors.textSecondary,
+  },
+  tipoFilterChipTextSelected: {
+    color: colors.onAccent,
+  },
   hint: {
     ...type.body,
     color: colors.textSecondary,
@@ -625,12 +723,31 @@ const styles = StyleSheet.create({
     borderRadius: radii.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: spacing.lg,
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  // Aplicado cuando se llega desde la ficha de artista con un evento
+  // puntual en mente ("Festivals" no tiene ruta por evento, así que esto es
+  // la señal visual de "es este") — ver ArtistDetailScreen.
+  cardHighlighted: {
+    borderColor: colors.accentPrimary,
+    borderWidth: 2,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: spacing.sm,
   },
   nombre: {
     ...type.h2,
     color: colors.textPrimary,
+    flexShrink: 1,
+  },
+  tipoBadge: {
+    ...type.caption,
+    color: colors.textSecondary,
+    flexShrink: 0,
   },
   meta: {
     ...type.body,
@@ -639,6 +756,11 @@ const styles = StyleSheet.create({
   squadHint: {
     ...type.label,
     color: colors.accentPrimary,
+  },
+  expandToggle: {
+    ...type.label,
+    color: colors.accentSecondary,
+    marginTop: spacing.xs,
   },
   squadGoingList: {
     marginTop: spacing.xs,

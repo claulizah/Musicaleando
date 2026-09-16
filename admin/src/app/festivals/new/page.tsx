@@ -2,6 +2,8 @@
 
 import { useActionState } from 'react';
 import { createFestival } from './actions';
+import { EventImageImporter } from './event-image-importer';
+import { EventLinkImporter } from './event-link-importer';
 
 const initialState = { error: '' };
 
@@ -33,6 +35,17 @@ export default function NewFestivalPage() {
             required
             className="rounded-md border border-gray-300 px-3 py-2"
           />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          Tipo
+          <select
+            name="tipo"
+            defaultValue="festival"
+            className="rounded-md border border-gray-300 px-3 py-2"
+          >
+            <option value="festival">Festival</option>
+            <option value="concierto">Concierto</option>
+          </select>
         </label>
         <div className="grid grid-cols-2 gap-4">
           <label className="flex flex-col gap-1 text-sm">
@@ -72,6 +85,11 @@ export default function NewFestivalPage() {
           {pending ? 'Creando…' : 'Crear festival'}
         </button>
       </form>
+
+      <div className="mt-8">
+        <EventImageImporter />
+        <EventLinkImporter />
+      </div>
     </main>
   );
 }

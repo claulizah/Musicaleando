@@ -200,11 +200,15 @@ export function SquadDetailScreen({ route, navigation }: Props) {
           style={styles.codeCard}
           onPress={() => navigation.navigate('SquadTorneo', { squadId })}
         >
-          <View>
+          <View style={styles.himnoTextWrap}>
             <Text style={styles.codeLabel}>Himno oficial del squad</Text>
-            <Text style={styles.himnoValue}>{squad.himno_nombre ?? 'Sin torneo grupal todavía'}</Text>
+            <Text style={styles.himnoValue} numberOfLines={1} ellipsizeMode="tail">
+              {squad.himno_nombre ?? 'Sin torneo grupal todavía'}
+            </Text>
           </View>
-          <Text style={styles.codeShare}>🏆 Torneo ↗</Text>
+          <Text style={styles.codeShare} numberOfLines={1}>
+            🏆 Torneo ↗
+          </Text>
         </Pressable>
 
         <View style={styles.section}>
@@ -459,6 +463,10 @@ const styles = StyleSheet.create({
   codeShare: {
     ...type.label,
     color: colors.accentSecondary,
+  },
+  himnoTextWrap: {
+    flex: 1,
+    marginRight: spacing.md,
   },
   himnoValue: {
     ...type.bodyLg,

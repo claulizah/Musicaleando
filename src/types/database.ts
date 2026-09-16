@@ -120,6 +120,27 @@ export type Database = {
           },
         ]
       }
+      artists: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          normalized_name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          normalized_name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          normalized_name?: string
+        }
+        Relationships: []
+      }
       community_share_votes: {
         Row: {
           created_at: string
@@ -446,6 +467,7 @@ export type Database = {
       festival_lineup: {
         Row: {
           artista: string
+          artist_id: string | null
           escenario: string | null
           festival_id: string
           horario: string | null
@@ -453,6 +475,7 @@ export type Database = {
         }
         Insert: {
           artista: string
+          artist_id?: string | null
           escenario?: string | null
           festival_id: string
           horario?: string | null
@@ -460,6 +483,7 @@ export type Database = {
         }
         Update: {
           artista?: string
+          artist_id?: string | null
           escenario?: string | null
           festival_id?: string
           horario?: string | null
@@ -471,6 +495,13 @@ export type Database = {
             columns: ["festival_id"]
             isOneToOne: false
             referencedRelation: "festivals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "festival_lineup_artist_id_fkey"
+            columns: ["artist_id"]
+            isOneToOne: false
+            referencedRelation: "artists"
             referencedColumns: ["id"]
           },
         ]
@@ -601,6 +632,7 @@ export type Database = {
           link_boletos: string | null
           mapa_url: string | null
           nombre: string
+          tipo: string
         }
         Insert: {
           ciudad: string
@@ -611,6 +643,7 @@ export type Database = {
           link_boletos?: string | null
           mapa_url?: string | null
           nombre: string
+          tipo?: string
         }
         Update: {
           ciudad?: string
@@ -621,6 +654,7 @@ export type Database = {
           link_boletos?: string | null
           mapa_url?: string | null
           nombre?: string
+          tipo?: string
         }
         Relationships: []
       }
@@ -1215,6 +1249,10 @@ export type Database = {
       }
     }
     Functions: {
+      delete_own_account: {
+        Args: { p_anon_id: string }
+        Returns: undefined
+      }
       advance_squad_tournament: {
         Args: { p_squad_id: string }
         Returns: {

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin';
 import { createClient } from '@/lib/supabase/server';
+import { FestivalesList } from './festivales-list';
 
 export default async function DashboardPage() {
   const admin = await requireAdmin();
@@ -37,6 +38,9 @@ export default async function DashboardPage() {
           <Link href="/moderacion" className="text-sm underline">
             Moderación
           </Link>
+          <Link href="/candidatos" className="text-sm underline">
+            Candidatos
+          </Link>
           <Link href="/mood" className="text-sm underline">
             Mood playlists
           </Link>
@@ -48,24 +52,7 @@ export default async function DashboardPage() {
           </Link>
         </div>
       </div>
-      <ul className="flex flex-col gap-3">
-        {festivals?.map((f) => (
-          <li key={f.id} className="rounded-lg border border-gray-200 bg-white p-4">
-            <Link href={`/festivals/${f.id}`} className="font-medium underline">
-              {f.nombre}
-            </Link>
-            <p className="text-sm text-gray-500">
-              {f.ciudad} · {f.fecha_inicio} → {f.fecha_fin}
-            </p>
-            <p className="text-xs text-gray-400">
-              {f.link_boletos ? f.link_boletos : 'Sin link de boletos'}
-            </p>
-          </li>
-        ))}
-        {festivals?.length === 0 && (
-          <p className="text-sm text-gray-500">No hay festivales todavía.</p>
-        )}
-      </ul>
+      <FestivalesList festivals={festivals ?? []} />
     </main>
   );
 }

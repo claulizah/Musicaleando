@@ -18,7 +18,7 @@ export type Database = {
         Returns: number;
       };
       count_segment_audience: {
-        Args: { p_ciudad: string | null; p_genero: string | null };
+        Args: { p_festival_id: string; p_ciudad: string | null; p_genero: string | null };
         Returns: number;
       };
     };
@@ -31,21 +31,43 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['users']['Row']>;
         Relationships: [];
       };
+      site_deploys: {
+        Row: { id: string; triggered_at: string; triggered_by: string };
+        Insert: Omit<Database['public']['Tables']['site_deploys']['Row'], 'id' | 'triggered_at'> & {
+          id?: string;
+          triggered_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['site_deploys']['Row']>;
+        Relationships: [
+          {
+            foreignKeyName: 'site_deploys_triggered_by_fkey';
+            columns: ['triggered_by'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       festivals: {
         Row: {
           id: string;
           nombre: string;
           ciudad: string;
+          tipo: string;
           fecha_inicio: string;
           fecha_fin: string;
           link_boletos: string | null;
           mapa_url: string | null;
           created_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['festivals']['Row'], 'id' | 'created_at' | 'mapa_url'> & {
+        Insert: Omit<
+          Database['public']['Tables']['festivals']['Row'],
+          'id' | 'created_at' | 'mapa_url' | 'tipo'
+        > & {
           id?: string;
           created_at?: string;
           mapa_url?: string | null;
+          tipo?: string;
         };
         Update: Partial<Database['public']['Tables']['festivals']['Row']>;
         Relationships: [];
@@ -57,9 +79,11 @@ export type Database = {
           artista: string;
           escenario: string | null;
           horario: string | null;
+          artist_id: string | null;
         };
-        Insert: Omit<Database['public']['Tables']['festival_lineup']['Row'], 'id'> & {
+        Insert: Omit<Database['public']['Tables']['festival_lineup']['Row'], 'id' | 'artist_id'> & {
           id?: string;
+          artist_id?: string | null;
         };
         Update: Partial<Database['public']['Tables']['festival_lineup']['Row']>;
         Relationships: [
@@ -70,7 +94,28 @@ export type Database = {
             referencedRelation: 'festivals';
             referencedColumns: ['id'];
           },
+          {
+            foreignKeyName: 'festival_lineup_artist_id_fkey';
+            columns: ['artist_id'];
+            isOneToOne: false;
+            referencedRelation: 'artists';
+            referencedColumns: ['id'];
+          },
         ];
+      };
+      artists: {
+        Row: {
+          id: string;
+          name: string;
+          normalized_name: string;
+          created_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['artists']['Row'], 'id' | 'created_at'> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['artists']['Row']>;
+        Relationships: [];
       };
       sponsors: {
         Row: {
@@ -239,6 +284,65 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: 'festival_lineup_candidates_festival_id_fkey';
+            columns: ['festival_id'];
+            isOneToOne: false;
+            referencedRelation: 'festivals';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      event_candidates: {
+        Row: {
+          id: string;
+          source: string;
+          source_id: string;
+          nombre: string;
+          tipo: string | null;
+          ciudad: string | null;
+          venue: string | null;
+          fecha_inicio: string | null;
+          fecha_fin: string | null;
+          // Ticketmaster rows are a flat string[] (artist names only); rows
+          // sourced from a poster image are richer objects with
+          // escenario/horario when the image had them — both shapes coexist
+          // since this is a jsonb column with no DB-level constraint on it.
+          lineup: (string | { artista: string; escenario: string | null; horario: string | null })[];
+          price_min: number | null;
+          price_max: number | null;
+          price_currency: string | null;
+          link_boletos: string | null;
+          raw_payload: Record<string, unknown>;
+          completo: boolean;
+          estado: string;
+          possible_duplicate_of: string | null;
+          festival_id: string | null;
+          created_at: string;
+          updated_at: string;
+          last_seen_at: string;
+        };
+        Insert: Omit<
+          Database['public']['Tables']['event_candidates']['Row'],
+          'id' | 'created_at' | 'updated_at' | 'last_seen_at' | 'estado' | 'completo' | 'tipo'
+        > & {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+          last_seen_at?: string;
+          estado?: string;
+          completo?: boolean;
+          tipo?: string | null;
+        };
+        Update: Partial<Database['public']['Tables']['event_candidates']['Row']>;
+        Relationships: [
+          {
+            foreignKeyName: 'event_candidates_possible_duplicate_of_fkey';
+            columns: ['possible_duplicate_of'];
+            isOneToOne: false;
+            referencedRelation: 'festivals';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'event_candidates_festival_id_fkey';
             columns: ['festival_id'];
             isOneToOne: false;
             referencedRelation: 'festivals';

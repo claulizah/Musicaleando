@@ -242,14 +242,10 @@ const styles = StyleSheet.create({
     gap: spacing.xl,
   },
   headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
+    gap: spacing.md,
   },
   headerTextWrap: {
     flexShrink: 1,
-    flex: 1,
-    paddingRight: spacing.sm,
   },
   eyebrow: {
     ...type.label,
@@ -263,8 +259,8 @@ const styles = StyleSheet.create({
   },
   headerButtons: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
-    flexShrink: 0,
   },
   squadButton: {
     flexShrink: 0,

@@ -31,7 +31,7 @@ export function AnnouncementForm({
 
   const handleEstimate = () => {
     startEstimating(async () => {
-      const res = await estimateSegmentAudience(targetCiudad, targetGenero);
+      const res = await estimateSegmentAudience(festivalId, targetCiudad, targetGenero);
       setAudience(res.count ?? null);
     });
   };

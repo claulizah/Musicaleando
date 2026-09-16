@@ -63,6 +63,7 @@ const styles = StyleSheet.create({
   label: {
     ...type.caption,
     color: colors.textSecondary,
+    textAlign: 'center',
   },
   labelSelected: {
     color: colors.textPrimary,

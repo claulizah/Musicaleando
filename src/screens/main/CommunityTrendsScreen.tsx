@@ -9,6 +9,7 @@ import { useCommunityStore, CommunityShareWithSongs } from '../../store/useCommu
 import { supabase } from '../../lib/supabase';
 import { GENEROS } from '../../lib/archetypes';
 import { promptReportContent } from '../../lib/moderation';
+import { openListenLink } from '../../lib/musicLinks';
 import { ContentReportMotivo, Tables } from '../../types/database';
 import { colors, radii, spacing, type } from '../../theme';
 
@@ -285,12 +286,25 @@ function ShareCard({
     <View style={[styles.card, highlighted && styles.cardHighlighted]}>
       {entry.songs.map((song) => (
         <View key={song.id} style={styles.songRow}>
-          <Text style={styles.songTitle} numberOfLines={1}>
-            {song.titulo}
-          </Text>
-          <Text style={styles.songArtist} numberOfLines={1}>
-            {song.artista}
-          </Text>
+          <View style={styles.songTextWrap}>
+            <Text style={styles.songTitle} numberOfLines={1}>
+              {song.titulo}
+            </Text>
+            <Text style={styles.songArtist} numberOfLines={1}>
+              {song.artista}
+            </Text>
+          </View>
+          <Pressable
+            hitSlop={8}
+            style={styles.listenButton}
+            onPress={() => {
+              openListenLink(song.artista, song.titulo).catch(() =>
+                Alert.alert('No se pudo abrir', 'Intenta de nuevo en un momento.'),
+              );
+            }}
+          >
+            <Text style={styles.listenButtonText}>Escuchar ↗</Text>
+          </Pressable>
         </View>
       ))}
       {entry.caption && <Text style={styles.caption}>"{entry.caption}"</Text>}
@@ -512,6 +526,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accentPrimaryMuted,
   },
   songRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  songTextWrap: {
+    flex: 1,
     gap: 2,
   },
   songTitle: {
@@ -521,6 +542,18 @@ const styles = StyleSheet.create({
   songArtist: {
     ...type.caption,
     color: colors.textSecondary,
+  },
+  listenButton: {
+    flexShrink: 0,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.accentPrimary,
+  },
+  listenButtonText: {
+    ...type.caption,
+    color: colors.accentPrimary,
   },
   caption: {
     ...type.caption,
