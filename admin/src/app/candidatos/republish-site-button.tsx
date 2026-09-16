@@ -1,6 +1,6 @@
 'use client';
 
-import { useTransition, useState } from 'react';
+import { useEffect, useTransition, useState } from 'react';
 import { triggerSiteDeploy } from './deploy-actions';
 
 function formatRelative(iso: string): string {
@@ -31,6 +31,28 @@ export function RepublishSiteButton({ initialLastTriggeredAt }: { initialLastTri
   const [lastTriggeredAt, setLastTriggeredAt] = useState(initialLastTriggeredAt);
   const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
+  // "hace X minutos" solo se calcula en el cliente, después de montar — el
+  // mismo valor calculado en el server-render y de nuevo en el primer
+  // render del cliente puede no coincidir si pasa un minuto entre ambos
+  // (mismatch de hidratación real, visto en Sentry). null = todavía no
+  // montó, se renderiza vacío en vez de arriesgar un valor que no cuadre;
+  // se recalcula cada 30s para que no quede pegado en el momento del montaje.
+  const [relativeText, setRelativeText] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!lastTriggeredAt) {
+      queueMicrotask(() => setRelativeText(null));
+      return;
+    }
+    const update = () => setRelativeText(formatRelative(lastTriggeredAt));
+    // Deferred a un microtask en vez de llamarse directo en el cuerpo del
+    // efecto — mismo resultado (corre antes del siguiente paint), pero sin
+    // el setState síncrono que react-hooks/set-state-in-effect marca como
+    // riesgo de renders en cascada.
+    queueMicrotask(update);
+    const interval = setInterval(update, 30_000);
+    return () => clearInterval(interval);
+  }, [lastTriggeredAt]);
 
   const handleClick = () => {
     setMessage(null);
@@ -70,8 +92,8 @@ export function RepublishSiteButton({ initialLastTriggeredAt }: { initialLastTri
           {message.text}
         </p>
       )}
-      {!message && lastTriggeredAt && (
-        <p className="text-xs text-gray-400">Último rebuild: {formatRelative(lastTriggeredAt)}</p>
+      {!message && relativeText && (
+        <p className="text-xs text-gray-400">Último rebuild: {relativeText}</p>
       )}
     </div>
   );
