@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requireAdmin } from '@/lib/admin';
 import { createClient } from '@/lib/supabase/server';
 import { resolveArtistIds } from '@/lib/artists';
+import { cleanEventNameSafe } from '@/lib/cleanEventName';
 
 export type ApproveOverrides = {
   nombre: string;
@@ -107,6 +108,57 @@ export async function approveCandidate(
   revalidatePath('/candidatos');
   revalidatePath('/admin');
   return {};
+}
+
+export type BulkApproveResult = { id: string; nombre: string; error?: string };
+
+// Aprobar en bulk reusa approveCandidate ítem por ítem (misma validación,
+// mismo vínculo con `artists`, mismo dedup) — nunca duplica esa lógica. Cada
+// candidato se aprueba con SUS PROPIOS datos ya cargados (no un formulario
+// editado a mano, eso sigue siendo el flujo individual); el único ajuste
+// automático es la limpieza segura del nombre (cleanEventNameSafe), nunca
+// una re-casing agresiva. Un candidato incompleto simplemente falla su
+// propia validación dentro de approveCandidate y queda reportado como error
+// sin bloquear el resto del lote.
+export async function approveCandidatesBulk(candidateIds: string[]): Promise<{ results: BulkApproveResult[] }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) {
+    return { results: candidateIds.map((id) => ({ id, nombre: id, error: 'No autorizado.' })) };
+  }
+  if (candidateIds.length === 0) return { results: [] };
+
+  const supabase = await createClient();
+  const { data: rows, error: fetchError } = await supabase
+    .from('event_candidates')
+    .select('id, nombre, tipo, ciudad, fecha_inicio, fecha_fin, link_boletos')
+    .in('id', candidateIds);
+
+  if (fetchError) {
+    return { results: candidateIds.map((id) => ({ id, nombre: id, error: fetchError.message })) };
+  }
+
+  const byId = new Map((rows ?? []).map((r) => [r.id, r]));
+  const results: BulkApproveResult[] = [];
+
+  for (const id of candidateIds) {
+    const row = byId.get(id);
+    if (!row) {
+      results.push({ id, nombre: '(candidato no encontrado)', error: 'El candidato ya no existe.' });
+      continue;
+    }
+    const overrides: ApproveOverrides = {
+      nombre: cleanEventNameSafe(row.nombre),
+      tipo: row.tipo === 'festival' || row.tipo === 'concierto' ? row.tipo : '',
+      ciudad: row.ciudad ?? '',
+      fecha_inicio: row.fecha_inicio ?? '',
+      fecha_fin: row.fecha_fin ?? '',
+      link_boletos: row.link_boletos ?? '',
+    };
+    const result = await approveCandidate(id, overrides);
+    results.push({ id, nombre: row.nombre, error: result.error });
+  }
+
+  return { results };
 }
 
 export async function discardCandidate(candidateId: string): Promise<{ error?: string }> {

@@ -1,8 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { CandidateActions } from './candidate-actions';
+import { approveCandidatesBulk, type BulkApproveResult } from './actions';
 import { resolveEstado, OTRO_ESTADO_LABEL } from '@/lib/mexicoEstados';
+import { cleanEventNameSafe } from '@/lib/cleanEventName';
 import type { Database } from '@/lib/database.types';
 
 type Candidate = Database['public']['Tables']['event_candidates']['Row'];
@@ -64,15 +66,27 @@ function artistGroupKey(c: Candidate): string {
 function CandidateCard({
   candidate,
   duplicateName,
+  selected,
+  onToggleSelect,
 }: {
   candidate: Candidate;
   duplicateName: string | null | undefined;
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
 }) {
   const { submittedLink, posterUrl } = rawPayloadExtras(candidate.raw_payload);
   return (
     <li className="rounded-lg border border-gray-200 bg-white p-4">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            className="mt-1"
+            checked={selected}
+            onChange={() => onToggleSelect(candidate.id)}
+            aria-label={`Seleccionar ${candidate.nombre}`}
+          />
+          <div>
           <div className="flex flex-wrap items-center gap-2">
             <p className="font-medium">{candidate.nombre}</p>
             {candidate.tipo && (
@@ -111,6 +125,7 @@ function CandidateCard({
               {candidate.lineup.length > 6 ? '…' : ''}
             </p>
           )}
+          </div>
         </div>
         <div className="flex flex-col items-end gap-1">
           <span
@@ -139,7 +154,7 @@ function CandidateCard({
         candidateId={candidate.id}
         completo={candidate.completo}
         defaults={{
-          nombre: candidate.nombre,
+          nombre: cleanEventNameSafe(candidate.nombre),
           tipo: candidate.tipo ?? '',
           ciudad: candidate.ciudad ?? '',
           fecha_inicio: candidate.fecha_inicio ?? '',
@@ -156,11 +171,15 @@ function GroupSection({
   candidates,
   festivalNameById,
   defaultOpen,
+  selectedIds,
+  onToggleSelect,
 }: {
   label: string;
   candidates: Candidate[];
   festivalNameById: Map<string, string>;
   defaultOpen: boolean;
+  selectedIds: Set<string>;
+  onToggleSelect: (id: string) => void;
 }) {
   return (
     <details className="rounded-lg border border-gray-200 bg-gray-50" open={defaultOpen}>
@@ -173,6 +192,8 @@ function GroupSection({
             key={c.id}
             candidate={c}
             duplicateName={c.possible_duplicate_of ? festivalNameById.get(c.possible_duplicate_of) : null}
+            selected={selectedIds.has(c.id)}
+            onToggleSelect={onToggleSelect}
           />
         ))}
       </ul>
@@ -189,6 +210,9 @@ export function CandidatosList({
 }) {
   const [query, setQuery] = useState('');
   const [groupBy, setGroupBy] = useState<GroupBy>('evento');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkResults, setBulkResults] = useState<BulkApproveResult[] | null>(null);
+  const [bulkPending, startBulkTransition] = useTransition();
 
   const filtered = useMemo(() => {
     const q = normalizeText(query.trim());
@@ -223,6 +247,40 @@ export function CandidatosList({
       });
   }, [filtered, groupBy]);
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // "Posibles duplicados" quedan fuera de "Seleccionar todos" por default —
+  // mismo criterio de seguridad que el importador de listados (agregar
+  // desde link): la curadora los marca a mano si de verdad quiere aprobarlos.
+  const selectAllVisible = () => {
+    setSelectedIds(new Set(filtered.filter((c) => !c.possible_duplicate_of).map((c) => c.id)));
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const handleBulkApprove = () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    if (!confirm(`Vas a aprobar ${ids.length} evento(s) y se publicarán en el catálogo. ¿Confirmas?`)) return;
+    setBulkResults(null);
+    startBulkTransition(async () => {
+      const { results } = await approveCandidatesBulk(ids);
+      setBulkResults(results);
+      // Solo se quitan de la selección los que sí se aprobaron — los que
+      // fallaron quedan marcados para que sea obvio cuáles todavía necesitan
+      // atención (completar datos a mano, etc.).
+      const succeededIds = new Set(results.filter((r) => !r.error).map((r) => r.id));
+      setSelectedIds((prev) => new Set([...prev].filter((id) => !succeededIds.has(id))));
+    });
+  };
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -256,6 +314,48 @@ export function CandidatosList({
         </div>
       </div>
 
+      {filtered.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-md bg-gray-50 px-3 py-2 text-sm">
+          <button type="button" onClick={selectAllVisible} className="underline">
+            Seleccionar todos visibles
+          </button>
+          {selectedIds.size > 0 && (
+            <button type="button" onClick={clearSelection} className="text-gray-500 underline">
+              Quitar selección
+            </button>
+          )}
+          <span className="text-gray-500">{selectedIds.size} seleccionado(s)</span>
+          <button
+            type="button"
+            disabled={selectedIds.size === 0 || bulkPending}
+            onClick={handleBulkApprove}
+            className="ml-auto rounded-md bg-black px-3 py-1.5 text-xs text-white disabled:opacity-50"
+          >
+            {bulkPending ? 'Aprobando…' : `Aprobar ${selectedIds.size} seleccionado(s)`}
+          </button>
+        </div>
+      )}
+
+      {bulkResults && (
+        <div className="mb-4 rounded-md border border-gray-200 bg-white p-3 text-xs">
+          <p className="mb-1 font-medium text-gray-700">
+            Resultado: {bulkResults.filter((r) => !r.error).length} aprobado(s),{' '}
+            {bulkResults.filter((r) => r.error).length} con error.
+          </p>
+          <ul className="flex flex-col gap-1">
+            {bulkResults.map((r) => (
+              <li key={r.id} className={r.error ? 'text-red-600' : 'text-green-700'}>
+                {r.error ? '✗' : '✓'} {r.nombre}
+                {r.error ? `: ${r.error}` : ''}
+              </li>
+            ))}
+          </ul>
+          <button type="button" onClick={() => setBulkResults(null)} className="mt-2 text-gray-500 underline">
+            Cerrar
+          </button>
+        </div>
+      )}
+
       {filtered.length === 0 && (
         <p className="text-sm text-gray-500">
           {candidates.length === 0 ? 'No hay candidatos pendientes.' : 'Nada coincide con esa búsqueda.'}
@@ -269,6 +369,8 @@ export function CandidatosList({
               key={c.id}
               candidate={c}
               duplicateName={c.possible_duplicate_of ? festivalNameById.get(c.possible_duplicate_of) : null}
+              selected={selectedIds.has(c.id)}
+              onToggleSelect={toggleSelect}
             />
           ))}
         </ul>
@@ -281,6 +383,8 @@ export function CandidatosList({
               candidates={g.items}
               festivalNameById={festivalNameById}
               defaultOpen={groups.length <= 5}
+              selectedIds={selectedIds}
+              onToggleSelect={toggleSelect}
             />
           ))}
         </div>

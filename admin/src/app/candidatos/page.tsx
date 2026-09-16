@@ -52,6 +52,9 @@ export default async function CandidatosPage() {
         </div>
         <div className="flex items-start gap-4">
           <RepublishSiteButton initialLastTriggeredAt={lastTriggeredAt} />
+          <Link href="/candidatos/limpieza" className="text-sm underline">
+            Limpiar nombres
+          </Link>
           <Link href="/admin" className="text-sm underline">
             ← Festivales
           </Link>
