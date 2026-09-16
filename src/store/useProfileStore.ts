@@ -35,6 +35,7 @@ type ProfileState = {
   applyTournamentChampion: (userId: string, champion: TournamentArtist) => Promise<void>;
   updateGuiltyPleasures: (userId: string, ids: string[]) => Promise<void>;
   applyImportResult: (userId: string, result: ImportGenreResult) => Promise<void>;
+  updateEstadosInteres: (userId: string, estados: string[]) => Promise<void>;
 };
 
 export const useProfileStore = create<ProfileState>((set, get) => ({
@@ -129,6 +130,21 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
     const { data, error } = await supabase
       .from('music_profile')
       .update({ guilty_pleasures: ids })
+      .eq('user_id', userId)
+      .select('*')
+      .single();
+
+    if (error) throw error;
+    set({ profile: data, status: 'ready' });
+  },
+
+  // Pregunta opcional de onboarding ("¿qué estados te interesa seguir?") —
+  // solo se captura para habilitar targeting geográfico futuro, no filtra
+  // nada todavía. Saltarla guarda `[]`, que ya es el default de la columna.
+  updateEstadosInteres: async (userId, estados) => {
+    const { data, error } = await supabase
+      .from('music_profile')
+      .update({ estados_interes: estados })
       .eq('user_id', userId)
       .select('*')
       .single();

@@ -1,0 +1,38 @@
+// Los 32 estados de la República — lista fija, no derivada de datos (a
+// diferencia de admin/src/lib/mexicoEstados.ts, que infiere un estado a
+// partir de texto libre de ciudad; aquí el usuario elige directo de esta
+// lista, así que no hace falta ningún mapeo).
+export const ESTADOS_MEXICO: string[] = [
+  'Aguascalientes',
+  'Baja California',
+  'Baja California Sur',
+  'Campeche',
+  'Chiapas',
+  'Chihuahua',
+  'Ciudad de México',
+  'Coahuila',
+  'Colima',
+  'Durango',
+  'Estado de México',
+  'Guanajuato',
+  'Guerrero',
+  'Hidalgo',
+  'Jalisco',
+  'Michoacán',
+  'Morelos',
+  'Nayarit',
+  'Nuevo León',
+  'Oaxaca',
+  'Puebla',
+  'Querétaro',
+  'Quintana Roo',
+  'San Luis Potosí',
+  'Sinaloa',
+  'Sonora',
+  'Tabasco',
+  'Tamaulipas',
+  'Tlaxcala',
+  'Veracruz',
+  'Yucatán',
+  'Zacatecas',
+];

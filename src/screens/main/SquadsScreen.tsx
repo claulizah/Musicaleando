@@ -3,10 +3,13 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Screen } from '../../components/Screen';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { EventFilterBar } from '../../components/EventFilterBar';
 import { RootStackParamList } from '../../navigation/types';
 import { useSessionStore } from '../../store/useSessionStore';
+import { useProfileStore } from '../../store/useProfileStore';
 import { useSquadStore } from '../../store/useSquadStore';
-import { supabase } from '../../lib/supabase';
+import { useFestivalStore } from '../../store/useFestivalStore';
+import { useEventFilters } from '../../hooks/useEventFilters';
 import { Tables } from '../../types/database';
 import { colors, radii, spacing, type } from '../../theme';
 
@@ -21,28 +24,40 @@ function squadAverage(members: { compat_score: number }[]): number {
 
 export function SquadsScreen({ navigation }: Props) {
   const userId = useSessionStore((s) => s.userId);
+  const generos = useProfileStore((s) => (s.profile?.generos as string[] | undefined) ?? []);
   const squads = useSquadStore((s) => s.squads);
   const status = useSquadStore((s) => s.status);
   const fetchMySquads = useSquadStore((s) => s.fetchMySquads);
   const createSquad = useSquadStore((s) => s.createSquad);
   const joinSquad = useSquadStore((s) => s.joinSquad);
   const setSquadFestival = useSquadStore((s) => s.setSquadFestival);
+  // useFestivalStore ya carga todos los festivales + su line-up completo
+  // (lo usa FestivalHubScreen) — se reusa aquí en vez de un select propio de
+  // solo id/nombre, porque el selector de "Festival" al crear un squad
+  // sufre exactamente el mismo problema de lista plana sin buscador, y
+  // reusar el mismo filtro (useEventFilters/EventFilterBar) requiere el
+  // mismo shape de datos que el catálogo principal.
+  const richFestivals = useFestivalStore((s) => s.festivals);
+  const fetchFestivals = useFestivalStore((s) => s.fetch);
+  const filters = useEventFilters(richFestivals, generos);
 
   const [nombre, setNombre] = useState('');
   const [code, setCode] = useState('');
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
-  const [festivals, setFestivals] = useState<FestivalOption[]>([]);
   const [festivalId, setFestivalId] = useState<string | null>(null);
   const [pendingPickerFor, setPendingPickerFor] = useState<string | null>(null);
 
+  // Lista plana simple id/nombre, derivada de lo mismo — solo para el picker
+  // chico de "reasignar festival" de un squad ya existente (caso raro, no
+  // necesita buscador propio).
+  const festivals: FestivalOption[] = richFestivals.map((e) => ({ id: e.festival.id, nombre: e.festival.nombre }));
+
   useEffect(() => {
-    if (userId) fetchMySquads(userId);
-    supabase
-      .from('festivals')
-      .select('id, nombre')
-      .order('fecha_inicio')
-      .then(({ data }) => setFestivals(data ?? []));
+    if (userId) {
+      fetchMySquads(userId);
+      fetchFestivals(userId);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
@@ -155,17 +170,35 @@ export function SquadsScreen({ navigation }: Props) {
             style={styles.input}
           />
           <Text style={styles.formLabel}>Festival</Text>
+          <EventFilterBar
+            query={filters.query}
+            onQueryChange={filters.setQuery}
+            ciudad={filters.ciudad}
+            onCiudadChange={filters.setCiudad}
+            ciudades={filters.ciudades}
+            dateFilter={filters.dateFilter}
+            onDateFilterChange={filters.setDateFilter}
+            tipoFilter={filters.tipoFilter}
+            onTipoFilterChange={filters.setTipoFilter}
+            soloMisGeneros={filters.soloMisGeneros}
+            onToggleSoloMisGeneros={filters.toggleSoloMisGeneros}
+            generoLoading={filters.generoLoading}
+            showGeneroFilter={generos.length > 0}
+          />
           <View style={styles.genreWrap}>
-            {festivals.map((f) => (
+            {filters.filtered.map((e) => (
               <Pressable
-                key={f.id}
-                style={[styles.genreChip, festivalId === f.id && styles.genreChipSelected]}
-                onPress={() => setFestivalId(f.id)}
+                key={e.festival.id}
+                style={[styles.genreChip, festivalId === e.festival.id && styles.genreChipSelected]}
+                onPress={() => setFestivalId(e.festival.id)}
               >
-                <Text style={styles.genreChipLabel}>{f.nombre}</Text>
+                <Text style={styles.genreChipLabel}>{e.festival.nombre}</Text>
               </Pressable>
             ))}
-            {festivals.length === 0 && <Text style={styles.hint}>No hay festivales cargados todavía.</Text>}
+            {richFestivals.length === 0 && <Text style={styles.hint}>No hay festivales cargados todavía.</Text>}
+            {richFestivals.length > 0 && filters.filtered.length === 0 && (
+              <Text style={styles.hint}>Nada coincide con esa búsqueda.</Text>
+            )}
           </View>
           <PrimaryButton
             label="Crear"

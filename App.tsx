@@ -20,6 +20,7 @@ import { WelcomeScreen } from './src/screens/onboarding/WelcomeScreen';
 import { QuizScreen } from './src/screens/onboarding/QuizScreen';
 import { RevealScreen } from './src/screens/onboarding/RevealScreen';
 import { MoodPickScreen } from './src/screens/onboarding/MoodPickScreen';
+import { EstadosInteresScreen } from './src/screens/onboarding/EstadosInteresScreen';
 import { HomeScreen } from './src/screens/main/HomeScreen';
 import { ProfileScreen } from './src/screens/main/ProfileScreen';
 import { SquadsScreen } from './src/screens/main/SquadsScreen';
@@ -117,6 +118,7 @@ function App() {
           <Stack.Screen name="Quiz" component={QuizScreen} />
           <Stack.Screen name="Reveal" component={RevealScreen} />
           <Stack.Screen name="MoodPick" component={MoodPickScreen} />
+          <Stack.Screen name="EstadosInteres" component={EstadosInteresScreen} />
           <Stack.Screen name="Home" component={HomeScreen} />
           <Stack.Screen name="Profile" component={ProfileScreen} />
           <Stack.Screen name="Squads" component={SquadsScreen} />

@@ -760,6 +760,7 @@ export type Database = {
         Row: {
           arquetipo: string | null
           energia: number
+          estados_interes: Json
           flavor: Json
           generos: Json
           guilty_pleasures: Json
@@ -771,6 +772,7 @@ export type Database = {
         Insert: {
           arquetipo?: string | null
           energia?: number
+          estados_interes?: Json
           flavor?: Json
           generos?: Json
           guilty_pleasures?: Json
@@ -782,6 +784,7 @@ export type Database = {
         Update: {
           arquetipo?: string | null
           energia?: number
+          estados_interes?: Json
           flavor?: Json
           generos?: Json
           guilty_pleasures?: Json

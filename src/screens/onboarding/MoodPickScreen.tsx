@@ -19,7 +19,7 @@ export function MoodPickScreen({ navigation }: Props) {
   const choose = async (mood: Mood) => {
     if (!userId) return;
     await setMood(userId, mood);
-    navigation.replace('Home');
+    navigation.replace('EstadosInteres');
   };
 
   return (

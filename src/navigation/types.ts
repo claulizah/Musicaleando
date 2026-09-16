@@ -3,6 +3,7 @@ export type RootStackParamList = {
   Quiz: undefined;
   Reveal: undefined;
   MoodPick: undefined;
+  EstadosInteres: undefined;
   Home: undefined;
   Profile: undefined;
   Squads: undefined;

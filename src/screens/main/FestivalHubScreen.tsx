@@ -18,16 +18,11 @@ import { fetchFestivalPersonalization, FestivalGenreMatch } from '../../lib/spot
 import { GENEROS, ARCHETYPES } from '../../lib/archetypes';
 import { promptReportContent } from '../../lib/moderation';
 import { useSquadStore } from '../../store/useSquadStore';
+import { useEventFilters } from '../../hooks/useEventFilters';
+import { EventFilterBar } from '../../components/EventFilterBar';
 import { colors, radii, spacing, type } from '../../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Festivals'>;
-type TipoFilter = 'todos' | 'festival' | 'concierto';
-
-const TIPO_FILTER_OPTIONS: { id: TipoFilter; label: string }[] = [
-  { id: 'todos', label: 'Todos' },
-  { id: 'festival', label: 'Festivales' },
-  { id: 'concierto', label: 'Conciertos' },
-];
 
 const TIPO_BADGE: Record<string, string> = {
   festival: '🎪 Festival',
@@ -77,7 +72,7 @@ export function FestivalHubScreen({ navigation, route }: Props) {
   const reportComment = useFestivalStore((s) => s.reportComment);
   const squads = useSquadStore((s) => s.squads);
   const fetchMySquads = useSquadStore((s) => s.fetchMySquads);
-  const [tipoFilter, setTipoFilter] = useState<TipoFilter>('todos');
+  const filters = useEventFilters(festivals, generos);
 
   useEffect(() => {
     if (userId) fetchFestivals(userId);
@@ -95,8 +90,7 @@ export function FestivalHubScreen({ navigation, route }: Props) {
     squads.flatMap((s) => s.members).map((m) => [m.user_id, m.arquetipo]),
   );
 
-  const filteredFestivals =
-    tipoFilter === 'todos' ? festivals : festivals.filter((e) => e.festival.tipo === tipoFilter);
+  const filteredFestivals = filters.filtered;
 
   return (
     <Screen>
@@ -109,22 +103,21 @@ export function FestivalHubScreen({ navigation, route }: Props) {
           <View style={styles.headerSpacer} />
         </View>
 
-        <View style={styles.tipoFilterRow}>
-          {TIPO_FILTER_OPTIONS.map((option) => {
-            const selected = tipoFilter === option.id;
-            return (
-              <Pressable
-                key={option.id}
-                style={[styles.tipoFilterChip, selected && styles.tipoFilterChipSelected]}
-                onPress={() => setTipoFilter(option.id)}
-              >
-                <Text style={[styles.tipoFilterChipText, selected && styles.tipoFilterChipTextSelected]}>
-                  {option.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        <EventFilterBar
+          query={filters.query}
+          onQueryChange={filters.setQuery}
+          ciudad={filters.ciudad}
+          onCiudadChange={filters.setCiudad}
+          ciudades={filters.ciudades}
+          dateFilter={filters.dateFilter}
+          onDateFilterChange={filters.setDateFilter}
+          tipoFilter={filters.tipoFilter}
+          onTipoFilterChange={filters.setTipoFilter}
+          soloMisGeneros={filters.soloMisGeneros}
+          onToggleSoloMisGeneros={filters.toggleSoloMisGeneros}
+          generoLoading={filters.generoLoading}
+          showGeneroFilter={generos.length > 0}
+        />
 
         {status === 'loading' && festivals.length === 0 && (
           <Text style={styles.hint}>Cargando eventos...</Text>
