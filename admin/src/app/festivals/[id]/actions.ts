@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requireAdmin } from '@/lib/admin';
 import { createClient } from '@/lib/supabase/server';
 import { resolveArtistIds } from '@/lib/artists';
+import { normalizeHorario } from '@/lib/normalizeHorario';
 
 export type LineupRow = {
   artista: string;
@@ -66,13 +67,18 @@ export async function importLineup(
   }
 
   const supabase = await createClient();
+  const { data: festival } = await supabase
+    .from('festivals')
+    .select('fecha_inicio')
+    .eq('id', festivalId)
+    .maybeSingle();
   const artistIds = await resolveArtistIds(supabase, validRows.map((r) => r.artista));
   const { error } = await supabase.from('festival_lineup').insert(
     validRows.map((r) => ({
       festival_id: festivalId,
       artista: r.artista,
       escenario: r.escenario?.trim() || null,
-      horario: r.horario?.trim() || null,
+      horario: festival ? normalizeHorario(festival.fecha_inicio, r.horario?.trim() || null) : null,
       artist_id: artistIds.get(r.artista) ?? null,
     })),
   );
@@ -346,12 +352,17 @@ export async function approveLineupCandidate(
   if (!artista) return { error: 'Falta el nombre del artista.' };
 
   const supabase = await createClient();
+  const { data: festival } = await supabase
+    .from('festivals')
+    .select('fecha_inicio')
+    .eq('id', festivalId)
+    .maybeSingle();
   const artistIds = await resolveArtistIds(supabase, [artista]);
   const { error: insertError } = await supabase.from('festival_lineup').insert({
     festival_id: festivalId,
     artista,
     escenario: values.escenario?.trim() || null,
-    horario: values.horario || null,
+    horario: festival ? normalizeHorario(festival.fecha_inicio, values.horario) : null,
     artist_id: artistIds.get(artista) ?? null,
   });
   if (insertError) return { error: insertError.message };

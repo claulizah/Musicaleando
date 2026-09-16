@@ -5,6 +5,7 @@ import { requireAdmin } from '@/lib/admin';
 import { createClient } from '@/lib/supabase/server';
 import { resolveArtistIds } from '@/lib/artists';
 import { cleanEventNameSafe } from '@/lib/cleanEventName';
+import { normalizeHorario } from '@/lib/normalizeHorario';
 
 export type ApproveOverrides = {
   nombre: string;
@@ -83,7 +84,7 @@ export async function approveCandidate(
       lineup.map((item) => {
         const artista = typeof item === 'string' ? item : item.artista;
         const escenario = typeof item === 'string' ? null : item.escenario;
-        const horario = typeof item === 'string' ? null : item.horario;
+        const horario = typeof item === 'string' ? null : normalizeHorario(fecha_inicio, item.horario);
         return {
           festival_id: festival.id,
           artista,
@@ -93,10 +94,16 @@ export async function approveCandidate(
         };
       }),
     );
-    // Un fallo aquí no debe dejar el candidato en un estado ambiguo — el
-    // festival ya existe y es lo que importa; el line-up se puede completar
-    // a mano después desde el detalle del festival.
-    if (lineupError) console.error('No se pudo insertar line-up al aprobar candidato:', lineupError);
+    if (lineupError) {
+      // Un evento sin su line-up/artista vinculado no debe quedar publicado
+      // en el catálogo público en silencio (bug real: esto pasaba y la
+      // aprobación igual reportaba éxito) — se revierte el festival recién
+      // creado y se reporta el error real; el candidato queda en 'pendiente'
+      // tal como estaba, listo para reintentar.
+      console.error('No se pudo insertar line-up al aprobar candidato — revirtiendo la aprobación:', lineupError);
+      await supabase.from('festivals').delete().eq('id', festival.id);
+      return { error: `No se pudo guardar el line-up (se revirtió la aprobación): ${lineupError.message}` };
+    }
   }
 
   const { error: updateError } = await supabase
@@ -128,19 +135,38 @@ export async function approveCandidatesBulk(candidateIds: string[]): Promise<{ r
   if (candidateIds.length === 0) return { results: [] };
 
   const supabase = await createClient();
-  const { data: rows, error: fetchError } = await supabase
-    .from('event_candidates')
-    .select('id, nombre, tipo, ciudad, fecha_inicio, fecha_fin, link_boletos')
-    .in('id', candidateIds);
 
-  if (fetchError) {
-    return { results: candidateIds.map((id) => ({ id, nombre: id, error: fetchError.message })) };
+  // Un solo .in() con cientos de IDs arma una URL GET larguísima del lado de
+  // PostgREST — con un lote de ~767 esto devolvía "Bad Request" genérico
+  // (nada de código/mensaje real de Postgres, porque el request ni llegaba a
+  // Postgres) y por eso TODOS los ítems fallaban igual sin explicación. Se
+  // trae en lotes chicos para evitar el límite de largo de URL.
+  const FETCH_CHUNK_SIZE = 100;
+  const byId = new Map<string, { id: string; nombre: string; tipo: string | null; ciudad: string | null; fecha_inicio: string | null; fecha_fin: string | null; link_boletos: string | null }>();
+  const fetchErrorById = new Map<string, string>();
+
+  for (let i = 0; i < candidateIds.length; i += FETCH_CHUNK_SIZE) {
+    const chunk = candidateIds.slice(i, i + FETCH_CHUNK_SIZE);
+    const { data: rows, error: fetchError } = await supabase
+      .from('event_candidates')
+      .select('id, nombre, tipo, ciudad, fecha_inicio, fecha_fin, link_boletos')
+      .in('id', chunk);
+
+    if (fetchError) {
+      console.error(`No se pudieron leer ${chunk.length} candidatos para aprobación en bulk:`, fetchError);
+      for (const id of chunk) fetchErrorById.set(id, fetchError.message);
+      continue;
+    }
+    for (const r of rows ?? []) byId.set(r.id, r);
   }
 
-  const byId = new Map((rows ?? []).map((r) => [r.id, r]));
   const results: BulkApproveResult[] = [];
 
   for (const id of candidateIds) {
+    if (fetchErrorById.has(id)) {
+      results.push({ id, nombre: id, error: fetchErrorById.get(id) });
+      continue;
+    }
     const row = byId.get(id);
     if (!row) {
       results.push({ id, nombre: '(candidato no encontrado)', error: 'El candidato ya no existe.' });
@@ -155,6 +181,12 @@ export async function approveCandidatesBulk(candidateIds: string[]): Promise<{ r
       link_boletos: row.link_boletos ?? '',
     };
     const result = await approveCandidate(id, overrides);
+    if (result.error) {
+      // Mismo nivel de detalle que approveCandidate individual — antes acá
+      // no quedaba ningún rastro del motivo real por ítem, solo se veía que
+      // la función bulk había corrido.
+      console.error(`approveCandidatesBulk: candidato ${id} (${row.nombre}) falló:`, result.error);
+    }
     results.push({ id, nombre: row.nombre, error: result.error });
   }
 
@@ -362,13 +394,18 @@ export async function mergeLineupIntoExisting(
   const supabase = await createClient();
 
   if (target.type === 'festival') {
+    const { data: targetFestival } = await supabase
+      .from('festivals')
+      .select('fecha_inicio')
+      .eq('id', target.id)
+      .maybeSingle();
     const artistIds = await resolveArtistIds(supabase, lineup.map((l) => l.artista));
     const { error } = await supabase.from('festival_lineup').insert(
       lineup.map((l) => ({
         festival_id: target.id,
         artista: l.artista,
         escenario: l.escenario,
-        horario: l.horario,
+        horario: targetFestival ? normalizeHorario(targetFestival.fecha_inicio, l.horario) : null,
         artist_id: artistIds.get(l.artista) ?? null,
       })),
     );
