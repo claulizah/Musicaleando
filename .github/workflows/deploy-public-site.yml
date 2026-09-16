@@ -1,0 +1,36 @@
+name: Deploy public-site
+
+# Solo manual (workflow_dispatch) — ni push a main ni ningún otro trigger
+# automático. Republicar el sitio sigue siendo una decisión explícita de
+# Claudia, ya sea desde la pestaña Actions de GitHub o desde el botón
+# "Republicar sitio" en /candidatos (que llama a este mismo workflow vía la
+# API de GitHub, ver admin/src/app/candidatos/deploy-actions.ts).
+on:
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: public-site
+    steps:
+      - uses: actions/checkout@v4
+
+      # public-site no fija versión de Node (sin .nvmrc/engines) — se usa la
+      # misma que corre localmente en esta máquina de desarrollo (v24).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: public-site/package-lock.json
+
+      - run: npm ci
+      - run: npm run build
+
+      # output: "export" en next.config.ts genera el sitio estático en out/.
+      - name: Deploy a Cloudflare Pages
+        run: npx wrangler pages deploy out --project-name=musicaleando-site --branch=main
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

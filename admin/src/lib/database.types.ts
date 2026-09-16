@@ -31,6 +31,23 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['users']['Row']>;
         Relationships: [];
       };
+      site_deploys: {
+        Row: { id: string; triggered_at: string; triggered_by: string };
+        Insert: Omit<Database['public']['Tables']['site_deploys']['Row'], 'id' | 'triggered_at'> & {
+          id?: string;
+          triggered_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['site_deploys']['Row']>;
+        Relationships: [
+          {
+            foreignKeyName: 'site_deploys_triggered_by_fkey';
+            columns: ['triggered_by'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       festivals: {
         Row: {
           id: string;

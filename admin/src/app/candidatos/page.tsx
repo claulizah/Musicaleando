@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin';
 import { createClient } from '@/lib/supabase/server';
 import { CandidatosList } from './candidatos-list';
+import { RepublishSiteButton } from './republish-site-button';
+import { getLastSiteDeploy } from './deploy-actions';
 
 const ESTADO_LABEL: Record<string, string> = {
   cancelado: 'Cancelado en la fuente',
@@ -20,7 +22,7 @@ export default async function CandidatosPage() {
 
   const supabase = await createClient();
 
-  const [{ data: pending }, { data: flagged }, { data: festivals }] = await Promise.all([
+  const [{ data: pending }, { data: flagged }, { data: festivals }, { lastTriggeredAt }] = await Promise.all([
     supabase
       .from('event_candidates')
       .select('*')
@@ -33,6 +35,7 @@ export default async function CandidatosPage() {
       .order('updated_at', { ascending: false })
       .limit(30),
     supabase.from('festivals').select('id, nombre'),
+    getLastSiteDeploy(),
   ]);
 
   const festivalNameById = new Map((festivals ?? []).map((f) => [f.id, f.nombre]));
@@ -47,9 +50,12 @@ export default async function CandidatosPage() {
             publica sin tu aprobación.
           </p>
         </div>
-        <Link href="/admin" className="text-sm underline">
-          ← Festivales
-        </Link>
+        <div className="flex items-start gap-4">
+          <RepublishSiteButton initialLastTriggeredAt={lastTriggeredAt} />
+          <Link href="/admin" className="text-sm underline">
+            ← Festivales
+          </Link>
+        </div>
       </div>
 
       <CandidatosList candidates={pending ?? []} festivalNameById={festivalNameById} />
