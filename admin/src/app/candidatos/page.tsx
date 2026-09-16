@@ -10,7 +10,9 @@ const ESTADO_LABEL: Record<string, string> = {
 
 const SOURCE_LABEL: Record<string, string> = {
   ticketmaster: 'Ticketmaster',
-  poster_image: '📷 Póster',
+  poster_image: '📷 Póster (admin)',
+  sumision_publica: '🌐 Sumisión pública',
+  link: '🔗 Link',
 };
 
 const TIPO_LABEL: Record<string, string> = {
@@ -24,6 +26,15 @@ function formatLineupItem(item: string | { artista: string; escenario: string | 
   if (item.escenario) parts.push(item.escenario);
   if (item.horario) parts.push(item.horario);
   return parts.join(' · ');
+}
+
+function rawPayloadExtras(raw: unknown): { submittedLink: string | null; posterUrl: string | null } {
+  if (!raw || typeof raw !== 'object') return { submittedLink: null, posterUrl: null };
+  const obj = raw as Record<string, unknown>;
+  return {
+    submittedLink: typeof obj.submitted_link === 'string' ? obj.submitted_link : null,
+    posterUrl: typeof obj.poster_url === 'string' ? obj.poster_url : null,
+  };
 }
 
 export default async function CandidatosPage() {
@@ -61,7 +72,8 @@ export default async function CandidatosPage() {
         <div>
           <h1 className="text-xl font-semibold">Candidatos de eventos</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Sincronizados desde Ticketmaster 2x al día. Nada se publica sin tu aprobación.
+            De Ticketmaster, imagen/link agregados desde el panel, o sugerencias públicas. Nada se
+            publica sin tu aprobación.
           </p>
         </div>
         <Link href="/admin" className="text-sm underline">
@@ -72,6 +84,7 @@ export default async function CandidatosPage() {
       <ul className="flex flex-col gap-3">
         {(pending ?? []).map((c) => {
           const duplicateName = c.possible_duplicate_of ? festivalNameById.get(c.possible_duplicate_of) : null;
+          const { submittedLink, posterUrl } = rawPayloadExtras(c.raw_payload);
           return (
             <li key={c.id} className="rounded-lg border border-gray-200 bg-white p-4">
               <div className="flex items-start justify-between gap-3">
@@ -89,6 +102,19 @@ export default async function CandidatosPage() {
                     {c.venue ? ` · ${c.venue}` : ''}
                   </p>
                   <p className="text-xs text-gray-400">Fuente: {SOURCE_LABEL[c.source] ?? c.source}</p>
+                  {posterUrl && (
+                    <a href={posterUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 underline">
+                      Ver póster adjunto
+                    </a>
+                  )}
+                  {submittedLink && (
+                    <p className="text-xs text-gray-400">
+                      Link de la fuente:{' '}
+                      <a href={submittedLink} target="_blank" rel="noreferrer" className="underline">
+                        {submittedLink}
+                      </a>
+                    </p>
+                  )}
                   {c.price_min != null && (
                     <p className="text-xs text-gray-400">
                       Desde {c.price_min} {c.price_currency ?? ''}

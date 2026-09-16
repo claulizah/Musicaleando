@@ -240,8 +240,9 @@ export async function extractEventFromImage(
   return { extracted, duplicate };
 }
 
-export async function createEventCandidateFromImage(
+export async function createEventCandidate(
   extracted: ExtractedEvent,
+  source: 'poster_image' | 'link',
 ): Promise<{ error?: string }> {
   const admin = await requireAdmin();
   if (!admin.authorized) return { error: 'No autorizado.' };
@@ -251,7 +252,7 @@ export async function createEventCandidateFromImage(
 
   const supabase = await createClient();
   const { error } = await supabase.from('event_candidates').insert({
-    source: 'poster_image',
+    source,
     source_id: crypto.randomUUID(),
     nombre,
     tipo: extracted.tipo,
@@ -313,4 +314,60 @@ export async function mergeLineupIntoExisting(
 
   revalidatePath('/candidatos');
   return {};
+}
+
+// ---------- Agregar evento desde link ----------
+// Mismo contrato de salida que extractEventFromImage (ExtractedEvent +
+// posible duplicado) para que la UI comparta el mismo componente de
+// preview/aprobación — solo cambia de dónde sale el JSON crudo (Edge
+// Function que lee una URL puntual en vez de una imagen).
+export async function extractEventFromLink(
+  url: string,
+): Promise<{ error?: string; extracted?: ExtractedEvent; duplicate?: DuplicateMatch | null }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) return { error: 'No autorizado.' };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.functions.invoke<{
+    evento?: {
+      nombre: string | null;
+      tipo: 'festival' | 'concierto' | null;
+      fecha_inicio: string | null;
+      fecha_fin: string | null;
+      ciudad: string | null;
+      venue: string | null;
+    };
+    bloques?: { escenario: string | null; artista: string; hora_inicio: string | null }[];
+    error?: string;
+  }>('extract-event-from-link', { body: { url } });
+
+  if (error) return { error: error.message };
+  if (data?.error) return { error: data.error };
+  if (!data?.evento) return { error: 'La IA no devolvió datos del evento. Completa el formulario a mano.' };
+
+  const extracted: ExtractedEvent = {
+    nombre: data.evento.nombre,
+    tipo: data.evento.tipo,
+    fecha_inicio: data.evento.fecha_inicio,
+    fecha_fin: data.evento.fecha_fin,
+    ciudad: data.evento.ciudad,
+    venue: data.evento.venue,
+    lineup: (data.bloques ?? []).map((b) => ({ artista: b.artista, escenario: b.escenario, horario: b.hora_inicio })),
+    esHorarioConTiempos: (data.bloques ?? []).some((b) => Boolean(b.hora_inicio)),
+  };
+
+  let duplicate: DuplicateMatch | null = null;
+  if (extracted.nombre) {
+    const [{ data: festivals }, { data: pendingCandidates }] = await Promise.all([
+      supabase.from('festivals').select('id, nombre, ciudad, fecha_inicio'),
+      supabase.from('event_candidates').select('id, nombre, ciudad, fecha_inicio').eq('estado', 'pendiente'),
+    ]);
+    duplicate = findDuplicateMatch(
+      { nombre: extracted.nombre, ciudad: extracted.ciudad, fecha_inicio: extracted.fecha_inicio },
+      festivals ?? [],
+      pendingCandidates ?? [],
+    );
+  }
+
+  return { extracted, duplicate };
 }

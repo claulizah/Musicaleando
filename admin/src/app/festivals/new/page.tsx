@@ -3,6 +3,7 @@
 import { useActionState } from 'react';
 import { createFestival } from './actions';
 import { EventImageImporter } from './event-image-importer';
+import { EventLinkImporter } from './event-link-importer';
 
 const initialState = { error: '' };
 
@@ -87,6 +88,7 @@ export default function NewFestivalPage() {
 
       <div className="mt-8">
         <EventImageImporter />
+        <EventLinkImporter />
       </div>
     </main>
   );
