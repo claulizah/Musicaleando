@@ -62,9 +62,11 @@ export type Database = {
           artista: string;
           escenario: string | null;
           horario: string | null;
+          artist_id: string | null;
         };
-        Insert: Omit<Database['public']['Tables']['festival_lineup']['Row'], 'id'> & {
+        Insert: Omit<Database['public']['Tables']['festival_lineup']['Row'], 'id' | 'artist_id'> & {
           id?: string;
+          artist_id?: string | null;
         };
         Update: Partial<Database['public']['Tables']['festival_lineup']['Row']>;
         Relationships: [
@@ -75,7 +77,28 @@ export type Database = {
             referencedRelation: 'festivals';
             referencedColumns: ['id'];
           },
+          {
+            foreignKeyName: 'festival_lineup_artist_id_fkey';
+            columns: ['artist_id'];
+            isOneToOne: false;
+            referencedRelation: 'artists';
+            referencedColumns: ['id'];
+          },
         ];
+      };
+      artists: {
+        Row: {
+          id: string;
+          name: string;
+          normalized_name: string;
+          created_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['artists']['Row'], 'id' | 'created_at'> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['artists']['Row']>;
+        Relationships: [];
       };
       sponsors: {
         Row: {

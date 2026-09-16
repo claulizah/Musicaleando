@@ -7,7 +7,8 @@ export type RootStackParamList = {
   Profile: undefined;
   Squads: undefined;
   SquadDetail: { squadId: string };
-  Festivals: undefined;
+  Festivals: { highlightFestivalId?: string } | undefined;
+  ArtistDetail: { artistId: string; artistName: string };
   Torneo: undefined;
   SquadTorneo: { squadId: string };
   CommunityTrends: undefined;

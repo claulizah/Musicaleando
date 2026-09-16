@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requireAdmin } from '@/lib/admin';
 import { createClient } from '@/lib/supabase/server';
+import { resolveArtistIds } from '@/lib/artists';
 
 export type ApproveOverrides = {
   nombre: string;
@@ -63,14 +64,33 @@ export async function approveCandidate(
     .single();
   if (insertError) return { error: insertError.message };
 
-  const lineup = candidate.lineup ?? [];
+  let lineup = candidate.lineup ?? [];
+  // Ticketmaster siempre manda el headliner como "attraction" en lineup, pero
+  // un candidato extraído de imagen/link a veces no devuelve bloques
+  // explícitos para un concierto de un solo acto — ahí el nombre del evento
+  // ES el artista, así que se sintetiza la única fila de line-up para que el
+  // artista quede vinculado igual que en cualquier otro evento.
+  if ((tipo ?? 'festival') === 'concierto' && lineup.length === 0) {
+    lineup = [{ artista: nombre, escenario: null, horario: null }];
+  }
   if (lineup.length > 0) {
+    const artistIds = await resolveArtistIds(
+      supabase,
+      lineup.map((item) => (typeof item === 'string' ? item : item.artista)),
+    );
     const { error: lineupError } = await supabase.from('festival_lineup').insert(
-      lineup.map((item) =>
-        typeof item === 'string'
-          ? { festival_id: festival.id, artista: item, escenario: null, horario: null }
-          : { festival_id: festival.id, artista: item.artista, escenario: item.escenario, horario: item.horario },
-      ),
+      lineup.map((item) => {
+        const artista = typeof item === 'string' ? item : item.artista;
+        const escenario = typeof item === 'string' ? null : item.escenario;
+        const horario = typeof item === 'string' ? null : item.horario;
+        return {
+          festival_id: festival.id,
+          artista,
+          escenario,
+          horario,
+          artist_id: artistIds.get(artista) ?? null,
+        };
+      }),
     );
     // Un fallo aquí no debe dejar el candidato en un estado ambiguo — el
     // festival ya existe y es lo que importa; el line-up se puede completar
@@ -290,12 +310,14 @@ export async function mergeLineupIntoExisting(
   const supabase = await createClient();
 
   if (target.type === 'festival') {
+    const artistIds = await resolveArtistIds(supabase, lineup.map((l) => l.artista));
     const { error } = await supabase.from('festival_lineup').insert(
       lineup.map((l) => ({
         festival_id: target.id,
         artista: l.artista,
         escenario: l.escenario,
         horario: l.horario,
+        artist_id: artistIds.get(l.artista) ?? null,
       })),
     );
     if (error) return { error: error.message };

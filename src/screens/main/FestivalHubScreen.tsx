@@ -59,7 +59,8 @@ function formatRange(inicio: string, fin: string): string {
   return inicio === fin ? fmt(inicio) : `${fmt(inicio)} – ${fmt(fin)}`;
 }
 
-export function FestivalHubScreen({ navigation }: Props) {
+export function FestivalHubScreen({ navigation, route }: Props) {
+  const highlightFestivalId = route.params?.highlightFestivalId;
   const userId = useSessionStore((s) => s.userId);
   const generos = useProfileStore((s) => (s.profile?.generos as string[] | undefined) ?? []);
   const festivals = useFestivalStore((s) => s.festivals);
@@ -144,6 +145,8 @@ export function FestivalHubScreen({ navigation }: Props) {
           <FestivalCard
             key={entry.festival.id}
             entry={entry}
+            navigation={navigation}
+            highlighted={entry.festival.id === highlightFestivalId}
             onSetStatus={(s) => userId && setFestivalStatus(userId, entry.festival.id, s)}
             onSetReaction={(r) => userId && setReaction(userId, entry.festival.id, r)}
             onSubmitFeedback={(tags, comentario) =>
@@ -174,6 +177,8 @@ export function FestivalHubScreen({ navigation }: Props) {
 
 function FestivalCard({
   entry,
+  navigation,
+  highlighted,
   onSetStatus,
   onSetReaction,
   onSubmitFeedback,
@@ -187,6 +192,8 @@ function FestivalCard({
   squadmateArchetypeById,
 }: {
   entry: FestivalWithIntent;
+  navigation: Props['navigation'];
+  highlighted: boolean;
   onSetStatus: (status: FestivalStatus) => void;
   onSetReaction: (reaction: FestivalReactionType) => void;
   onSubmitFeedback: (tags: string[], comentario: string | null) => Promise<void>;
@@ -212,7 +219,7 @@ function FestivalCard({
     mapPins,
     survey,
   } = entry;
-  const [showLineup, setShowLineup] = useState(false);
+  const [showLineup, setShowLineup] = useState(highlighted);
   const [showSquadGoing, setShowSquadGoing] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [selectedEscenario, setSelectedEscenario] = useState<string | null>(null);
@@ -227,7 +234,7 @@ function FestivalCard({
   const [loadingPersonalized, setLoadingPersonalized] = useState(false);
   const [surveyCalificacion, setSurveyCalificacion] = useState<SurveyCalificacion | null>(null);
   const [savingSurvey, setSavingSurvey] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(highlighted);
 
   const handlePersonalize = async () => {
     if (generos.length === 0 || lineup.length === 0) return;
@@ -289,7 +296,7 @@ function FestivalCard({
   };
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, highlighted && styles.cardHighlighted]}>
       <View style={styles.cardHeaderRow}>
         <Text style={styles.nombre}>{festival.nombre}</Text>
         <Text style={styles.tipoBadge}>{TIPO_BADGE[festival.tipo] ?? '🎪 Festival'}</Text>
@@ -368,18 +375,27 @@ function FestivalCard({
       )}
       {showLineup &&
         lineup.map((artist) => (
-          <Text key={artist.id} style={styles.lineupRow}>
-            {artist.artista}
-            {artist.escenario ? ` · ${artist.escenario}` : ''}
-            {artist.horario
-              ? ` · ${new Date(artist.horario).toLocaleString('es-MX', {
-                  day: 'numeric',
-                  month: 'short',
-                  hour: 'numeric',
-                  minute: '2-digit',
-                })}`
-              : ''}
-          </Text>
+          <Pressable
+            key={artist.id}
+            disabled={!artist.artist_id}
+            onPress={() =>
+              artist.artist_id &&
+              navigation.navigate('ArtistDetail', { artistId: artist.artist_id, artistName: artist.artista })
+            }
+          >
+            <Text style={styles.lineupRow}>
+              {artist.artista}
+              {artist.escenario ? ` · ${artist.escenario}` : ''}
+              {artist.horario
+                ? ` · ${new Date(artist.horario).toLocaleString('es-MX', {
+                    day: 'numeric',
+                    month: 'short',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                  })}`
+                : ''}
+            </Text>
+          </Pressable>
         ))}
 
       {festival.mapa_url && (
@@ -410,9 +426,15 @@ function FestivalCard({
               {lineup
                 .filter((l) => l.escenario === selectedEscenario)
                 .map((l) => (
-                  <Text key={l.id} style={styles.lineupRow}>
-                    {l.artista}
-                  </Text>
+                  <Pressable
+                    key={l.id}
+                    disabled={!l.artist_id}
+                    onPress={() =>
+                      l.artist_id && navigation.navigate('ArtistDetail', { artistId: l.artist_id, artistName: l.artista })
+                    }
+                  >
+                    <Text style={styles.lineupRow}>{l.artista}</Text>
+                  </Pressable>
                 ))}
               {lineup.filter((l) => l.escenario === selectedEscenario).length === 0 && (
                 <Text style={styles.hint}>No hay artistas cargados para este escenario.</Text>
@@ -703,6 +725,13 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.md,
     gap: spacing.xs,
+  },
+  // Aplicado cuando se llega desde la ficha de artista con un evento
+  // puntual en mente ("Festivals" no tiene ruta por evento, así que esto es
+  // la señal visual de "es este") — ver ArtistDetailScreen.
+  cardHighlighted: {
+    borderColor: colors.accentPrimary,
+    borderWidth: 2,
   },
   cardHeaderRow: {
     flexDirection: 'row',
