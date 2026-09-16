@@ -321,53 +321,85 @@ export async function mergeLineupIntoExisting(
 // posible duplicado) para que la UI comparta el mismo componente de
 // preview/aprobación — solo cambia de dónde sale el JSON crudo (Edge
 // Function que lee una URL puntual en vez de una imagen).
+export type ExtractedEventWithDuplicate = ExtractedEvent & { duplicate: DuplicateMatch | null };
+
+// Handles both a single-event page and a listing/cartelera page with one
+// call — the Edge Function always returns an array (length 1 for a normal
+// event page), so the UI just branches on how many came back instead of
+// needing a separate "is this a listing" step.
 export async function extractEventFromLink(
   url: string,
-): Promise<{ error?: string; extracted?: ExtractedEvent; duplicate?: DuplicateMatch | null }> {
+): Promise<{ error?: string; events?: ExtractedEventWithDuplicate[]; esListado?: boolean }> {
   const admin = await requireAdmin();
   if (!admin.authorized) return { error: 'No autorizado.' };
 
   const supabase = await createClient();
   const { data, error } = await supabase.functions.invoke<{
-    evento?: {
+    esListado?: boolean;
+    eventos?: {
       nombre: string | null;
       tipo: 'festival' | 'concierto' | null;
       fecha_inicio: string | null;
       fecha_fin: string | null;
       ciudad: string | null;
       venue: string | null;
-    };
-    bloques?: { escenario: string | null; artista: string; hora_inicio: string | null }[];
+      bloques: { escenario: string | null; artista: string; hora_inicio: string | null }[];
+    }[];
     error?: string;
   }>('extract-event-from-link', { body: { url } });
 
   if (error) return { error: error.message };
   if (data?.error) return { error: data.error };
-  if (!data?.evento) return { error: 'La IA no devolvió datos del evento. Completa el formulario a mano.' };
-
-  const extracted: ExtractedEvent = {
-    nombre: data.evento.nombre,
-    tipo: data.evento.tipo,
-    fecha_inicio: data.evento.fecha_inicio,
-    fecha_fin: data.evento.fecha_fin,
-    ciudad: data.evento.ciudad,
-    venue: data.evento.venue,
-    lineup: (data.bloques ?? []).map((b) => ({ artista: b.artista, escenario: b.escenario, horario: b.hora_inicio })),
-    esHorarioConTiempos: (data.bloques ?? []).some((b) => Boolean(b.hora_inicio)),
-  };
-
-  let duplicate: DuplicateMatch | null = null;
-  if (extracted.nombre) {
-    const [{ data: festivals }, { data: pendingCandidates }] = await Promise.all([
-      supabase.from('festivals').select('id, nombre, ciudad, fecha_inicio'),
-      supabase.from('event_candidates').select('id, nombre, ciudad, fecha_inicio').eq('estado', 'pendiente'),
-    ]);
-    duplicate = findDuplicateMatch(
-      { nombre: extracted.nombre, ciudad: extracted.ciudad, fecha_inicio: extracted.fecha_inicio },
-      festivals ?? [],
-      pendingCandidates ?? [],
-    );
+  if (!data?.eventos || data.eventos.length === 0) {
+    return { error: 'La IA no encontró ningún evento en esa página. Completa el formulario a mano.' };
   }
 
-  return { extracted, duplicate };
+  const extracted: ExtractedEvent[] = data.eventos.map((e) => ({
+    nombre: e.nombre,
+    tipo: e.tipo,
+    fecha_inicio: e.fecha_inicio,
+    fecha_fin: e.fecha_fin,
+    ciudad: e.ciudad,
+    venue: e.venue,
+    lineup: (e.bloques ?? []).map((b) => ({ artista: b.artista, escenario: b.escenario, horario: b.hora_inicio })),
+    esHorarioConTiempos: (e.bloques ?? []).some((b) => Boolean(b.hora_inicio)),
+  }));
+
+  // One fetch of festivals/pending-candidates, reused for every event's
+  // dedup check — a listing page can propose dozens of events, no reason to
+  // re-query the same two tables that many times.
+  const [{ data: festivals }, { data: pendingCandidates }] = await Promise.all([
+    supabase.from('festivals').select('id, nombre, ciudad, fecha_inicio'),
+    supabase.from('event_candidates').select('id, nombre, ciudad, fecha_inicio').eq('estado', 'pendiente'),
+  ]);
+
+  const events: ExtractedEventWithDuplicate[] = extracted.map((ev) => ({
+    ...ev,
+    duplicate: ev.nombre
+      ? findDuplicateMatch({ nombre: ev.nombre, ciudad: ev.ciudad, fecha_inicio: ev.fecha_inicio }, festivals ?? [], pendingCandidates ?? [])
+      : null,
+  }));
+
+  return { events, esListado: Boolean(data.esListado) };
+}
+
+// Bulk version of createEventCandidate — used when the curator selects
+// several events from a listing page at once. Each insert is independent
+// (one bad row doesn't block the rest), and results are reported per event
+// so the UI can show which ones actually landed in /candidatos.
+export async function createEventCandidates(
+  events: ExtractedEvent[],
+  source: 'poster_image' | 'link',
+): Promise<{ created: number; errors: string[] }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) return { created: 0, errors: ['No autorizado.'] };
+
+  let created = 0;
+  const errors: string[] = [];
+  for (const event of events) {
+    const result = await createEventCandidate(event, source);
+    if (result.error) errors.push(`${event.nombre ?? '(sin nombre)'}: ${result.error}`);
+    else created++;
+  }
+  return { created, errors };
 }

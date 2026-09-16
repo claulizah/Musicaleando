@@ -1,48 +1,61 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
-// Admin-only: the curator pastes a URL (venue/promoter/social page for one
-// specific event) and this fetches that single page server-side, strips it
-// to visible text, and sends it to Claude to propose the same
-// {evento, bloques} shape that extract-lineup-image's event mode returns —
-// same JSON contract, same model, so the admin UI can share its
-// preview/dedup/approve flow across image- and link-sourced candidates.
+// Admin-only: the curator pastes a URL and this fetches that single page
+// server-side, strips it to visible text, and sends it to Claude to
+// propose event(s). Handles two page shapes with ONE generic prompt (no
+// per-boletera hardcoding — the same call works for any ticketing site):
+//   - A single-event page (venue/promoter/social post for one show): the
+//     model returns a one-item "eventos" array, same as before this page
+//     also handled listings.
+//   - A listing/cartelera page (a boletera's "Conciertos" category page):
+//     the model returns multiple items, one per event it can identify.
+// Same JSON contract either way — "eventos" is always an array — so the
+// admin UI just branches on its length instead of needing a separate
+// endpoint or a pre-classification step.
 // This is a one-off fetch of a URL the curator explicitly gave, never a
-// crawler: no following links, no repeat fetches of the same URL, no queue.
+// crawler: no following links, no pagination/scroll simulation, no repeat
+// fetches of the same URL, no queue.
 
 const ANTHROPIC_API_KEY = Deno.env.get("API_CONSOLE_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
 const ANTHROPIC_MODEL = "claude-sonnet-5";
 
-// Generous but bounded — a real event page is a few KB of meaningful text;
-// this just guards against feeding a multi-MB page to the model.
-const MAX_TEXT_CHARS = 15000;
+// A listing page has a lot more text than a single-event page (dozens of
+// event blocks) — bumped up from the single-event-only version of this
+// function, still bounded.
+const MAX_TEXT_CHARS = 40000;
 const FETCH_TIMEOUT_MS = 10000;
 
-const LINK_EXTRACTION_PROMPT = `El siguiente es el texto visible (etiquetas HTML ya removidas) de una página web que describe un concierto o festival de música específico. La página puede ser de un venue, una promotora, una red social, o un sitio de boletos.
+const LINK_EXTRACTION_PROMPT = `El siguiente es el texto visible (etiquetas HTML ya removidas) de una página web de una boletera, venue, promotora o red social. Puede describir UN SOLO concierto/festival, o ser una página de listado/cartelera con VARIOS eventos distintos (ej. una categoría "Conciertos" de un sitio de boletos).
 
-Extrae SOLO lo que puedas leer con confianza real en el texto. Nunca inventes ni adivines un dato que no esté claramente presente — es preferible dejar un campo en null que adivinar. El texto puede incluir navegación, menús u otro contenido no relacionado al evento — ignóralo.
+Identifica cada evento musical distinto que el texto describa con al menos un nombre reconocible, y para cada uno extrae SOLO lo que puedas leer con confianza real — nunca inventes ni adivines un dato que no esté claramente presente, es preferible dejar un campo en null que adivinar. El texto puede incluir navegación, menús, otros eventos no musicales, u otro contenido irrelevante — ignóralo.
 
-Para "tipo": infiere "festival" si se describe un line-up con varios artistas, o "concierto" si es claramente un solo artista/acto principal. Si no está claro, deja "tipo" en null.
+Para "tipo": infiere "festival" si ese evento describe un line-up con varios artistas, o "concierto" si es claramente un solo artista/acto principal. Si no está claro, deja "tipo" en null.
+
+Si la página es un listado con eventos que el texto no llegó a describir completo (por ejemplo, quedaron cortados porque la página tiene más resultados que no caben en este texto, o pide cargar más), igual reporta los que sí alcanzaste a leer completos — no los omitas ni los inventes completos.
 
 Responde ÚNICAMENTE con un JSON válido (sin texto antes ni después, sin bloques de código markdown) con esta forma exacta:
 
 {
-  "evento": {
-    "nombre": string | null,
-    "tipo": "festival" | "concierto" | null,
-    "fecha_inicio": string | null,
-    "fecha_fin": string | null,
-    "ciudad": string | null,
-    "venue": string | null
-  },
-  "bloques": [
-    { "escenario": string | null, "artista": string, "hora_inicio": string | null }
+  "es_listado": boolean,
+  "eventos": [
+    {
+      "nombre": string | null,
+      "tipo": "festival" | "concierto" | null,
+      "fecha_inicio": string | null,
+      "fecha_fin": string | null,
+      "ciudad": string | null,
+      "venue": string | null,
+      "bloques": [
+        { "escenario": string | null, "artista": string, "hora_inicio": string | null }
+      ]
+    }
   ]
 }
 
-Si el texto no describe ningún evento identificable, responde con "evento" con todos los campos en null y "bloques": [].
+Si el texto no describe ningún evento identificable, responde con "es_listado": false y "eventos": [].
 
 --- TEXTO DE LA PÁGINA ---
 `;
@@ -186,7 +199,10 @@ Deno.serve(async (req: Request) => {
       },
       body: JSON.stringify({
         model: ANTHROPIC_MODEL,
-        max_tokens: 4000,
+        // A listing page can report dozens of events — 4000 (the
+        // single-event version's budget) risks truncating the JSON
+        // mid-response once there's more than a handful of events.
+        max_tokens: 16000,
         messages: [{ role: "user", content: LINK_EXTRACTION_PROMPT + text }],
       }),
     });
@@ -204,17 +220,16 @@ Deno.serve(async (req: Request) => {
     const textBlock = (data.content ?? []).find((c) => c.type === "text")?.text ?? "";
     const cleaned = textBlock.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
 
-    let parsed: {
-      evento?: {
-        nombre?: string | null;
-        tipo?: string | null;
-        fecha_inicio?: string | null;
-        fecha_fin?: string | null;
-        ciudad?: string | null;
-        venue?: string | null;
-      };
+    type ParsedEvento = {
+      nombre?: string | null;
+      tipo?: string | null;
+      fecha_inicio?: string | null;
+      fecha_fin?: string | null;
+      ciudad?: string | null;
+      venue?: string | null;
       bloques?: { escenario: string | null; artista: string; hora_inicio: string | null }[];
     };
+    let parsed: { es_listado?: boolean; eventos?: ParsedEvento[] };
     try {
       parsed = JSON.parse(cleaned);
     } catch {
@@ -225,18 +240,18 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    const eventos = (Array.isArray(parsed.eventos) ? parsed.eventos : []).map((e) => ({
+      nombre: e.nombre ?? null,
+      tipo: e.tipo === "festival" || e.tipo === "concierto" ? e.tipo : null,
+      fecha_inicio: e.fecha_inicio ?? null,
+      fecha_fin: e.fecha_fin ?? null,
+      ciudad: e.ciudad ?? null,
+      venue: e.venue ?? null,
+      bloques: Array.isArray(e.bloques) ? e.bloques : [],
+    }));
+
     return new Response(
-      JSON.stringify({
-        evento: {
-          nombre: parsed.evento?.nombre ?? null,
-          tipo: parsed.evento?.tipo === "festival" || parsed.evento?.tipo === "concierto" ? parsed.evento.tipo : null,
-          fecha_inicio: parsed.evento?.fecha_inicio ?? null,
-          fecha_fin: parsed.evento?.fecha_fin ?? null,
-          ciudad: parsed.evento?.ciudad ?? null,
-          venue: parsed.evento?.venue ?? null,
-        },
-        bloques: Array.isArray(parsed.bloques) ? parsed.bloques : [],
-      }),
+      JSON.stringify({ esListado: Boolean(parsed.es_listado), eventos }),
       { headers: { "Content-Type": "application/json" } },
     );
   } catch (err) {
