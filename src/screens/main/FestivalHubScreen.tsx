@@ -20,6 +20,8 @@ import { promptReportContent } from '../../lib/moderation';
 import { useSquadStore } from '../../store/useSquadStore';
 import { useEventFilters } from '../../hooks/useEventFilters';
 import { EventFilterBar } from '../../components/EventFilterBar';
+import { groupLineupByDay } from '../../lib/lineupByDay';
+import { dateBucketFor, DATE_BUCKET_LABEL, DATE_BUCKET_ORDER } from '../../lib/dateBuckets';
 import { colors, radii, spacing, type } from '../../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Festivals'>;
@@ -134,35 +136,61 @@ export function FestivalHubScreen({ navigation, route }: Props) {
           </Text>
         )}
 
-        {filteredFestivals.map((entry) => (
-          <FestivalCard
-            key={entry.festival.id}
-            entry={entry}
-            navigation={navigation}
-            highlighted={entry.festival.id === highlightFestivalId}
-            onSetStatus={(s) => userId && setFestivalStatus(userId, entry.festival.id, s)}
-            onSetReaction={(r) => userId && setReaction(userId, entry.festival.id, r)}
-            onSubmitFeedback={(tags, comentario) =>
-              userId ? submitFeedback(userId, entry.festival.id, tags, comentario) : Promise.resolve()
-            }
-            userId={userId}
-            onPostComment={(texto) =>
-              userId ? postComment(userId, entry.festival.id, texto) : Promise.resolve()
-            }
-            onDeleteComment={(commentId) => deleteComment(entry.festival.id, commentId)}
-            onReportComment={(commentId, motivo) =>
-              userId ? reportComment(userId, commentId, motivo) : Promise.resolve()
-            }
-            onToggleInterest={(announcementId) =>
-              userId ? toggleInterest(userId, entry.festival.id, announcementId) : Promise.resolve()
-            }
-            onSubmitSurvey={(calificacion, volveria) =>
-              userId ? submitSurvey(userId, entry.festival.id, calificacion, volveria) : Promise.resolve()
-            }
-            generos={generos}
-            squadmateArchetypeById={squadmateArchetypeById}
-          />
-        ))}
+        {(() => {
+          const renderCard = (entry: FestivalWithIntent) => (
+            <FestivalCard
+              key={entry.festival.id}
+              entry={entry}
+              navigation={navigation}
+              highlighted={entry.festival.id === highlightFestivalId}
+              onSetStatus={(s) => userId && setFestivalStatus(userId, entry.festival.id, s)}
+              onSetReaction={(r) => userId && setReaction(userId, entry.festival.id, r)}
+              onSubmitFeedback={(tags, comentario) =>
+                userId ? submitFeedback(userId, entry.festival.id, tags, comentario) : Promise.resolve()
+              }
+              userId={userId}
+              onPostComment={(texto) =>
+                userId ? postComment(userId, entry.festival.id, texto) : Promise.resolve()
+              }
+              onDeleteComment={(commentId) => deleteComment(entry.festival.id, commentId)}
+              onReportComment={(commentId, motivo) =>
+                userId ? reportComment(userId, commentId, motivo) : Promise.resolve()
+              }
+              onToggleInterest={(announcementId) =>
+                userId ? toggleInterest(userId, entry.festival.id, announcementId) : Promise.resolve()
+              }
+              onSubmitSurvey={(calificacion, volveria) =>
+                userId ? submitSurvey(userId, entry.festival.id, calificacion, volveria) : Promise.resolve()
+              }
+              generos={generos}
+              squadmateArchetypeById={squadmateArchetypeById}
+            />
+          );
+
+          // Secciones por fecha (Esta semana / Este mes / Próximamente) para
+          // que el catálogo completo no se sienta como una sola tira
+          // interminable — solo cuando no hay ya un filtro de fecha
+          // explícito activo (ahí seccionar de nuevo sería redundante,
+          // ej. filtrar "Próximos 7 días" y luego ver un solo encabezado
+          // "Esta semana" no aporta nada).
+          if (filters.dateFilter !== 'todos') {
+            return filteredFestivals.map(renderCard);
+          }
+
+          const buckets = new Map<string, FestivalWithIntent[]>();
+          for (const entry of filteredFestivals) {
+            const key = dateBucketFor(entry.festival.fecha_inicio);
+            if (!buckets.has(key)) buckets.set(key, []);
+            buckets.get(key)!.push(entry);
+          }
+
+          return DATE_BUCKET_ORDER.filter((b) => buckets.has(b)).map((bucket) => (
+            <View key={bucket} style={styles.sectionWrap}>
+              <Text style={styles.sectionHeader}>{DATE_BUCKET_LABEL[bucket]}</Text>
+              {buckets.get(bucket)!.map(renderCard)}
+            </View>
+          ));
+        })()}
       </ScrollView>
     </Screen>
   );
@@ -213,6 +241,15 @@ function FestivalCard({
     survey,
   } = entry;
   const [showLineup, setShowLineup] = useState(highlighted);
+  const [openDays, setOpenDays] = useState<Set<string>>(new Set(['0']));
+  const toggleDay = (key: string) => {
+    setOpenDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
   const [showSquadGoing, setShowSquadGoing] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [selectedEscenario, setSelectedEscenario] = useState<string | null>(null);
@@ -367,29 +404,55 @@ function FestivalCard({
         </Pressable>
       )}
       {showLineup &&
-        lineup.map((artist) => (
-          <Pressable
-            key={artist.id}
-            disabled={!artist.artist_id}
-            onPress={() =>
-              artist.artist_id &&
-              navigation.navigate('ArtistDetail', { artistId: artist.artist_id, artistName: artist.artista })
-            }
-          >
-            <Text style={styles.lineupRow}>
-              {artist.artista}
-              {artist.escenario ? ` · ${artist.escenario}` : ''}
-              {artist.horario
-                ? ` · ${new Date(artist.horario).toLocaleString('es-MX', {
-                    day: 'numeric',
-                    month: 'short',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })}`
-                : ''}
-            </Text>
-          </Pressable>
-        ))}
+        (() => {
+          const byDay = groupLineupByDay(lineup, festival.fecha_inicio, festival.fecha_fin);
+          const renderArtist = (artist: (typeof lineup)[number]) => (
+            <Pressable
+              key={artist.id}
+              disabled={!artist.artist_id}
+              onPress={() =>
+                artist.artist_id &&
+                navigation.navigate('ArtistDetail', { artistId: artist.artist_id, artistName: artist.artista })
+              }
+            >
+              <Text style={styles.lineupRow}>
+                {artist.artista}
+                {artist.escenario ? ` · ${artist.escenario}` : ''}
+                {artist.horario
+                  ? ` · ${new Date(artist.horario).toLocaleString('es-MX', {
+                      day: 'numeric',
+                      month: 'short',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    })}`
+                  : ''}
+              </Text>
+            </Pressable>
+          );
+          // Multi-día (ej. Corona Capital, 3 días): se agrupa por fecha con
+          // encabezados colapsables para que un line-up largo no sea una
+          // sola tira de texto. Un festival de un solo día no cambia nada
+          // de su presentación — groupLineupByDay devuelve null y cae al
+          // mismo .map plano de siempre.
+          if (byDay) {
+            return byDay.map((group, i) => {
+              const dayKey = String(i);
+              const isOpen = openDays.has(dayKey);
+              return (
+                <View key={group.day ?? 'sin-dia'}>
+                  <Pressable onPress={() => toggleDay(dayKey)}>
+                    <Text style={styles.lineupToggle}>
+                      {'  '}
+                      {isOpen ? '▾' : '▸'} {group.label} ({group.items.length})
+                    </Text>
+                  </Pressable>
+                  {isOpen && group.items.map(renderArtist)}
+                </View>
+              );
+            });
+          }
+          return lineup.map(renderArtist);
+        })()}
 
       {festival.mapa_url && (
         <View>
@@ -658,6 +721,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  sectionWrap: {
+    gap: spacing.md,
+  },
+  sectionHeader: {
+    ...type.label,
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   back: {
     ...type.h1,

@@ -13,6 +13,9 @@ import {
 import { UndoToast } from './undo-toast';
 import { resolveEstado, OTRO_ESTADO_LABEL } from '@/lib/mexicoEstados';
 import { cleanEventNameSafe } from '@/lib/cleanEventName';
+import { categorizeEvent, CATEGORY_LABEL, type EventCategory } from '@/lib/eventCategory';
+import { dateBucketFor, DATE_BUCKET_LABEL, DATE_BUCKET_ORDER } from '@/lib/dateBuckets';
+import { groupLineupByDay } from '@/lib/lineupByDay';
 import type { Database } from '@/lib/database.types';
 
 type Candidate = Database['public']['Tables']['event_candidates']['Row'];
@@ -30,7 +33,7 @@ const TIPO_LABEL: Record<string, string> = {
   concierto: '🎤 Concierto',
 };
 
-type GroupBy = 'evento' | 'artista' | 'estado';
+type GroupBy = 'evento' | 'artista' | 'estado' | 'categoria' | 'fecha';
 
 function formatLineupItem(item: string | { artista: string; escenario: string | null; horario: string | null }): string {
   if (typeof item === 'string') return item;
@@ -150,12 +153,37 @@ function CandidateCard({
               {candidate.price_max != null ? ` hasta ${candidate.price_max}` : ''}
             </p>
           )}
-          {Array.isArray(candidate.lineup) && candidate.lineup.length > 0 && (
-            <p className="mt-1 text-xs text-gray-500">
-              Line-up: {candidate.lineup.slice(0, 6).map(formatLineupItem).join(', ')}
-              {candidate.lineup.length > 6 ? '…' : ''}
-            </p>
-          )}
+          {(() => {
+            const lineup = Array.isArray(candidate.lineup) ? candidate.lineup : [];
+            if (lineup.length === 0) return null;
+            const normalized = lineup.map((item) =>
+              typeof item === 'string' ? { artista: item, escenario: null, horario: null } : item,
+            );
+            const byDay = groupLineupByDay(normalized, candidate.fecha_inicio, candidate.fecha_fin);
+            // Multi-día: se agrupa por fecha para que revisar un line-up
+            // largo (ej. un festival de 3 días) no sea una sola tira de
+            // texto. Un candidato de un solo día no cambia su presentación.
+            if (byDay) {
+              return (
+                <div className="mt-1 flex flex-col gap-1">
+                  {byDay.map((group) => (
+                    <details key={group.day ?? 'sin-dia'} className="text-xs text-gray-500">
+                      <summary className="cursor-pointer select-none">
+                        {group.label} ({group.items.length})
+                      </summary>
+                      <p className="pl-3">{group.items.map(formatLineupItem).join(', ')}</p>
+                    </details>
+                  ))}
+                </div>
+              );
+            }
+            return (
+              <p className="mt-1 text-xs text-gray-500">
+                Line-up: {lineup.slice(0, 6).map(formatLineupItem).join(', ')}
+                {lineup.length > 6 ? '…' : ''}
+              </p>
+            );
+          })()}
           </div>
         </div>
         <div className="flex flex-col items-end gap-1">
@@ -245,6 +273,7 @@ export function CandidatosList({
   const [query, setQuery] = useState('');
   const [groupBy, setGroupBy] = useState<GroupBy>('evento');
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<EventCategory | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkResults, setBulkResults] = useState<
     { kind: 'approve'; results: BulkApproveResult[] } | { kind: 'reject'; results: BulkRejectResult[] } | null
@@ -264,6 +293,7 @@ export function CandidatosList({
     const q = normalizeText(query.trim());
     return candidates.filter((c) => {
       if (sourceFilter && c.source !== sourceFilter) return false;
+      if (categoryFilter && categorizeEvent(c) !== categoryFilter) return false;
       if (!q) return true;
       const haystack = [c.nombre, c.ciudad, c.venue, ...lineupArtistNames(c.lineup)]
         .filter((v): v is string => Boolean(v))
@@ -271,11 +301,45 @@ export function CandidatosList({
         .join(' | ');
       return haystack.includes(q);
     });
-  }, [candidates, query, sourceFilter]);
+  }, [candidates, query, sourceFilter, categoryFilter]);
+
+  // Conteo real por categoría sobre lo ya filtrado por texto/fuente — sirve
+  // tanto para los chips del filtro como para saber cuántos entrarían al
+  // "seleccionar todos" de una categoría antes de hacer clic.
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<EventCategory, number>();
+    for (const c of candidates) {
+      const cat = categorizeEvent(c);
+      counts.set(cat, (counts.get(cat) ?? 0) + 1);
+    }
+    return counts;
+  }, [candidates]);
 
   const groups = useMemo(() => {
     if (groupBy === 'evento') {
       return [{ key: '__all__', label: null as string | null, items: filtered }];
+    }
+    if (groupBy === 'categoria') {
+      const map = new Map<EventCategory, Candidate[]>();
+      for (const c of filtered) {
+        const key = categorizeEvent(c);
+        if (!map.has(key)) map.set(key, []);
+        map.get(key)!.push(c);
+      }
+      return [...map.entries()].map(([key, items]) => ({ key, label: CATEGORY_LABEL[key], items }));
+    }
+    if (groupBy === 'fecha') {
+      const map = new Map<string, Candidate[]>();
+      for (const c of filtered) {
+        const key = dateBucketFor(c.fecha_inicio);
+        if (!map.has(key)) map.set(key, []);
+        map.get(key)!.push(c);
+      }
+      return DATE_BUCKET_ORDER.filter((b) => map.has(b)).map((b) => ({
+        key: b,
+        label: DATE_BUCKET_LABEL[b],
+        items: map.get(b)!,
+      }));
     }
     const map = new Map<string, { label: string; items: Candidate[] }>();
     for (const c of filtered) {
@@ -311,6 +375,14 @@ export function CandidatosList({
   };
 
   const clearSelection = () => setSelectedIds(new Set());
+
+  // Selección rápida en bulk por categoría — un clic reemplaza la selección
+  // por todos los candidatos de esa categoría (respeta la misma exclusión de
+  // posibles duplicados que "Seleccionar todos visibles"), independiente del
+  // filtro de texto/fuente activo en ese momento.
+  const selectAllInCategory = (cat: EventCategory) => {
+    setSelectedIds(new Set(candidates.filter((c) => categorizeEvent(c) === cat && !c.possible_duplicate_of).map((c) => c.id)));
+  };
 
   const handleBulkApprove = () => {
     const ids = [...selectedIds];
@@ -378,6 +450,8 @@ export function CandidatosList({
               { id: 'evento', label: 'Por evento' },
               { id: 'artista', label: 'Por artista' },
               { id: 'estado', label: 'Por estado' },
+              { id: 'categoria', label: 'Por categoría' },
+              { id: 'fecha', label: 'Por fecha' },
             ] as { id: GroupBy; label: string }[]
           ).map((opt) => (
             <button
@@ -418,6 +492,42 @@ export function CandidatosList({
             ))}
           </div>
         )}
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-gray-500">Categoría:</span>
+        <button
+          type="button"
+          onClick={() => setCategoryFilter(null)}
+          className={`rounded-full px-3 py-1 text-xs ${
+            categoryFilter === null ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'
+          }`}
+        >
+          Todas
+        </button>
+        {(Object.keys(CATEGORY_LABEL) as EventCategory[])
+          .filter((cat) => (categoryCounts.get(cat) ?? 0) > 0)
+          .map((cat) => (
+            <span key={cat} className="inline-flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setCategoryFilter(cat)}
+                className={`rounded-full px-3 py-1 text-xs ${
+                  categoryFilter === cat ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                {CATEGORY_LABEL[cat]} ({categoryCounts.get(cat)})
+              </button>
+              <button
+                type="button"
+                title={`Seleccionar todos los de ${CATEGORY_LABEL[cat]}`}
+                onClick={() => selectAllInCategory(cat)}
+                className="rounded-full border border-gray-300 px-1.5 py-0.5 text-xs text-gray-500"
+              >
+                ☑
+              </button>
+            </span>
+          ))}
       </div>
 
       {filtered.length > 0 && (

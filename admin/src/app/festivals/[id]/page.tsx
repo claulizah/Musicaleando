@@ -12,6 +12,7 @@ import { AnnouncementSegment } from './announcement-segment';
 import { DeleteAnnouncementButton } from './delete-announcement-button';
 import { SelectWinnerButton } from './select-winner-button';
 import { MapUploader } from './map-uploader';
+import { groupLineupByDay } from '@/lib/lineupByDay';
 
 const TIPO_LABEL: Record<string, string> = {
   simple: '📣 Anuncio',
@@ -43,6 +44,7 @@ export default async function FestivalDetailPage({
     .maybeSingle();
 
   if (!festival) notFound();
+  const festivalId = festival.id;
 
   const { data: lineup } = await supabase
     .from('festival_lineup')
@@ -90,6 +92,23 @@ export default async function FestivalDetailPage({
     .order('created_at');
 
   const escenarios = [...new Set((lineup ?? []).map((l) => l.escenario).filter((e): e is string => !!e))];
+  const lineupByDay = groupLineupByDay(lineup ?? [], festival.fecha_inicio, festival.fecha_fin);
+
+  function renderLineupRow(row: { id: string; artista: string; escenario: string | null; horario: string | null }) {
+    return (
+      <li
+        key={row.id}
+        className="flex items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2 text-sm"
+      >
+        <span>
+          <span className="font-medium">{row.artista}</span>
+          {row.escenario && <span className="text-gray-500"> · {row.escenario}</span>}
+          {row.horario && <span className="text-gray-400"> · {new Date(row.horario).toLocaleString('es-MX')}</span>}
+        </span>
+        <DeleteLineupRowButton festivalId={festivalId} rowId={row.id} />
+      </li>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
@@ -110,29 +129,23 @@ export default async function FestivalDetailPage({
 
       <section className="mt-8">
         <h2 className="mb-2 font-medium">Line-up ({lineup?.length ?? 0})</h2>
-        <ul className="mb-4 flex flex-col gap-2">
-          {lineup?.map((row) => (
-            <li
-              key={row.id}
-              className="flex items-center justify-between rounded-md border border-gray-200 bg-white px-3 py-2 text-sm"
-            >
-              <span>
-                <span className="font-medium">{row.artista}</span>
-                {row.escenario && <span className="text-gray-500"> · {row.escenario}</span>}
-                {row.horario && (
-                  <span className="text-gray-400">
-                    {' '}
-                    · {new Date(row.horario).toLocaleString('es-MX')}
-                  </span>
-                )}
-              </span>
-              <DeleteLineupRowButton festivalId={festival.id} rowId={row.id} />
-            </li>
-          ))}
-          {lineup?.length === 0 && (
-            <p className="text-sm text-gray-500">Todavía no hay artistas cargados.</p>
-          )}
-        </ul>
+        {lineupByDay ? (
+          <div className="mb-4 flex flex-col gap-2">
+            {lineupByDay.map((group) => (
+              <details key={group.day ?? 'sin-dia'} className="rounded-md border border-gray-200 bg-gray-50" open>
+                <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium text-gray-700">
+                  {group.label} <span className="text-gray-400">({group.items.length})</span>
+                </summary>
+                <ul className="flex flex-col gap-2 p-2 pt-0">{group.items.map(renderLineupRow)}</ul>
+              </details>
+            ))}
+          </div>
+        ) : (
+          <ul className="mb-4 flex flex-col gap-2">
+            {lineup?.map(renderLineupRow)}
+            {lineup?.length === 0 && <p className="text-sm text-gray-500">Todavía no hay artistas cargados.</p>}
+          </ul>
+        )}
 
         <LineupImporter festivalId={festival.id} />
 

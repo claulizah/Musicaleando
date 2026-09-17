@@ -3,17 +3,20 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { resolveEstado, OTRO_ESTADO_LABEL } from '@/lib/mexicoEstados';
+import { categorizeEvent, CATEGORY_LABEL, type EventCategory } from '@/lib/eventCategory';
+import { dateBucketFor, DATE_BUCKET_LABEL, DATE_BUCKET_ORDER } from '@/lib/dateBuckets';
 
 type Festival = {
   id: string;
   nombre: string;
+  tipo: string;
   ciudad: string;
   fecha_inicio: string;
   fecha_fin: string;
   link_boletos: string | null;
 };
 
-type GroupBy = 'evento' | 'artista' | 'estado';
+type GroupBy = 'evento' | 'artista' | 'estado' | 'categoria' | 'fecha';
 
 function normalizeText(s: string): string {
   return s
@@ -55,15 +58,46 @@ function GroupSection({ label, festivals, defaultOpen }: { label: string; festiv
 export function FestivalesList({ festivals }: { festivals: Festival[] }) {
   const [query, setQuery] = useState('');
   const [groupBy, setGroupBy] = useState<GroupBy>('evento');
+  const [categoryFilter, setCategoryFilter] = useState<EventCategory | null>(null);
+
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<EventCategory, number>();
+    for (const f of festivals) {
+      const cat = categorizeEvent(f);
+      counts.set(cat, (counts.get(cat) ?? 0) + 1);
+    }
+    return counts;
+  }, [festivals]);
 
   const filtered = useMemo(() => {
     const q = normalizeText(query.trim());
-    if (!q) return festivals;
-    return festivals.filter((f) => normalizeText(`${f.nombre} ${f.ciudad}`).includes(q));
-  }, [festivals, query]);
+    return festivals.filter((f) => {
+      if (categoryFilter && categorizeEvent(f) !== categoryFilter) return false;
+      if (!q) return true;
+      return normalizeText(`${f.nombre} ${f.ciudad}`).includes(q);
+    });
+  }, [festivals, query, categoryFilter]);
 
   const groups = useMemo(() => {
     if (groupBy === 'evento') return [{ key: '__all__', label: null as string | null, items: filtered }];
+    if (groupBy === 'categoria') {
+      const map = new Map<EventCategory, Festival[]>();
+      for (const f of filtered) {
+        const key = categorizeEvent(f);
+        if (!map.has(key)) map.set(key, []);
+        map.get(key)!.push(f);
+      }
+      return [...map.entries()].map(([key, items]) => ({ key, label: CATEGORY_LABEL[key], items }));
+    }
+    if (groupBy === 'fecha') {
+      const map = new Map<string, Festival[]>();
+      for (const f of filtered) {
+        const key = dateBucketFor(f.fecha_inicio);
+        if (!map.has(key)) map.set(key, []);
+        map.get(key)!.push(f);
+      }
+      return DATE_BUCKET_ORDER.filter((b) => map.has(b)).map((b) => ({ key: b, label: DATE_BUCKET_LABEL[b], items: map.get(b)! }));
+    }
     const map = new Map<string, { label: string; items: Festival[] }>();
     for (const f of filtered) {
       const key = groupBy === 'artista' ? normalizeText(f.nombre) : resolveEstado(f.ciudad);
@@ -97,6 +131,8 @@ export function FestivalesList({ festivals }: { festivals: Festival[] }) {
               { id: 'evento', label: 'Por evento' },
               { id: 'artista', label: 'Por artista' },
               { id: 'estado', label: 'Por estado' },
+              { id: 'categoria', label: 'Por categoría' },
+              { id: 'fecha', label: 'Por fecha' },
             ] as { id: GroupBy; label: string }[]
           ).map((opt) => (
             <button
@@ -111,6 +147,33 @@ export function FestivalesList({ festivals }: { festivals: Festival[] }) {
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-gray-500">Categoría:</span>
+        <button
+          type="button"
+          onClick={() => setCategoryFilter(null)}
+          className={`rounded-full px-3 py-1 text-xs ${
+            categoryFilter === null ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'
+          }`}
+        >
+          Todas
+        </button>
+        {(Object.keys(CATEGORY_LABEL) as EventCategory[])
+          .filter((cat) => (categoryCounts.get(cat) ?? 0) > 0)
+          .map((cat) => (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setCategoryFilter(cat)}
+              className={`rounded-full px-3 py-1 text-xs ${
+                categoryFilter === cat ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              {CATEGORY_LABEL[cat]} ({categoryCounts.get(cat)})
+            </button>
+          ))}
       </div>
 
       {filtered.length === 0 && (

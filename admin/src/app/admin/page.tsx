@@ -21,7 +21,7 @@ export default async function DashboardPage() {
   const supabase = await createClient();
   const { data: festivals } = await supabase
     .from('festivals')
-    .select('id, nombre, ciudad, fecha_inicio, fecha_fin, link_boletos')
+    .select('id, nombre, tipo, ciudad, fecha_inicio, fecha_fin, link_boletos')
     .order('fecha_inicio', { ascending: true });
 
   return (
