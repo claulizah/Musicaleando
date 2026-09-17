@@ -87,6 +87,23 @@ function normalizeText(s: string): string {
     .trim();
 }
 
+// A partir de este tamaño de lote, un confirm() simple ya no es suficiente
+// fricción — "seleccionar todos visibles" o por categoría hace fácil
+// seleccionar cientos por accidente. 50 es el umbral: por debajo, el
+// confirm() de siempre; por arriba, hay que escribir el número exacto de
+// candidatos afectados (un segundo paso deliberado, no solo un click más).
+const BULK_CONFIRM_THRESHOLD = 50;
+
+function confirmBulkAction(count: number, verbo: string, sustantivo: string): boolean {
+  if (count > BULK_CONFIRM_THRESHOLD) {
+    const typed = prompt(
+      `Vas a ${verbo} ${count} ${sustantivo}. Es un lote grande — escribe "${count}" para confirmar.`,
+    );
+    return typed?.trim() === String(count);
+  }
+  return confirm(`Vas a ${verbo} ${count} ${sustantivo}. ¿Confirmas?`);
+}
+
 // "Por artista": el nombre del candidato ya ES el artista para un concierto
 // de un solo acto (así quedaron los 90 de la carga de Eticket — un
 // idartista por página), y para un festival agrupa ediciones repetidas del
@@ -387,7 +404,7 @@ export function CandidatosList({
   const handleBulkApprove = () => {
     const ids = [...selectedIds];
     if (ids.length === 0) return;
-    if (!confirm(`Vas a aprobar ${ids.length} evento(s) y se publicarán en el catálogo. ¿Confirmas?`)) return;
+    if (!confirmBulkAction(ids.length, 'aprobar', 'evento(s) y se publicarán en el catálogo')) return;
     setBulkResults(null);
     setBulkUndo(null);
     startBulkTransition(async () => {
@@ -405,7 +422,7 @@ export function CandidatosList({
   const handleBulkReject = () => {
     const ids = [...selectedIds];
     if (ids.length === 0) return;
-    if (!confirm(`Vas a rechazar ${ids.length} candidato(s). ¿Confirmas?`)) return;
+    if (!confirmBulkAction(ids.length, 'rechazar', 'candidato(s)')) return;
     setBulkResults(null);
     setBulkUndo(null);
     startBulkTransition(async () => {

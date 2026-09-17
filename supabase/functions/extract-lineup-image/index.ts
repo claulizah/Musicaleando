@@ -13,6 +13,12 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
 const ANTHROPIC_MODEL = "claude-sonnet-5";
 
+// 30/hora por admin — generoso para una sesión real de curación, pero acota
+// el costo si algo dispara llamadas en loop. Ver
+// prompt-siguiente-salud-sistema.md.
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+const RATE_LIMIT_MAX = 30;
+
 const EXTRACTION_PROMPT = `Esta imagen es un cartel/horario de un festival de música mexicano. Puede venir en dos formatos:
 1. Un grid de horarios: columnas por escenario, filas por hora, cada artista en un bloque de color con su rango de horario.
 2. Un cartel de anuncio de line-up SIN horarios (solo nombres de artistas agrupados por día, sin grid de tiempo).
@@ -128,6 +134,23 @@ Deno.serve(async (req: Request) => {
         headers: { "Content-Type": "application/json" },
       });
     }
+
+    // Segunda capa de defensa (no es el caso de abuso público — ya está
+    // gateado por is_admin arriba) contra un loop/bug o una sesión de admin
+    // comprometida disparando llamadas pagadas a Claude sin límite.
+    const since = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString();
+    const { count: recentCalls } = await supabase
+      .from("admin_ai_calls")
+      .select("id", { count: "exact", head: true })
+      .eq("admin_id", user.id)
+      .gte("created_at", since);
+    if ((recentCalls ?? 0) >= RATE_LIMIT_MAX) {
+      return new Response(
+        JSON.stringify({ error: "Demasiadas extracciones en poco tiempo. Espera unos minutos e intenta de nuevo." }),
+        { status: 429, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    await supabase.from("admin_ai_calls").insert({ admin_id: user.id, function_name: "extract-lineup-image" });
 
     if (!ANTHROPIC_API_KEY) {
       return new Response(JSON.stringify({ error: "Falta el secreto API_CONSOLE_KEY." }), {

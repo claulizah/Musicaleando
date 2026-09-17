@@ -48,6 +48,34 @@ export type Database = {
           },
         ];
       };
+      admin_actions_log: {
+        Row: {
+          id: string;
+          admin_id: string;
+          action: string;
+          target_type: string;
+          target_id: string;
+          is_bulk: boolean;
+          detail: Record<string, unknown>;
+          created_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['admin_actions_log']['Row'], 'id' | 'created_at' | 'is_bulk' | 'detail'> & {
+          id?: string;
+          created_at?: string;
+          is_bulk?: boolean;
+          detail?: Record<string, unknown>;
+        };
+        Update: Partial<Database['public']['Tables']['admin_actions_log']['Row']>;
+        Relationships: [
+          {
+            foreignKeyName: 'admin_actions_log_admin_id_fkey';
+            columns: ['admin_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       festivals: {
         Row: {
           id: string;

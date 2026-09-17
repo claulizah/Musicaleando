@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { resolveArtistIds } from '@/lib/artists';
 import { cleanEventNameSafe } from '@/lib/cleanEventName';
 import { normalizeHorario } from '@/lib/normalizeHorario';
+import { logAdminAction } from '@/lib/adminActionsLog';
 
 export type ApproveOverrides = {
   nombre: string;
@@ -24,6 +25,7 @@ export type ApproveOverrides = {
 export async function approveCandidate(
   candidateId: string,
   overrides: ApproveOverrides,
+  isBulk = false,
 ): Promise<{ error?: string }> {
   const admin = await requireAdmin();
   if (!admin.authorized) return { error: 'No autorizado.' };
@@ -112,6 +114,11 @@ export async function approveCandidate(
     .eq('id', candidateId);
   if (updateError) return { error: updateError.message };
 
+  await logAdminAction(supabase, admin.userId, 'aprobar', 'candidato', candidateId, {
+    isBulk,
+    detail: { nombre, festival_id: festival.id },
+  });
+
   revalidatePath('/candidatos');
   revalidatePath('/admin');
   return {};
@@ -180,7 +187,7 @@ export async function approveCandidatesBulk(candidateIds: string[]): Promise<{ r
       fecha_fin: row.fecha_fin ?? '',
       link_boletos: row.link_boletos ?? '',
     };
-    const result = await approveCandidate(id, overrides);
+    const result = await approveCandidate(id, overrides, true);
     if (result.error) {
       // Mismo nivel de detalle que approveCandidate individual — antes acá
       // no quedaba ningún rastro del motivo real por ítem, solo se veía que
@@ -193,7 +200,7 @@ export async function approveCandidatesBulk(candidateIds: string[]): Promise<{ r
   return { results };
 }
 
-export async function discardCandidate(candidateId: string): Promise<{ error?: string }> {
+export async function discardCandidate(candidateId: string, isBulk = false): Promise<{ error?: string }> {
   const admin = await requireAdmin();
   if (!admin.authorized) return { error: 'No autorizado.' };
 
@@ -203,6 +210,8 @@ export async function discardCandidate(candidateId: string): Promise<{ error?: s
     .update({ estado: 'descartado' })
     .eq('id', candidateId);
   if (error) return { error: error.message };
+
+  await logAdminAction(supabase, admin.userId, 'rechazar', 'candidato', candidateId, { isBulk });
 
   revalidatePath('/candidatos');
   return {};
@@ -240,7 +249,7 @@ export async function discardCandidatesBulk(candidateIds: string[]): Promise<{ r
   const results: BulkRejectResult[] = [];
   for (const id of candidateIds) {
     const nombre = nombreById.get(id) ?? id;
-    const result = await discardCandidate(id);
+    const result = await discardCandidate(id, true);
     if (result.error) console.error(`discardCandidatesBulk: candidato ${id} (${nombre}) falló:`, result.error);
     results.push({ id, nombre, error: result.error });
   }
@@ -252,7 +261,7 @@ export async function discardCandidatesBulk(candidateIds: string[]): Promise<{ r
 // No hay historial de auditoría completo aquí — solo revierte la acción
 // inmediata anterior, mientras el toast de "Deshacer" sigue visible.
 
-export async function undoDiscard(candidateId: string): Promise<{ error?: string }> {
+export async function undoDiscard(candidateId: string, isBulk = false): Promise<{ error?: string }> {
   const admin = await requireAdmin();
   if (!admin.authorized) return { error: 'No autorizado.' };
 
@@ -264,6 +273,7 @@ export async function undoDiscard(candidateId: string): Promise<{ error?: string
     .eq('estado', 'descartado'); // no revive algo que ya cambió de estado por otra vía mientras tanto
 
   if (error) return { error: error.message };
+  await logAdminAction(supabase, admin.userId, 'deshacer_rechazar', 'candidato', candidateId, { isBulk });
   revalidatePath('/candidatos');
   return {};
 }
@@ -281,6 +291,9 @@ export async function undoDiscardBulk(candidateIds: string[]): Promise<{ error?:
     .eq('estado', 'descartado');
 
   if (error) return { error: error.message };
+  await Promise.all(
+    candidateIds.map((id) => logAdminAction(supabase, admin.userId, 'deshacer_rechazar', 'candidato', id, { isBulk: true })),
+  );
   revalidatePath('/candidatos');
   return {};
 }
@@ -297,7 +310,7 @@ export async function undoDiscardBulk(candidateIds: string[]): Promise<{ error?:
 // que ya haya empezado a depender de ese festival en la ventana de ~30s
 // (ej. un squad creado con ese festival) — ventana corta y acción deliberada
 // de la curadora, no un rollback transaccional real.
-export async function undoApprove(candidateId: string): Promise<{ error?: string }> {
+export async function undoApprove(candidateId: string, isBulk = false): Promise<{ error?: string }> {
   const admin = await requireAdmin();
   if (!admin.authorized) return { error: 'No autorizado.' };
 
@@ -327,6 +340,11 @@ export async function undoApprove(candidateId: string): Promise<{ error?: string
     .eq('id', candidateId);
   if (updateError) return { error: updateError.message };
 
+  await logAdminAction(supabase, admin.userId, 'deshacer_aprobar', 'candidato', candidateId, {
+    isBulk,
+    detail: { festival_id_revertido: candidate.festival_id },
+  });
+
   revalidatePath('/candidatos');
   revalidatePath('/admin');
   return {};
@@ -342,7 +360,7 @@ export async function undoApproveBulk(candidateIds: string[]): Promise<{ results
 
   const results: UndoApproveResult[] = [];
   for (const id of candidateIds) {
-    const result = await undoApprove(id);
+    const result = await undoApprove(id, true);
     results.push({ id, error: result.error });
   }
   return { results };

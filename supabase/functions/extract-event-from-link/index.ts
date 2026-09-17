@@ -28,6 +28,12 @@ const ANTHROPIC_MODEL = "claude-sonnet-5";
 const MAX_TEXT_CHARS = 40000;
 const FETCH_TIMEOUT_MS = 10000;
 
+// 30/hora por admin — generoso para una sesión real de curación (importar
+// varios links seguidos), pero acota el costo si algo dispara llamadas en
+// loop. Ver prompt-siguiente-salud-sistema.md.
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+const RATE_LIMIT_MAX = 30;
+
 const LINK_EXTRACTION_PROMPT = `El siguiente es el texto visible (etiquetas HTML ya removidas) de una página web de una boletera, venue, promotora o red social. Puede describir UN SOLO concierto/festival, o ser una página de listado/cartelera con VARIOS eventos distintos (ej. una categoría "Conciertos" de un sitio de boletos).
 
 Identifica cada evento musical distinto que el texto describa con al menos un nombre reconocible, y para cada uno extrae SOLO lo que puedas leer con confianza real — nunca inventes ni adivines un dato que no esté claramente presente, es preferible dejar un campo en null que adivinar. El texto puede incluir navegación, menús, otros eventos no musicales, u otro contenido irrelevante — ignóralo.
@@ -115,6 +121,23 @@ Deno.serve(async (req: Request) => {
         headers: { "Content-Type": "application/json" },
       });
     }
+
+    // Segunda capa de defensa (no es el caso de abuso público — ya está
+    // gateado por is_admin arriba) contra un loop/bug o una sesión de admin
+    // comprometida disparando llamadas pagadas a Claude sin límite.
+    const since = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString();
+    const { count: recentCalls } = await supabase
+      .from("admin_ai_calls")
+      .select("id", { count: "exact", head: true })
+      .eq("admin_id", user.id)
+      .gte("created_at", since);
+    if ((recentCalls ?? 0) >= RATE_LIMIT_MAX) {
+      return new Response(
+        JSON.stringify({ error: "Demasiadas extracciones en poco tiempo. Espera unos minutos e intenta de nuevo." }),
+        { status: 429, headers: { "Content-Type": "application/json" } },
+      );
+    }
+    await supabase.from("admin_ai_calls").insert({ admin_id: user.id, function_name: "extract-event-from-link" });
 
     if (!ANTHROPIC_API_KEY) {
       return new Response(JSON.stringify({ error: "Falta el secreto API_CONSOLE_KEY." }), {
