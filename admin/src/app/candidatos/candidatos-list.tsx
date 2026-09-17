@@ -2,7 +2,15 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { CandidateActions } from './candidate-actions';
-import { approveCandidatesBulk, type BulkApproveResult } from './actions';
+import {
+  approveCandidatesBulk,
+  discardCandidatesBulk,
+  undoApproveBulk,
+  undoDiscardBulk,
+  type BulkApproveResult,
+  type BulkRejectResult,
+} from './actions';
+import { UndoToast } from './undo-toast';
 import { resolveEstado, OTRO_ESTADO_LABEL } from '@/lib/mexicoEstados';
 import { cleanEventNameSafe } from '@/lib/cleanEventName';
 import type { Database } from '@/lib/database.types';
@@ -35,6 +43,28 @@ function formatLineupItem(item: string | { artista: string; escenario: string | 
 function lineupArtistNames(lineup: Candidate['lineup']): string[] {
   if (!Array.isArray(lineup)) return [];
   return lineup.map((item) => (typeof item === 'string' ? item : item.artista));
+}
+
+// Checklist visual simple de campos esperados para un evento publicable —
+// no es detección de "candidato sospechoso", solo lo que hoy es obligatorio
+// (ciudad, fecha_inicio, link_boletos si la fuente es ticketmaster) o
+// esperado (alguna hora en el line-up, póster cuando la fuente es imagen).
+// No incluye "género": no existe ningún campo de género por evento en el
+// esquema (Ticketmaster no lo trae, tampoco hay mapeo artista→género — ver
+// prompt-siguiente-filtros-catalogo-eventos.md) y mostrarlo siempre como
+// "falta" sería ruido, no señal real.
+function missingFields(candidate: Candidate): string[] {
+  const missing: string[] = [];
+  if (!candidate.ciudad) missing.push('ciudad');
+  if (!candidate.fecha_inicio) missing.push('fecha');
+  if (candidate.source === 'ticketmaster' && !candidate.link_boletos) missing.push('boletos');
+  const lineup = Array.isArray(candidate.lineup) ? candidate.lineup : [];
+  const tieneHora = lineup.some((item) => typeof item !== 'string' && Boolean(item.horario));
+  if (lineup.length > 0 && !tieneHora) missing.push('hora');
+  if (candidate.source === 'poster_image' && !rawPayloadExtras(candidate.raw_payload).posterUrl) {
+    missing.push('poster');
+  }
+  return missing;
 }
 
 function rawPayloadExtras(raw: unknown): { submittedLink: string | null; posterUrl: string | null } {
@@ -75,6 +105,7 @@ function CandidateCard({
   onToggleSelect: (id: string) => void;
 }) {
   const { submittedLink, posterUrl } = rawPayloadExtras(candidate.raw_payload);
+  const missing = missingFields(candidate);
   return (
     <li className="rounded-lg border border-gray-200 bg-white p-4">
       <div className="flex items-start justify-between gap-3">
@@ -135,6 +166,9 @@ function CandidateCard({
           >
             {candidate.completo ? 'Completo' : 'Incompleto'}
           </span>
+          {missing.length > 0 && (
+            <span className="max-w-[10rem] text-right text-xs text-amber-700">falta: {missing.join(', ')}</span>
+          )}
           {candidate.link_boletos && (
             <a href={candidate.link_boletos} target="_blank" rel="noreferrer" className="text-xs underline">
               Ver boletos
@@ -145,8 +179,8 @@ function CandidateCard({
 
       {duplicateName && (
         <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Posible duplicado de un festival ya cargado: <strong>{duplicateName}</strong>. Revisa antes de aprobar
-          — no se fusiona automáticamente.
+          ⚠ Posible duplicado de: <strong>{duplicateName}</strong>. Revisa antes de aprobar — no se fusiona
+          automáticamente.
         </p>
       )}
 
@@ -210,21 +244,34 @@ export function CandidatosList({
 }) {
   const [query, setQuery] = useState('');
   const [groupBy, setGroupBy] = useState<GroupBy>('evento');
+  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkResults, setBulkResults] = useState<BulkApproveResult[] | null>(null);
+  const [bulkResults, setBulkResults] = useState<
+    { kind: 'approve'; results: BulkApproveResult[] } | { kind: 'reject'; results: BulkRejectResult[] } | null
+  >(null);
   const [bulkPending, startBulkTransition] = useTransition();
+  const [bulkUndo, setBulkUndo] = useState<{ kind: 'approve' | 'reject'; ids: string[] } | null>(null);
+  const [bulkUndoPending, startBulkUndoTransition] = useTransition();
+
+  // Filtro por fuente de origen — opciones sacadas de los valores reales
+  // presentes en los candidatos, no de una lista fija (una fuente que hoy no
+  // tenga pendientes no aparece como chip vacío).
+  const sourceOptions = useMemo(() => {
+    return [...new Set(candidates.map((c) => c.source))].sort();
+  }, [candidates]);
 
   const filtered = useMemo(() => {
     const q = normalizeText(query.trim());
-    if (!q) return candidates;
     return candidates.filter((c) => {
+      if (sourceFilter && c.source !== sourceFilter) return false;
+      if (!q) return true;
       const haystack = [c.nombre, c.ciudad, c.venue, ...lineupArtistNames(c.lineup)]
         .filter((v): v is string => Boolean(v))
         .map(normalizeText)
         .join(' | ');
       return haystack.includes(q);
     });
-  }, [candidates, query]);
+  }, [candidates, query, sourceFilter]);
 
   const groups = useMemo(() => {
     if (groupBy === 'evento') {
@@ -270,14 +317,47 @@ export function CandidatosList({
     if (ids.length === 0) return;
     if (!confirm(`Vas a aprobar ${ids.length} evento(s) y se publicarán en el catálogo. ¿Confirmas?`)) return;
     setBulkResults(null);
+    setBulkUndo(null);
     startBulkTransition(async () => {
       const { results } = await approveCandidatesBulk(ids);
-      setBulkResults(results);
+      setBulkResults({ kind: 'approve', results });
       // Solo se quitan de la selección los que sí se aprobaron — los que
       // fallaron quedan marcados para que sea obvio cuáles todavía necesitan
       // atención (completar datos a mano, etc.).
-      const succeededIds = new Set(results.filter((r) => !r.error).map((r) => r.id));
-      setSelectedIds((prev) => new Set([...prev].filter((id) => !succeededIds.has(id))));
+      const succeededIds = results.filter((r) => !r.error).map((r) => r.id);
+      setSelectedIds((prev) => new Set([...prev].filter((id) => !succeededIds.includes(id))));
+      if (succeededIds.length > 0) setBulkUndo({ kind: 'approve', ids: succeededIds });
+    });
+  };
+
+  const handleBulkReject = () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    if (!confirm(`Vas a rechazar ${ids.length} candidato(s). ¿Confirmas?`)) return;
+    setBulkResults(null);
+    setBulkUndo(null);
+    startBulkTransition(async () => {
+      const { results } = await discardCandidatesBulk(ids);
+      setBulkResults({ kind: 'reject', results });
+      const succeededIds = results.filter((r) => !r.error).map((r) => r.id);
+      setSelectedIds((prev) => new Set([...prev].filter((id) => !succeededIds.includes(id))));
+      if (succeededIds.length > 0) setBulkUndo({ kind: 'reject', ids: succeededIds });
+    });
+  };
+
+  // El deshacer en bulk revierte el LOTE completo de la última acción, no
+  // ítem por ítem — mismo alcance que documenta undoApprove del lado del
+  // servidor (borra festival_lineup + festivals creados, nunca los artists).
+  const handleBulkUndo = () => {
+    if (!bulkUndo) return;
+    startBulkUndoTransition(async () => {
+      if (bulkUndo.kind === 'approve') {
+        await undoApproveBulk(bulkUndo.ids);
+      } else {
+        await undoDiscardBulk(bulkUndo.ids);
+      }
+      setBulkUndo(null);
+      setBulkResults(null);
     });
   };
 
@@ -312,6 +392,32 @@ export function CandidatosList({
             </button>
           ))}
         </div>
+        {sourceOptions.length > 1 && (
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-gray-500">Fuente:</span>
+            <button
+              type="button"
+              onClick={() => setSourceFilter(null)}
+              className={`rounded-full px-3 py-1 text-xs ${
+                sourceFilter === null ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'
+              }`}
+            >
+              Todas
+            </button>
+            {sourceOptions.map((source) => (
+              <button
+                key={source}
+                type="button"
+                onClick={() => setSourceFilter(source)}
+                className={`rounded-full px-3 py-1 text-xs ${
+                  sourceFilter === source ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                {SOURCE_LABEL[source] ?? source}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {filtered.length > 0 && (
@@ -328,10 +434,18 @@ export function CandidatosList({
           <button
             type="button"
             disabled={selectedIds.size === 0 || bulkPending}
-            onClick={handleBulkApprove}
-            className="ml-auto rounded-md bg-black px-3 py-1.5 text-xs text-white disabled:opacity-50"
+            onClick={handleBulkReject}
+            className="ml-auto rounded-md border border-red-300 px-3 py-1.5 text-xs text-red-600 disabled:opacity-50"
           >
-            {bulkPending ? 'Aprobando…' : `Aprobar ${selectedIds.size} seleccionado(s)`}
+            {bulkPending ? 'Procesando…' : `Rechazar ${selectedIds.size} seleccionado(s)`}
+          </button>
+          <button
+            type="button"
+            disabled={selectedIds.size === 0 || bulkPending}
+            onClick={handleBulkApprove}
+            className="rounded-md bg-black px-3 py-1.5 text-xs text-white disabled:opacity-50"
+          >
+            {bulkPending ? 'Procesando…' : `Aprobar ${selectedIds.size} seleccionado(s)`}
           </button>
         </div>
       )}
@@ -339,11 +453,12 @@ export function CandidatosList({
       {bulkResults && (
         <div className="mb-4 rounded-md border border-gray-200 bg-white p-3 text-xs">
           <p className="mb-1 font-medium text-gray-700">
-            Resultado: {bulkResults.filter((r) => !r.error).length} aprobado(s),{' '}
-            {bulkResults.filter((r) => r.error).length} con error.
+            Resultado: {bulkResults.results.filter((r) => !r.error).length}{' '}
+            {bulkResults.kind === 'approve' ? 'aprobado(s)' : 'rechazado(s)'},{' '}
+            {bulkResults.results.filter((r) => r.error).length} con error.
           </p>
           <ul className="flex flex-col gap-1">
-            {bulkResults.map((r) => (
+            {bulkResults.results.map((r) => (
               <li key={r.id} className={r.error ? 'text-red-600' : 'text-green-700'}>
                 {r.error ? '✗' : '✓'} {r.nombre}
                 {r.error ? `: ${r.error}` : ''}
@@ -354,6 +469,19 @@ export function CandidatosList({
             Cerrar
           </button>
         </div>
+      )}
+
+      {bulkUndo && (
+        <UndoToast
+          message={
+            bulkUndo.kind === 'approve'
+              ? `${bulkUndo.ids.length} aprobado(s).`
+              : `${bulkUndo.ids.length} rechazado(s).`
+          }
+          onUndo={handleBulkUndo}
+          onExpire={() => setBulkUndo(null)}
+          pending={bulkUndoPending}
+        />
       )}
 
       {filtered.length === 0 && (

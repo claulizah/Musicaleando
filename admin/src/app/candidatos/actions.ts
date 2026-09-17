@@ -208,6 +208,146 @@ export async function discardCandidate(candidateId: string): Promise<{ error?: s
   return {};
 }
 
+export type BulkRejectResult = { id: string; nombre: string; error?: string };
+
+// Mismo patrón que approveCandidatesBulk: trae los nombres en chunks (evita
+// el mismo problema de URL demasiado larga con lotes grandes) y reusa
+// discardCandidate ítem por ítem en vez de duplicar la lógica.
+export async function discardCandidatesBulk(candidateIds: string[]): Promise<{ results: BulkRejectResult[] }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) {
+    return { results: candidateIds.map((id) => ({ id, nombre: id, error: 'No autorizado.' })) };
+  }
+  if (candidateIds.length === 0) return { results: [] };
+
+  const supabase = await createClient();
+  const FETCH_CHUNK_SIZE = 100;
+  const nombreById = new Map<string, string>();
+
+  for (let i = 0; i < candidateIds.length; i += FETCH_CHUNK_SIZE) {
+    const chunk = candidateIds.slice(i, i + FETCH_CHUNK_SIZE);
+    const { data: rows, error: fetchError } = await supabase
+      .from('event_candidates')
+      .select('id, nombre')
+      .in('id', chunk);
+    if (fetchError) {
+      console.error(`No se pudieron leer ${chunk.length} candidatos para rechazo en bulk:`, fetchError);
+      continue;
+    }
+    for (const r of rows ?? []) nombreById.set(r.id, r.nombre);
+  }
+
+  const results: BulkRejectResult[] = [];
+  for (const id of candidateIds) {
+    const nombre = nombreById.get(id) ?? id;
+    const result = await discardCandidate(id);
+    if (result.error) console.error(`discardCandidatesBulk: candidato ${id} (${nombre}) falló:`, result.error);
+    results.push({ id, nombre, error: result.error });
+  }
+
+  return { results };
+}
+
+// ---------- Deshacer (ventana corta tras aprobar/rechazar) ----------
+// No hay historial de auditoría completo aquí — solo revierte la acción
+// inmediata anterior, mientras el toast de "Deshacer" sigue visible.
+
+export async function undoDiscard(candidateId: string): Promise<{ error?: string }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) return { error: 'No autorizado.' };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('event_candidates')
+    .update({ estado: 'pendiente' })
+    .eq('id', candidateId)
+    .eq('estado', 'descartado'); // no revive algo que ya cambió de estado por otra vía mientras tanto
+
+  if (error) return { error: error.message };
+  revalidatePath('/candidatos');
+  return {};
+}
+
+export async function undoDiscardBulk(candidateIds: string[]): Promise<{ error?: string }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) return { error: 'No autorizado.' };
+  if (candidateIds.length === 0) return {};
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('event_candidates')
+    .update({ estado: 'pendiente' })
+    .in('id', candidateIds)
+    .eq('estado', 'descartado');
+
+  if (error) return { error: error.message };
+  revalidatePath('/candidatos');
+  return {};
+}
+
+// Deshacer una aprobación es más delicado: ya se creó `festivals` +
+// `festival_lineup` + posibles `artists` nuevos. Decisión de alcance (ver
+// reporte del ticket): se borran festival_lineup y festivals (lo que esta
+// aprobación específica creó, identificable sin ambigüedad vía
+// event_candidates.festival_id) y el candidato vuelve a 'pendiente'. Los
+// `artists` que se hayan creado/reusado en el proceso NO se borran — un
+// artista puede estar compartido con otro evento ya aprobado, y una fila de
+// más en `artists` no es "dato a medias" (es solo un nombre sin usar), a
+// diferencia de un festival fantasma sin dueño. Esto no defiende contra algo
+// que ya haya empezado a depender de ese festival en la ventana de ~30s
+// (ej. un squad creado con ese festival) — ventana corta y acción deliberada
+// de la curadora, no un rollback transaccional real.
+export async function undoApprove(candidateId: string): Promise<{ error?: string }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) return { error: 'No autorizado.' };
+
+  const supabase = await createClient();
+  const { data: candidate, error: fetchError } = await supabase
+    .from('event_candidates')
+    .select('estado, festival_id')
+    .eq('id', candidateId)
+    .maybeSingle();
+  if (fetchError) return { error: fetchError.message };
+  if (!candidate || candidate.estado !== 'aprobado' || !candidate.festival_id) {
+    return { error: 'Este candidato ya no está en un estado que se pueda deshacer.' };
+  }
+
+  const { error: lineupDeleteError } = await supabase
+    .from('festival_lineup')
+    .delete()
+    .eq('festival_id', candidate.festival_id);
+  if (lineupDeleteError) return { error: lineupDeleteError.message };
+
+  const { error: festivalDeleteError } = await supabase.from('festivals').delete().eq('id', candidate.festival_id);
+  if (festivalDeleteError) return { error: festivalDeleteError.message };
+
+  const { error: updateError } = await supabase
+    .from('event_candidates')
+    .update({ estado: 'pendiente', festival_id: null })
+    .eq('id', candidateId);
+  if (updateError) return { error: updateError.message };
+
+  revalidatePath('/candidatos');
+  revalidatePath('/admin');
+  return {};
+}
+
+export type UndoApproveResult = { id: string; error?: string };
+
+export async function undoApproveBulk(candidateIds: string[]): Promise<{ results: UndoApproveResult[] }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) {
+    return { results: candidateIds.map((id) => ({ id, error: 'No autorizado.' })) };
+  }
+
+  const results: UndoApproveResult[] = [];
+  for (const id of candidateIds) {
+    const result = await undoApprove(id);
+    results.push({ id, error: result.error });
+  }
+  return { results };
+}
+
 // ---------- Agregar evento desde imagen (póster/flyer/line-up) ----------
 // Misma idea que Ticketmaster: nunca se publica directo a `festivals`, todo
 // entra a event_candidates como 'pendiente' salvo que el curador decida
