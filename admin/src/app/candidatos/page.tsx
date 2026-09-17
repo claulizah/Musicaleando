@@ -55,6 +55,9 @@ export default async function CandidatosPage() {
           <Link href="/candidatos/limpieza" className="text-sm underline">
             Limpiar nombres
           </Link>
+          <Link href="/candidatos/reparar-lineup" className="text-sm underline">
+            Reparar line-up
+          </Link>
           <Link href="/admin" className="text-sm underline">
             ← Festivales
           </Link>
