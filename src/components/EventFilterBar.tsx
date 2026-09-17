@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors, radii, spacing, type } from '../theme';
 import type { DateFilter, TipoFilter } from '../hooks/useEventFilters';
 
@@ -36,6 +37,15 @@ export type EventFilterBarProps = {
 // squad (SquadsScreen), para no mantener dos implementaciones del mismo
 // filtro. Ver useEventFilters (el hook que le da los valores) para el
 // porqué del toggle de género en vez de un selector de género arbitrario.
+//
+// Antes esto era UN solo scroll horizontal con tipo+fecha+ciudad+género
+// juntos — con 55+ ciudades reales ya en el catálogo eso es una tira
+// larguísima que se corta en el borde sin avisar (bug reportado por
+// Claudia). Ahora: Tipo queda siempre visible (3 opciones, lo que más se
+// usa para escanear rápido); fecha/ciudad/género quedan detrás de "Más
+// filtros" para que la vista inicial no abrume; y cualquier fila que
+// scrollea horizontal lleva un degradado en el borde derecho para que se
+// note que sigue.
 export function EventFilterBar({
   query,
   onQueryChange,
@@ -51,6 +61,9 @@ export function EventFilterBar({
   generoLoading,
   showGeneroFilter,
 }: EventFilterBarProps) {
+  const [showMore, setShowMore] = useState(false);
+  const activeExtraCount = (dateFilter !== 'todos' ? 1 : 0) + (ciudad ? 1 : 0) + (soloMisGeneros ? 1 : 0);
+
   return (
     <View style={styles.wrap}>
       <TextInput
@@ -60,24 +73,66 @@ export function EventFilterBar({
         placeholderTextColor={colors.textMuted}
         style={styles.input}
       />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+
+      <FadingChipRow>
         {TIPO_OPTIONS.map((opt) => (
           <Chip key={opt.id} label={opt.label} selected={tipoFilter === opt.id} onPress={() => onTipoFilterChange(opt.id)} />
         ))}
-        {DATE_OPTIONS.map((opt) => (
-          <Chip key={opt.id} label={opt.label} selected={dateFilter === opt.id} onPress={() => onDateFilterChange(opt.id)} />
-        ))}
-        {ciudades.map((c) => (
-          <Chip key={c} label={c} selected={ciudad === c} onPress={() => onCiudadChange(ciudad === c ? null : c)} />
-        ))}
-        {showGeneroFilter && (
-          <Chip
-            label={generoLoading ? 'Buscando…' : 'Coincide con tus géneros'}
-            selected={soloMisGeneros}
-            onPress={onToggleSoloMisGeneros}
-          />
-        )}
+      </FadingChipRow>
+
+      <Pressable onPress={() => setShowMore((v) => !v)} style={styles.moreToggle}>
+        <Text style={styles.moreToggleText}>
+          {showMore ? '▾' : '▸'} Más filtros{activeExtraCount > 0 ? ` (${activeExtraCount})` : ''}
+        </Text>
+      </Pressable>
+
+      {showMore && (
+        <View style={styles.moreWrap}>
+          <FadingChipRow>
+            {DATE_OPTIONS.map((opt) => (
+              <Chip key={opt.id} label={opt.label} selected={dateFilter === opt.id} onPress={() => onDateFilterChange(opt.id)} />
+            ))}
+          </FadingChipRow>
+
+          {ciudades.length > 0 && (
+            <FadingChipRow>
+              {ciudades.map((c) => (
+                <Chip key={c} label={c} selected={ciudad === c} onPress={() => onCiudadChange(ciudad === c ? null : c)} />
+              ))}
+            </FadingChipRow>
+          )}
+
+          {showGeneroFilter && (
+            <FadingChipRow>
+              <Chip
+                label={generoLoading ? 'Buscando…' : 'Coincide con tus géneros'}
+                selected={soloMisGeneros}
+                onPress={onToggleSoloMisGeneros}
+              />
+            </FadingChipRow>
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
+
+// Fila de chips con scroll horizontal + degradado en el borde derecho, para
+// que quede claro que hay más opciones fuera de pantalla en vez de que
+// parezca que la lista termina ahí (antes el corte era seco, sin aviso).
+function FadingChipRow({ children }: { children: React.ReactNode }) {
+  return (
+    <View style={styles.fadingRowWrap}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
+        {children}
       </ScrollView>
+      <LinearGradient
+        colors={[`${colors.bg}00`, colors.bg]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={styles.fadeEdge}
+        pointerEvents="none"
+      />
     </View>
   );
 }
@@ -89,6 +144,8 @@ function Chip({ label, selected, onPress }: { label: string; selected: boolean; 
     </Pressable>
   );
 }
+
+const FADE_WIDTH = 28;
 
 const styles = StyleSheet.create({
   wrap: {
@@ -104,9 +161,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
+  fadingRowWrap: {
+    position: 'relative',
+  },
   chipRow: {
     gap: spacing.xs,
-    paddingRight: spacing.md,
+    paddingRight: spacing.md + FADE_WIDTH,
+  },
+  fadeEdge: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: FADE_WIDTH,
   },
   chip: {
     backgroundColor: colors.bgElevated,
@@ -126,5 +193,15 @@ const styles = StyleSheet.create({
   },
   chipLabelSelected: {
     color: colors.accentPrimary,
+  },
+  moreToggle: {
+    alignSelf: 'flex-start',
+  },
+  moreToggleText: {
+    ...type.label,
+    color: colors.accentSecondary,
+  },
+  moreWrap: {
+    gap: spacing.sm,
   },
 });

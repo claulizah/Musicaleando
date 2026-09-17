@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
+import { fetchAllByIds } from '../lib/fetchInChunks';
 import {
   ContentReportMotivo,
   FestivalReactionType,
@@ -101,64 +102,58 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
     }
 
     // RLS scopes this to my own rows + my squadmates' rows automatically.
-    const { data: intentRows, error: intentErr } = await supabase
-      .from('festival_intent')
-      .select('*')
-      .in('festival_id', festivalIds);
+    const { data: intentRows, error: intentErr } = await fetchAllByIds(festivalIds, (chunk) =>
+      supabase.from('festival_intent').select('*').in('festival_id', chunk),
+    );
 
     if (intentErr) {
       set({ status: 'error', error: intentErr.message });
       return;
     }
 
-    const { data: lineupRows, error: lineupErr } = await supabase
-      .from('festival_lineup')
-      .select('*')
-      .in('festival_id', festivalIds)
-      .order('horario', { ascending: true, nullsFirst: false });
+    const { data: lineupRows, error: lineupErr } = await fetchAllByIds(festivalIds, (chunk) =>
+      supabase
+        .from('festival_lineup')
+        .select('*')
+        .in('festival_id', chunk)
+        .order('horario', { ascending: true, nullsFirst: false }),
+    );
 
     if (lineupErr) {
       set({ status: 'error', error: lineupErr.message });
       return;
     }
 
-    const { data: reactionRows, error: reactionErr } = await supabase
-      .from('festival_reactions')
-      .select('*')
-      .in('festival_id', festivalIds);
+    const { data: reactionRows, error: reactionErr } = await fetchAllByIds(festivalIds, (chunk) =>
+      supabase.from('festival_reactions').select('*').in('festival_id', chunk),
+    );
 
     if (reactionErr) {
       set({ status: 'error', error: reactionErr.message });
       return;
     }
 
-    const { data: feedbackRows, error: feedbackErr } = await supabase
-      .from('festival_feedback')
-      .select('*')
-      .in('festival_id', festivalIds)
-      .eq('user_id', userId);
+    const { data: feedbackRows, error: feedbackErr } = await fetchAllByIds(festivalIds, (chunk) =>
+      supabase.from('festival_feedback').select('*').in('festival_id', chunk).eq('user_id', userId),
+    );
 
     if (feedbackErr) {
       set({ status: 'error', error: feedbackErr.message });
       return;
     }
 
-    const { data: commentRows, error: commentErr } = await supabase
-      .from('festival_comments')
-      .select('*')
-      .in('festival_id', festivalIds)
-      .order('created_at', { ascending: false });
+    const { data: commentRows, error: commentErr } = await fetchAllByIds(festivalIds, (chunk) =>
+      supabase.from('festival_comments').select('*').in('festival_id', chunk).order('created_at', { ascending: false }),
+    );
 
     if (commentErr) {
       set({ status: 'error', error: commentErr.message });
       return;
     }
 
-    const { data: rawAnnouncementRows, error: announcementErr } = await supabase
-      .from('announcements')
-      .select('*')
-      .in('festival_id', festivalIds)
-      .order('created_at', { ascending: false });
+    const { data: rawAnnouncementRows, error: announcementErr } = await fetchAllByIds(festivalIds, (chunk) =>
+      supabase.from('announcements').select('*').in('festival_id', chunk).order('created_at', { ascending: false }),
+    );
 
     if (announcementErr) {
       set({ status: 'error', error: announcementErr.message });
@@ -184,31 +179,27 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
     });
 
     const announcementIds = announcementRows.map((a) => a.id);
-    const { data: interestRows, error: interestErr } =
-      announcementIds.length > 0
-        ? await supabase.from('announcement_interest').select('*').in('announcement_id', announcementIds)
-        : { data: [], error: null };
+    const { data: interestRows, error: interestErr } = await fetchAllByIds(announcementIds, (chunk) =>
+      supabase.from('announcement_interest').select('*').in('announcement_id', chunk),
+    );
 
     if (interestErr) {
       set({ status: 'error', error: interestErr.message });
       return;
     }
 
-    const { data: mapPinRows, error: mapPinErr } = await supabase
-      .from('festival_map_pins')
-      .select('*')
-      .in('festival_id', festivalIds);
+    const { data: mapPinRows, error: mapPinErr } = await fetchAllByIds(festivalIds, (chunk) =>
+      supabase.from('festival_map_pins').select('*').in('festival_id', chunk),
+    );
 
     if (mapPinErr) {
       set({ status: 'error', error: mapPinErr.message });
       return;
     }
 
-    const { data: surveyRows, error: surveyErr } = await supabase
-      .from('festival_survey_responses')
-      .select('*')
-      .in('festival_id', festivalIds)
-      .eq('user_id', userId);
+    const { data: surveyRows, error: surveyErr } = await fetchAllByIds(festivalIds, (chunk) =>
+      supabase.from('festival_survey_responses').select('*').in('festival_id', chunk).eq('user_id', userId),
+    );
 
     if (surveyErr) {
       set({ status: 'error', error: surveyErr.message });

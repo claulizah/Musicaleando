@@ -48,7 +48,6 @@ export function HomeScreen({ navigation }: Props) {
   const trendHistory = useTrendStore((s) => s.history);
   const fetchTrendHistory = useTrendStore((s) => s.fetchHistory);
   const [showHistory, setShowHistory] = useState(false);
-  const bestMatch = useContactsStore((s) => s.bestMatch);
   const fetchContacts = useContactsStore((s) => s.fetchAll);
   const festivalesConfirmados = useAchievementsStore((s) => s.festivalesConfirmados);
   const fetchAchievements = useAchievementsStore((s) => s.fetch);
@@ -128,9 +127,11 @@ export function HomeScreen({ navigation }: Props) {
             <Pressable style={styles.squadButton} onPress={() => navigation.navigate('Squads')}>
               <Text style={styles.squadButtonText}>👥</Text>
             </Pressable>
-            <Pressable style={styles.squadButton} onPress={() => navigation.navigate('Contacts')}>
-              <Text style={styles.squadButtonText}>🤝</Text>
-            </Pressable>
+            {/* "Tu red de conocidos" (Contacts) queda deliberadamente fuera
+                de la navegación de este release — función diferida a una
+                ronda futura. El código de la pantalla/store se deja intacto
+                (ver ContactsScreen.tsx, useContactsStore) para retomarla
+                más adelante; solo se le quitan los puntos de entrada. */}
           </View>
         </View>
 
@@ -183,14 +184,6 @@ export function HomeScreen({ navigation }: Props) {
               {challenge.progress} / {challenge.target}
             </Text>
           </View>
-        )}
-
-        {bestMatch && (
-          <Pressable style={styles.matchCard} onPress={() => navigation.navigate('Contacts')}>
-            <Text style={styles.matchEyebrow}>COMPAÑERO IDEAL</Text>
-            <Text style={styles.matchName}>{bestMatch.nombre ?? 'Sin nombre'}</Text>
-            <Text style={styles.matchMeta}>{bestMatch.compat_score ?? 0}% compatible contigo</Text>
-          </Pressable>
         )}
 
         {trend && <TrendCard trend={formatTrend(trend)} />}
