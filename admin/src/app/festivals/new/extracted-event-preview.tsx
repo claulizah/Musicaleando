@@ -35,7 +35,7 @@ export function ExtractedEventPreview({
 
   const handleCreateNew = () => {
     startTransition(async () => {
-      const res = await createEventCandidate(extracted, source);
+      const res = await createEventCandidate(extracted, source, duplicate);
       if (!res.error) onDone();
     });
   };

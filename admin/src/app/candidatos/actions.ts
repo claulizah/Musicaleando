@@ -487,6 +487,7 @@ export async function extractEventFromImage(
 export async function createEventCandidate(
   extracted: ExtractedEvent,
   source: 'poster_image' | 'link',
+  duplicate: DuplicateMatch | null = null,
 ): Promise<{ error?: string }> {
   const admin = await requireAdmin();
   if (!admin.authorized) return { error: 'No autorizado.' };
@@ -511,7 +512,13 @@ export async function createEventCandidate(
     price_min: null,
     price_max: null,
     price_currency: null,
-    possible_duplicate_of: null,
+    // possible_duplicate_of es FK a `festivals` únicamente (ver migración
+    // de event_candidates) — un duplicado de otro candidato PENDIENTE
+    // (duplicate.type === 'candidate') no se puede guardar aquí, la FK lo
+    // rechazaría. Ese caso se sigue mostrando en el momento de la extracción
+    // (event-link-importer / extracted-event-preview), pero no persiste como
+    // badge en /candidatos — limitación real del esquema, no un descuido.
+    possible_duplicate_of: duplicate?.type === 'festival' ? duplicate.id : null,
     festival_id: null,
   });
   if (error) return { error: error.message };
@@ -639,7 +646,7 @@ export async function extractEventFromLink(
 // (one bad row doesn't block the rest), and results are reported per event
 // so the UI can show which ones actually landed in /candidatos.
 export async function createEventCandidates(
-  events: ExtractedEvent[],
+  events: ExtractedEventWithDuplicate[],
   source: 'poster_image' | 'link',
 ): Promise<{ created: number; errors: string[] }> {
   const admin = await requireAdmin();
@@ -648,7 +655,7 @@ export async function createEventCandidates(
   let created = 0;
   const errors: string[] = [];
   for (const event of events) {
-    const result = await createEventCandidate(event, source);
+    const result = await createEventCandidate(event, source, event.duplicate);
     if (result.error) errors.push(`${event.nombre ?? '(sin nombre)'}: ${result.error}`);
     else created++;
   }
