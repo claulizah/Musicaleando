@@ -41,3 +41,7 @@ env.txt
 # generated native folders
 /ios
 /android
+
+# notas personales sueltas en la raíz del repo, no parte del código
+Importantisimo no borrar.txt
+iniciar-admin.bat
