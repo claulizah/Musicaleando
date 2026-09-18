@@ -24,10 +24,21 @@ export async function fetchAllByIds<T>(
   // Promise hasta que se resuelve.
   fetchChunk: (chunk: string[]) => PromiseLike<{ data: T[] | null; error: PostgrestError | null }>,
 ): Promise<{ data: T[]; error: PostgrestError | null }> {
-  const results: T[] = [];
+  const chunks: string[][] = [];
   for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
-    const chunk = ids.slice(i, i + CHUNK_SIZE);
-    const { data, error } = await fetchChunk(chunk);
+    chunks.push(ids.slice(i, i + CHUNK_SIZE));
+  }
+
+  // Los lotes son independientes entre sí (cada uno filtra un subconjunto
+  // disjunto de IDs) — pedirlos uno por uno con await en un for era la otra
+  // mitad de por qué la carga de Conciertos y festivales tardaba tanto
+  // (~20 lotes secuenciales solo para esta tabla, multiplicado por cada
+  // tabla que usa este helper). En paralelo, el tiempo total es el de UN
+  // lote, no la suma de los 20.
+  const settled = await Promise.all(chunks.map((chunk) => fetchChunk(chunk)));
+
+  const results: T[] = [];
+  for (const { data, error } of settled) {
     if (error) return { data: results, error };
     results.push(...(data ?? []));
   }

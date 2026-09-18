@@ -101,74 +101,64 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
       return;
     }
 
-    // RLS scopes this to my own rows + my squadmates' rows automatically.
-    const { data: intentRows, error: intentErr } = await fetchAllByIds(festivalIds, (chunk) =>
-      supabase.from('festival_intent').select('*').in('festival_id', chunk),
-    );
-
-    if (intentErr) {
-      set({ status: 'error', error: intentErr.message });
-      return;
-    }
-
-    const { data: lineupRows, error: lineupErr } = await fetchAllByIds(festivalIds, (chunk) =>
-      supabase
-        .from('festival_lineup')
-        .select('*')
-        .in('festival_id', chunk)
-        .order('horario', { ascending: true, nullsFirst: false }),
-    );
-
-    if (lineupErr) {
-      set({ status: 'error', error: lineupErr.message });
-      return;
-    }
-
-    const { data: reactionRows, error: reactionErr } = await fetchAllByIds(festivalIds, (chunk) =>
-      supabase.from('festival_reactions').select('*').in('festival_id', chunk),
-    );
-
-    if (reactionErr) {
-      set({ status: 'error', error: reactionErr.message });
-      return;
-    }
-
-    const { data: feedbackRows, error: feedbackErr } = await fetchAllByIds(festivalIds, (chunk) =>
-      supabase.from('festival_feedback').select('*').in('festival_id', chunk).eq('user_id', userId),
-    );
-
-    if (feedbackErr) {
-      set({ status: 'error', error: feedbackErr.message });
-      return;
-    }
-
-    const { data: commentRows, error: commentErr } = await fetchAllByIds(festivalIds, (chunk) =>
-      supabase.from('festival_comments').select('*').in('festival_id', chunk).order('created_at', { ascending: false }),
-    );
-
-    if (commentErr) {
-      set({ status: 'error', error: commentErr.message });
-      return;
-    }
-
-    const { data: rawAnnouncementRows, error: announcementErr } = await fetchAllByIds(festivalIds, (chunk) =>
-      supabase.from('announcements').select('*').in('festival_id', chunk).order('created_at', { ascending: false }),
-    );
-
-    if (announcementErr) {
-      set({ status: 'error', error: announcementErr.message });
-      return;
-    }
-
-    // Segmentación básica: un anuncio con target_ciudad/target_genero solo
-    // se muestra a quien califica — el filtro real (mínimo de agregación)
-    // ya se aplicó al publicarlo desde el panel admin, esto es solo "¿me
-    // toca verlo a mí?". Own row reads only (RLS select-own), nunca se leen
-    // otros usuarios aquí.
-    const [{ data: myUserRow }, { data: myProfileRow }] = await Promise.all([
+    // Estas 8+2 consultas son independientes entre sí (ninguna necesita el
+    // resultado de otra) — antes se pedían una por una con await, lo que
+    // sumaba la latencia de cada una (y cada una ya son ~20 lotes en
+    // paralelo gracias a fetchAllByIds). Pedirlas todas juntas hace que el
+    // tiempo total sea el de la más lenta, no la suma de las 10. Esta era
+    // la causa real de la carga lenta reportada en "Conciertos y
+    // festivales" — no faltaba un índice, sobraba secuencialidad.
+    const [
+      { data: intentRows, error: intentErr },
+      { data: lineupRows, error: lineupErr },
+      { data: reactionRows, error: reactionErr },
+      { data: feedbackRows, error: feedbackErr },
+      { data: commentRows, error: commentErr },
+      { data: rawAnnouncementRows, error: announcementErr },
+      { data: mapPinRows, error: mapPinErr },
+      { data: surveyRows, error: surveyErr },
+      { data: myUserRow },
+      { data: myProfileRow },
+    ] = await Promise.all([
+      // RLS scopes this to my own rows + my squadmates' rows automatically.
+      fetchAllByIds(festivalIds, (chunk) => supabase.from('festival_intent').select('*').in('festival_id', chunk)),
+      fetchAllByIds(festivalIds, (chunk) =>
+        supabase
+          .from('festival_lineup')
+          .select('*')
+          .in('festival_id', chunk)
+          .order('horario', { ascending: true, nullsFirst: false }),
+      ),
+      fetchAllByIds(festivalIds, (chunk) => supabase.from('festival_reactions').select('*').in('festival_id', chunk)),
+      fetchAllByIds(festivalIds, (chunk) =>
+        supabase.from('festival_feedback').select('*').in('festival_id', chunk).eq('user_id', userId),
+      ),
+      fetchAllByIds(festivalIds, (chunk) =>
+        supabase.from('festival_comments').select('*').in('festival_id', chunk).order('created_at', { ascending: false }),
+      ),
+      fetchAllByIds(festivalIds, (chunk) =>
+        supabase.from('announcements').select('*').in('festival_id', chunk).order('created_at', { ascending: false }),
+      ),
+      fetchAllByIds(festivalIds, (chunk) => supabase.from('festival_map_pins').select('*').in('festival_id', chunk)),
+      fetchAllByIds(festivalIds, (chunk) =>
+        supabase.from('festival_survey_responses').select('*').in('festival_id', chunk).eq('user_id', userId),
+      ),
+      // Segmentación básica: un anuncio con target_ciudad/target_genero solo
+      // se muestra a quien califica — el filtro real (mínimo de agregación)
+      // ya se aplicó al publicarlo desde el panel admin, esto es solo "¿me
+      // toca verlo a mí?". Own row reads only (RLS select-own), nunca se leen
+      // otros usuarios aquí.
       supabase.from('users').select('ciudad').eq('id', userId).maybeSingle(),
       supabase.from('music_profile').select('generos').eq('user_id', userId).maybeSingle(),
     ]);
+
+    for (const err of [intentErr, lineupErr, reactionErr, feedbackErr, commentErr, announcementErr, mapPinErr, surveyErr]) {
+      if (err) {
+        set({ status: 'error', error: err.message });
+        return;
+      }
+    }
+
     const myCiudad = myUserRow?.ciudad ?? null;
     const myGeneros = (myProfileRow?.generos as string[] | null) ?? [];
 
@@ -178,6 +168,8 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
       return true;
     });
 
+    // Depende de announcementRows (recién filtrado arriba), así que este sí
+    // se queda después del Promise.all — no puede unirse a la ronda paralela.
     const announcementIds = announcementRows.map((a) => a.id);
     const { data: interestRows, error: interestErr } = await fetchAllByIds(announcementIds, (chunk) =>
       supabase.from('announcement_interest').select('*').in('announcement_id', chunk),
@@ -185,24 +177,6 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
 
     if (interestErr) {
       set({ status: 'error', error: interestErr.message });
-      return;
-    }
-
-    const { data: mapPinRows, error: mapPinErr } = await fetchAllByIds(festivalIds, (chunk) =>
-      supabase.from('festival_map_pins').select('*').in('festival_id', chunk),
-    );
-
-    if (mapPinErr) {
-      set({ status: 'error', error: mapPinErr.message });
-      return;
-    }
-
-    const { data: surveyRows, error: surveyErr } = await fetchAllByIds(festivalIds, (chunk) =>
-      supabase.from('festival_survey_responses').select('*').in('festival_id', chunk).eq('user_id', userId),
-    );
-
-    if (surveyErr) {
-      set({ status: 'error', error: surveyErr.message });
       return;
     }
 

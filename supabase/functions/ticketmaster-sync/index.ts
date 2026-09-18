@@ -31,7 +31,7 @@ const STALE_AFTER_DAYS = 3; // ~2 corridas (2x/día) sin ver el evento -> "desap
 
 type TmClassification = { segment?: { name?: string } };
 type TmAttraction = { name?: string };
-type TmVenue = { name?: string; city?: { name?: string } };
+type TmVenue = { name?: string; city?: { name?: string }; state?: { name?: string } };
 type TmPriceRange = { min?: number; max?: number; currency?: string };
 type TmEvent = {
   id: string;
@@ -131,7 +131,13 @@ function normalizeEvent(ev: TmEvent) {
   const statusCode = ev.dates?.status?.code;
 
   const nombre = ev.name;
-  const ciudad = venue?.city?.name ?? null;
+  // Ticketmaster reporta "México" (el país, no una ciudad) como city.name
+  // para muchas sedes de Ciudad de México — confirmado con datos reales:
+  // en esos casos state.name trae el valor específico correcto ("Ciudad de
+  // México"), city.name simplemente no lo tiene. Se usa como respaldo solo
+  // en ese caso puntual, no como reemplazo general de city.name.
+  const rawCity = venue?.city?.name ?? null;
+  const ciudad = rawCity === "México" ? (venue?.state?.name ?? rawCity) : rawCity;
   const fecha_inicio = ev.dates?.start?.localDate ?? null;
   const fecha_fin = ev.dates?.end?.localDate ?? null;
   const link_boletos = ev.url ?? null;

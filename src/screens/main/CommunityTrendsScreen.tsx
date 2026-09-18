@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
 import { Screen } from '../../components/Screen';
@@ -10,11 +10,28 @@ import { supabase } from '../../lib/supabase';
 import { GENEROS } from '../../lib/archetypes';
 import { promptReportContent } from '../../lib/moderation';
 import { openListenLink } from '../../lib/musicLinks';
-import { ContentReportMotivo, Tables } from '../../types/database';
+import { resolveOrCreateSong } from '../../lib/resolveOrCreateSong';
+import { ContentReportMotivo } from '../../types/database';
 import { colors, radii, spacing, type } from '../../theme';
 
-type Song = Tables<'songs'>;
 type Props = NativeStackScreenProps<RootStackParamList, 'CommunityTrends'>;
+
+// La iTunes Search API es pública, sin API key — se llama directo, sin CORS
+// que resolver (a diferencia del panel admin en navegador, aquí es una app
+// nativa). Mismo endpoint que se usó para el buscador de canciones del panel.
+const ITUNES_SEARCH_URL = 'https://itunes.apple.com/search';
+const SEARCH_DEBOUNCE_MS = 350;
+const MIN_QUERY_LENGTH = 2;
+
+type ItunesTrack = {
+  trackId: number;
+  trackName: string;
+  artistName: string;
+  primaryGenreName?: string;
+  artworkUrl60?: string;
+};
+
+type StagedTrack = { trackId: number; titulo: string; artista: string; genero?: string };
 
 export function CommunityTrendsScreen({ navigation }: Props) {
   const userId = useSessionStore((s) => s.userId);
@@ -28,10 +45,12 @@ export function CommunityTrendsScreen({ navigation }: Props) {
   const reportShare = useCommunityStore((s) => s.reportShare);
 
   const [ciudad, setCiudad] = useState<string | null>(null);
-  const [catalog, setCatalog] = useState<Song[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerGenre, setPickerGenre] = useState<string | null>(null);
-  const [selectedSongIds, setSelectedSongIds] = useState<string[]>([]);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<ItunesTrack[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [stagedTracks, setStagedTracks] = useState<StagedTrack[]>([]);
   const [sharing, setSharing] = useState(false);
   const [genreFilter, setGenreFilter] = useState<string | null>(null);
 
@@ -50,38 +69,82 @@ export function CommunityTrendsScreen({ navigation }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, ciudad, scope]);
 
-  const openPicker = async () => {
+  const openPicker = () => {
     setPickerOpen(true);
-    setSelectedSongIds([]);
-    if (catalog.length === 0) {
-      const { data } = await supabase.from('songs').select('*').order('genero').order('orden');
-      setCatalog(data ?? []);
+    setStagedTracks([]);
+    setQuery('');
+    setResults([]);
+    setSearchError('');
+  };
+
+  const closePicker = () => {
+    setPickerOpen(false);
+    setStagedTracks([]);
+    setQuery('');
+    setResults([]);
+    setSearchError('');
+  };
+
+  const handleQueryChange = (value: string) => {
+    setQuery(value);
+    if (value.trim().length < MIN_QUERY_LENGTH) {
+      setResults([]);
+      setSearchError('');
     }
   };
 
-  const toggleSongPick = (songId: string) => {
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < MIN_QUERY_LENGTH) return;
+
+    const timer = setTimeout(async () => {
+      setSearchLoading(true);
+      setSearchError('');
+      try {
+        const url = `${ITUNES_SEARCH_URL}?media=music&entity=song&limit=8&term=${encodeURIComponent(q)}`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('bad status');
+        const data = (await res.json()) as { results?: ItunesTrack[] };
+        setResults(data.results ?? []);
+      } catch {
+        setSearchError('No se pudo buscar. Intenta de nuevo.');
+        setResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const stageTrack = (track: ItunesTrack) => {
     Haptics.selectionAsync();
-    setSelectedSongIds((prev) =>
-      prev.includes(songId) ? prev.filter((id) => id !== songId) : [...prev, songId],
+    setStagedTracks((prev) =>
+      prev.some((t) => t.trackId === track.trackId)
+        ? prev
+        : [...prev, { trackId: track.trackId, titulo: track.trackName, artista: track.artistName, genero: track.primaryGenreName }],
     );
   };
 
+  const unstageTrack = (trackId: number) => {
+    setStagedTracks((prev) => prev.filter((t) => t.trackId !== trackId));
+  };
+
   const confirmShare = async () => {
-    if (!userId || selectedSongIds.length === 0) return;
+    if (!userId || stagedTracks.length === 0) return;
     setSharing(true);
     try {
-      await shareSongs(userId, selectedSongIds, ciudad);
-      setPickerOpen(false);
-      setPickerGenre(null);
-      setSelectedSongIds([]);
+      const songIds = await Promise.all(
+        stagedTracks.map((t) => resolveOrCreateSong(t.titulo, t.artista, t.genero)),
+      );
+      await shareSongs(userId, songIds, ciudad);
+      closePicker();
     } catch (err) {
       Alert.alert('No se pudo compartir', err instanceof Error ? err.message : 'Intenta de nuevo.');
     } finally {
       setSharing(false);
     }
   };
-
-  const genres = [...new Set(catalog.map((s) => s.genero))];
 
   // "Trends avanzados" (Sprint 5): filter the ranking by género — data was
   // already loaded client-side (every share's songs come with the fetch),
@@ -161,67 +224,72 @@ export function CommunityTrendsScreen({ navigation }: Props) {
 
         {pickerOpen && (
           <View style={styles.pickerCard}>
-            {pickerGenre === null ? (
-              <>
-                <Text style={styles.formLabel}>Elige un género</Text>
-                <View style={styles.genreWrap}>
-                  {genres.map((g) => (
-                    <Pressable key={g} style={styles.genreChip} onPress={() => setPickerGenre(g)}>
-                      <Text style={styles.genreChipLabel}>{g}</Text>
+            <Text style={styles.formLabel}>Buscar canción o artista</Text>
+            <TextInput
+              value={query}
+              onChangeText={handleQueryChange}
+              placeholder="ej. Bad Bunny, Nueva York…"
+              placeholderTextColor={colors.textMuted}
+              style={styles.searchInput}
+            />
+
+            {searchLoading && <Text style={styles.hint}>Buscando…</Text>}
+            {searchError && <Text style={styles.errorText}>{searchError}</Text>}
+
+            {results.length > 0 && (
+              <View style={styles.resultsWrap}>
+                {results.map((r) => {
+                  const alreadyStaged = stagedTracks.some((t) => t.trackId === r.trackId);
+                  return (
+                    <Pressable
+                      key={r.trackId}
+                      style={[styles.trackRow, alreadyStaged && styles.trackRowSelected]}
+                      disabled={alreadyStaged}
+                      onPress={() => stageTrack(r)}
+                    >
+                      {r.artworkUrl60 && <Image source={{ uri: r.artworkUrl60 }} style={styles.artwork} />}
+                      <View style={styles.trackTextWrap}>
+                        <Text style={styles.trackTitle} numberOfLines={1}>
+                          {r.trackName}
+                        </Text>
+                        <Text style={styles.trackMeta} numberOfLines={1}>
+                          {r.artistName}
+                        </Text>
+                      </View>
+                      <Text style={styles.trackCheck}>{alreadyStaged ? '✓' : '+'}</Text>
                     </Pressable>
-                  ))}
-                </View>
-              </>
-            ) : (
-              <>
-                <View style={styles.pickerHeader}>
-                  <Text style={styles.formLabel}>{pickerGenre}</Text>
-                  <Pressable onPress={() => setPickerGenre(null)}>
-                    <Text style={styles.addLink}>‹ Géneros</Text>
-                  </Pressable>
-                </View>
-                {catalog
-                  .filter((s) => s.genero === pickerGenre)
-                  .map((s) => {
-                    const selected = selectedSongIds.includes(s.id);
-                    return (
-                      <Pressable
-                        key={s.id}
-                        style={[styles.trackRow, selected && styles.trackRowSelected]}
-                        onPress={() => toggleSongPick(s.id)}
-                      >
-                        <View style={styles.trackTextWrap}>
-                          <Text style={styles.trackTitle} numberOfLines={1}>
-                            {s.titulo}
-                          </Text>
-                          <Text style={styles.trackMeta} numberOfLines={1}>
-                            {s.artista}
-                          </Text>
-                        </View>
-                        <Text style={styles.trackCheck}>{selected ? '✓' : ''}</Text>
-                      </Pressable>
-                    );
-                  })}
-              </>
+                  );
+                })}
+              </View>
+            )}
+
+            {stagedTracks.length > 0 && (
+              <View style={styles.stagedWrap}>
+                <Text style={styles.formLabel}>Seleccionadas ({stagedTracks.length})</Text>
+                {stagedTracks.map((t) => (
+                  <View key={t.trackId} style={styles.stagedRow}>
+                    <Text style={styles.trackTitle} numberOfLines={1}>
+                      {t.titulo} <Text style={styles.trackMeta}>— {t.artista}</Text>
+                    </Text>
+                    <Pressable hitSlop={8} onPress={() => unstageTrack(t.trackId)}>
+                      <Text style={styles.removeLink}>Quitar</Text>
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
             )}
 
             <View style={styles.pickerActions}>
-              <Pressable
-                onPress={() => {
-                  setPickerOpen(false);
-                  setPickerGenre(null);
-                  setSelectedSongIds([]);
-                }}
-              >
+              <Pressable onPress={closePicker}>
                 <Text style={styles.cancelLink}>Cancelar</Text>
               </Pressable>
               <Pressable
-                style={[styles.confirmButton, selectedSongIds.length === 0 && styles.confirmButtonDisabled]}
-                disabled={selectedSongIds.length === 0 || sharing}
+                style={[styles.confirmButton, stagedTracks.length === 0 && styles.confirmButtonDisabled]}
+                disabled={stagedTracks.length === 0 || sharing}
                 onPress={confirmShare}
               >
                 <Text style={styles.confirmButtonText}>
-                  {sharing ? 'Compartiendo...' : `Compartir (${selectedSongIds.length})`}
+                  {sharing ? 'Compartiendo...' : `Compartir (${stagedTracks.length})`}
                 </Text>
               </Pressable>
             </View>
@@ -419,37 +487,47 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: spacing.sm,
   },
-  pickerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
   formLabel: {
     ...type.label,
     color: colors.textSecondary,
     textTransform: 'capitalize',
   },
-  addLink: {
-    ...type.label,
-    color: colors.accentSecondary,
-  },
-  genreWrap: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  genreChip: {
+  searchInput: {
+    ...type.body,
+    color: colors.textPrimary,
     backgroundColor: colors.bg,
     borderRadius: radii.md,
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.sm,
   },
-  genreChipLabel: {
-    ...type.body,
-    color: colors.textPrimary,
-    textTransform: 'capitalize',
+  errorText: {
+    ...type.caption,
+    color: colors.danger,
+  },
+  resultsWrap: {
+    gap: spacing.xs,
+  },
+  artwork: {
+    width: 36,
+    height: 36,
+    borderRadius: radii.sm,
+    marginRight: spacing.sm,
+  },
+  stagedWrap: {
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  stagedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  removeLink: {
+    ...type.caption,
+    color: colors.textMuted,
   },
   trackRow: {
     flexDirection: 'row',
@@ -541,6 +619,8 @@ const styles = StyleSheet.create({
   },
   songArtist: {
     ...type.caption,
+    fontSize: 11,
+    lineHeight: 14,
     color: colors.textSecondary,
   },
   listenButton: {

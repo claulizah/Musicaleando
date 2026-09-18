@@ -273,7 +273,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   squadName: {
-    ...type.bodyLg,
+    ...type.body,
+    fontFamily: type.bodyLg.fontFamily,
     color: colors.textPrimary,
   },
   squadMeta: {

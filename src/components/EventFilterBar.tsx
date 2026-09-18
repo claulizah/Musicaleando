@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, radii, spacing, type } from '../theme';
 import type { DateFilter, TipoFilter } from '../hooks/useEventFilters';
@@ -15,6 +15,11 @@ const DATE_OPTIONS: { id: DateFilter; label: string }[] = [
   { id: 'proximos7', label: 'Próximos 7 días' },
   { id: 'este_mes', label: 'Este mes' },
 ];
+
+// Sentinel de "todas las ciudades" para el dropdown — ciudad real en la app
+// es `string | null`, pero un dropdown necesita un id de opción concreto
+// para el valor "sin filtro".
+const CIUDAD_TODAS = '__todas__';
 
 export type EventFilterBarProps = {
   query: string;
@@ -88,18 +93,20 @@ export function EventFilterBar({
 
       {showMore && (
         <View style={styles.moreWrap}>
-          <FadingChipRow>
-            {DATE_OPTIONS.map((opt) => (
-              <Chip key={opt.id} label={opt.label} selected={dateFilter === opt.id} onPress={() => onDateFilterChange(opt.id)} />
-            ))}
-          </FadingChipRow>
+          <Dropdown
+            label="Fecha"
+            options={DATE_OPTIONS}
+            value={dateFilter}
+            onChange={(v) => onDateFilterChange(v as DateFilter)}
+          />
 
           {ciudades.length > 0 && (
-            <FadingChipRow>
-              {ciudades.map((c) => (
-                <Chip key={c} label={c} selected={ciudad === c} onPress={() => onCiudadChange(ciudad === c ? null : c)} />
-              ))}
-            </FadingChipRow>
+            <Dropdown
+              label="Ciudad"
+              options={[{ id: CIUDAD_TODAS, label: 'Todas las ciudades' }, ...ciudades.map((c) => ({ id: c, label: c }))]}
+              value={ciudad ?? CIUDAD_TODAS}
+              onChange={(v) => onCiudadChange(v === CIUDAD_TODAS ? null : v)}
+            />
           )}
 
           {showGeneroFilter && (
@@ -142,6 +149,65 @@ function Chip({ label, selected, onPress }: { label: string; selected: boolean; 
     <Pressable style={[styles.chip, selected && styles.chipSelected]} onPress={onPress}>
       <Text style={[styles.chipLabel, selected && styles.chipLabelSelected]}>{label}</Text>
     </Pressable>
+  );
+}
+
+// Selector desplegable en vez de una fila de chips con scroll horizontal —
+// con 55+ ciudades reales en el catálogo, esa fila se desbordaba y se
+// cortaba a la mitad sin dejar claro a qué filtro pertenecía cada chip
+// visible (bug reportado por Claudia). Un modal con lista vertical no tiene
+// ese problema de corte, y dentro de un mismo filtro las opciones son
+// mutuamente excluyentes de por sí (una sola fila seleccionada).
+function Dropdown({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: { id: string; label: string }[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedLabel = options.find((o) => o.id === value)?.label ?? label;
+
+  return (
+    <>
+      <Pressable style={styles.dropdownTrigger} onPress={() => setOpen(true)}>
+        <Text style={styles.dropdownTriggerLabel}>{label}</Text>
+        <Text style={styles.dropdownTriggerValue} numberOfLines={1}>
+          {selectedLabel} ▾
+        </Text>
+      </Pressable>
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setOpen(false)}>
+          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.modalTitle}>{label}</Text>
+            <ScrollView style={styles.modalScroll}>
+              {options.map((opt) => {
+                const selected = opt.id === value;
+                return (
+                  <Pressable
+                    key={opt.id}
+                    style={styles.modalOption}
+                    onPress={() => {
+                      onChange(opt.id);
+                      setOpen(false);
+                    }}
+                  >
+                    <Text style={[styles.modalOptionLabel, selected && styles.modalOptionLabelSelected]}>
+                      {opt.label}
+                    </Text>
+                    {selected && <Text style={styles.modalOptionCheck}>✓</Text>}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
@@ -203,5 +269,66 @@ const styles = StyleSheet.create({
   },
   moreWrap: {
     gap: spacing.sm,
+  },
+  dropdownTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.bgElevated,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  dropdownTriggerLabel: {
+    ...type.label,
+    color: colors.textSecondary,
+  },
+  dropdownTriggerValue: {
+    ...type.label,
+    color: colors.textPrimary,
+    flexShrink: 1,
+    marginLeft: spacing.sm,
+    textAlign: 'right',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: colors.bgElevated,
+    borderTopLeftRadius: radii.lg,
+    borderTopRightRadius: radii.lg,
+    padding: spacing.md,
+    maxHeight: '70%',
+  },
+  modalTitle: {
+    ...type.h2,
+    color: colors.textPrimary,
+    marginBottom: spacing.sm,
+  },
+  modalScroll: {
+    flexGrow: 0,
+  },
+  modalOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  modalOptionLabel: {
+    ...type.body,
+    color: colors.textPrimary,
+  },
+  modalOptionLabelSelected: {
+    color: colors.accentPrimary,
+  },
+  modalOptionCheck: {
+    ...type.body,
+    color: colors.accentPrimary,
   },
 });
