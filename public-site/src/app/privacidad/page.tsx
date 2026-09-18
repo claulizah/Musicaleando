@@ -6,15 +6,13 @@ export const metadata: Metadata = {
   description: 'Cómo Musicaleando recaba, usa y protege tus datos personales.',
 };
 
-// Contenido final de producto (no un placeholder técnico). Todos los datos
-// legales/de contacto ya están llenos salvo la ruta de eliminar cuenta,
-// pendiente a propósito hasta que esa función exista en producción.
+// Contenido final de producto (no un placeholder técnico).
 export default function PrivacidadPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 py-16 text-sm leading-relaxed text-gray-700">
       <h1 className="text-2xl font-semibold text-gray-900">Aviso de Privacidad — Musicaleando</h1>
       <p className="mt-1 text-gray-500">
-        Última actualización: 14 de septiembre de 2026
+        Última actualización: 18 de septiembre de 2026
       </p>
 
       <div className="mt-8 flex flex-col gap-6">
@@ -39,8 +37,9 @@ export default function PrivacidadPage() {
           <p className="mt-1">Al usar Musicaleando podemos recabar:</p>
           <ul className="mt-2 list-disc pl-5">
             <li>
-              <b>Datos de cuenta:</b> correo electrónico y contraseña (almacenada de forma
-              cifrada, nunca en texto plano).
+              <b>Datos de cuenta:</b> Musicaleando no pide correo ni contraseña — cada dispositivo
+              obtiene una sesión anónima propia, y tu perfil se asocia a esa sesión, no a tu
+              identidad personal.
             </li>
             <li>
               <b>Perfil musical:</b> género(s) favoritos, artistas, y respuestas al cuestionario
@@ -109,7 +108,7 @@ export default function PrivacidadPage() {
               ningún dato que pudiera identificar a un grupo tan pequeño de personas.
             </li>
             <li>
-              Los datos de seguridad de la cuenta (contraseñas, tokens de sesión, etc.) nunca
+              Los datos de seguridad de la cuenta (identificador de sesión, tokens, etc.) nunca
               se comparten con patrocinadores bajo ninguna circunstancia.
             </li>
           </ul>
@@ -148,12 +147,13 @@ export default function PrivacidadPage() {
             indicando tu solicitud; te responderemos en los plazos que marca la LFPDPPP.
           </p>
           <p className="mt-2">
-            También puedes eliminar tu cuenta directamente desde la app en{' '}
-            <span className="text-amber-600">
-              [PENDIENTE: se documentará una vez publicada la pantalla de Configuración/Cuenta con
-              la opción de eliminar cuenta]
-            </span>
-            .
+            También puedes eliminar tu cuenta directamente desde la app, sin tener que
+            contactarnos: entra a tu perfil, toca el ícono de engranaje (Configuración) y elige
+            &quot;Eliminar mi cuenta&quot;. Esto borra tu perfil musical, tu historial de moods,
+            tus membresías de squad y tus solicitudes de contacto de forma permanente e inmediata
+            — no hay periodo de gracia ni forma de recuperarlos después. Tus comentarios y
+            reacciones en festivales permanecen visibles para no romper la conversación, pero
+            dejan de estar ligados a ti (se muestran como &quot;Usuario eliminado&quot;).
           </p>
         </section>
 

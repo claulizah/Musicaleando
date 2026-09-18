@@ -50,8 +50,9 @@ export default function TerminosPage() {
               Debes contar con al menos 18 años para crear una cuenta.
             </li>
             <li>
-              Eres responsable de mantener la confidencialidad de tu contraseña y de toda
-              actividad realizada desde tu cuenta.
+              Musicaleando no usa correo ni contraseña — tu cuenta vive en tu dispositivo a
+              través de una sesión anónima. Eres responsable de toda actividad realizada desde
+              esa sesión.
             </li>
             <li>
               La información que proporciones (perfil, mood, etc.) debe ser veraz y no debe
