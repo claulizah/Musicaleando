@@ -5,6 +5,7 @@ import { requireAdmin } from '@/lib/admin';
 import { createClient } from '@/lib/supabase/server';
 import { resolveArtistIds } from '@/lib/artists';
 import { normalizeHorario } from '@/lib/normalizeHorario';
+import { logAdminAction } from '@/lib/adminActionsLog';
 
 export type LineupRow = {
   artista: string;
@@ -47,7 +48,42 @@ export async function updateTipo(
 
   if (error) return { error: error.message };
 
+  await logAdminAction(supabase, admin.userId, 'editar', 'festival', festivalId, { detail: { campo: 'tipo', valor: tipo } });
   revalidatePath(`/festivals/${festivalId}`);
+  return {};
+}
+
+// El catálogo aprobado solo dejaba editar tipo y link_boletos — nombre,
+// ciudad y fechas quedaban fijos desde que se aprobó el candidato, sin forma
+// de corregirlos si el dato llegó mal (ej. el bug de ciudad="México"
+// genérico de Ticketmaster, corregido antes con una migración puntual
+// porque no había otra forma de arreglarlo desde el admin).
+export async function updateEventDetails(
+  festivalId: string,
+  fields: { nombre: string; ciudad: string; fecha_inicio: string; fecha_fin: string },
+): Promise<{ error?: string }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) return { error: 'No autorizado.' };
+
+  const nombre = fields.nombre.trim();
+  const ciudad = fields.ciudad.trim();
+  if (!nombre || !ciudad || !fields.fecha_inicio || !fields.fecha_fin) {
+    return { error: 'Nombre, ciudad y ambas fechas son obligatorios.' };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('festivals')
+    .update({ nombre, ciudad, fecha_inicio: fields.fecha_inicio, fecha_fin: fields.fecha_fin })
+    .eq('id', festivalId);
+
+  if (error) return { error: error.message };
+
+  await logAdminAction(supabase, admin.userId, 'editar', 'festival', festivalId, {
+    detail: { campo: 'detalles', nombre, ciudad, fecha_inicio: fields.fecha_inicio, fecha_fin: fields.fecha_fin },
+  });
+  revalidatePath(`/festivals/${festivalId}`);
+  revalidatePath('/admin');
   return {};
 }
 

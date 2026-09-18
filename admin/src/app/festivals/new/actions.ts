@@ -14,8 +14,8 @@ export async function createFestival(
 
   const nombre = String(formData.get('nombre') ?? '').trim();
   const ciudad = String(formData.get('ciudad') ?? '').trim();
-  const tipoRaw = String(formData.get('tipo') ?? 'festival');
-  const tipo = tipoRaw === 'concierto' ? 'concierto' : 'festival';
+  const tipoRaw = String(formData.get('tipo') ?? 'concierto');
+  const tipo = tipoRaw === 'festival' ? 'festival' : 'concierto';
   const fecha_inicio = String(formData.get('fecha_inicio') ?? '');
   const fecha_fin = String(formData.get('fecha_fin') ?? '');
   const link_boletos = String(formData.get('link_boletos') ?? '').trim() || null;

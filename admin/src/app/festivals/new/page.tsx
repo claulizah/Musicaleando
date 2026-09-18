@@ -40,11 +40,11 @@ export default function NewFestivalPage() {
           Tipo
           <select
             name="tipo"
-            defaultValue="festival"
+            defaultValue="concierto"
             className="rounded-md border border-gray-300 px-3 py-2"
           >
-            <option value="festival">Festival</option>
             <option value="concierto">Concierto</option>
+            <option value="festival">Festival</option>
           </select>
         </label>
         <div className="grid grid-cols-2 gap-4">

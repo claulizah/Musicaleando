@@ -331,10 +331,23 @@ function FestivalCard({
         <Text style={styles.nombre}>{festival.nombre}</Text>
         <Text style={styles.tipoBadge}>{TIPO_BADGE[festival.tipo] ?? '🎪 Festival'}</Text>
       </View>
-      <Text style={styles.meta}>
+      <Text style={styles.meta} numberOfLines={1}>
         {festival.ciudad} · {formatRange(festival.fecha_inicio, festival.fecha_fin)}
       </Text>
 
+      {/* Colapsada por default (solo nombre/tipo/ciudad-fecha, una línea) —
+          antes esto mostraba siempre el aviso de squad, los 3 botones de
+          asistencia y "Comprar boletos" para CADA evento de la lista, lo
+          que hacía que una lista de decenas de eventos fuera puro scroll.
+          Se reusa el mismo toggle expanded/"Ver más" que ya existía para
+          el line-up/mapa/comentarios, en vez de construir un mecanismo
+          aparte. */}
+      <Pressable onPress={() => setExpanded((v) => !v)}>
+        <Text style={styles.expandToggle}>{expanded ? '▴ Ver menos' : '▾ Ver más'}</Text>
+      </Pressable>
+
+      {expanded && (
+        <>
       {squadGoingCount > 0 && (
         <Text style={styles.squadHint}>
           👥 {squadGoingCount} {squadGoingCount === 1 ? 'de tu squad va' : 'de tu squad van'}
@@ -367,12 +380,6 @@ function FestivalCard({
         </Pressable>
       )}
 
-      <Pressable onPress={() => setExpanded((v) => !v)}>
-        <Text style={styles.expandToggle}>{expanded ? '▴ Ver menos' : '▾ Ver más'}</Text>
-      </Pressable>
-
-      {expanded && (
-        <>
       {squadGoingCount > 0 && (
         <View>
           <Pressable onPress={() => setShowSquadGoing((v) => !v)}>

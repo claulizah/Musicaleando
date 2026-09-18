@@ -6,6 +6,7 @@ import { LineupImageImporter } from './lineup-image-importer';
 import type { LineupCandidate } from './actions';
 import { LinkBoletosForm } from './link-boletos-form';
 import { TipoForm } from './tipo-form';
+import { EventDetailsForm } from './event-details-form';
 import { DeleteLineupRowButton } from './delete-lineup-row-button';
 import { AnnouncementForm } from './announcement-form';
 import { AnnouncementSegment } from './announcement-segment';
@@ -116,6 +117,17 @@ export default async function FestivalDetailPage({
       <p className="text-sm text-gray-500">
         {festival.ciudad} · {festival.fecha_inicio} → {festival.fecha_fin}
       </p>
+
+      <section className="mt-8">
+        <h2 className="mb-2 font-medium">Datos del evento</h2>
+        <EventDetailsForm
+          festivalId={festival.id}
+          initialNombre={festival.nombre}
+          initialCiudad={festival.ciudad}
+          initialFechaInicio={festival.fecha_inicio}
+          initialFechaFin={festival.fecha_fin}
+        />
+      </section>
 
       <section className="mt-8">
         <h2 className="mb-2 font-medium">Tipo de evento</h2>

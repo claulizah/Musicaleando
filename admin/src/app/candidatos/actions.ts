@@ -63,7 +63,7 @@ export async function approveCandidate(
 
   const { data: festival, error: insertError } = await supabase
     .from('festivals')
-    .insert({ nombre, tipo: tipo ?? 'festival', ciudad, fecha_inicio, fecha_fin, link_boletos: link_boletos || null })
+    .insert({ nombre, tipo: tipo ?? 'concierto', ciudad, fecha_inicio, fecha_fin, link_boletos: link_boletos || null })
     .select('id')
     .single();
   if (insertError) return { error: insertError.message };
@@ -74,7 +74,7 @@ export async function approveCandidate(
   // explícitos para un concierto de un solo acto — ahí el nombre del evento
   // ES el artista, así que se sintetiza la única fila de line-up para que el
   // artista quede vinculado igual que en cualquier otro evento.
-  if ((tipo ?? 'festival') === 'concierto' && lineup.length === 0) {
+  if ((tipo ?? 'concierto') === 'concierto' && lineup.length === 0) {
     lineup = [{ artista: nombre, escenario: null, horario: null }];
   }
   if (lineup.length > 0) {
