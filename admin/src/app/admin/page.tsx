@@ -24,6 +24,24 @@ export default async function DashboardPage() {
     .select('id, nombre, tipo, ciudad, fecha_inicio, fecha_fin, link_boletos')
     .order('fecha_inicio', { ascending: true });
 
+  // festival_lineup ya tiene 1400+ filas (más que el límite de 1000 filas
+  // por página que aplica PostgREST por default) — se pagina explícito para
+  // no perder artistas de festivales que quedaron en páginas después de la
+  // primera al armar el índice de búsqueda por artista.
+  const lineupByFestival = new Map<string, string[]>();
+  const PAGE_SIZE = 1000;
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data: page } = await supabase
+      .from('festival_lineup')
+      .select('festival_id, artista')
+      .range(from, from + PAGE_SIZE - 1);
+    for (const row of page ?? []) {
+      if (!lineupByFestival.has(row.festival_id)) lineupByFestival.set(row.festival_id, []);
+      lineupByFestival.get(row.festival_id)!.push(row.artista);
+    }
+    if (!page || page.length < PAGE_SIZE) break;
+  }
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       <div className="mb-6 flex items-center justify-between">
@@ -41,6 +59,9 @@ export default async function DashboardPage() {
           <Link href="/candidatos" className="text-sm underline">
             Candidatos
           </Link>
+          <Link href="/admin/calendario" className="text-sm underline">
+            Calendario
+          </Link>
           <Link href="/mood" className="text-sm underline">
             Mood playlists
           </Link>
@@ -52,7 +73,7 @@ export default async function DashboardPage() {
           </Link>
         </div>
       </div>
-      <FestivalesList festivals={festivals ?? []} />
+      <FestivalesList festivals={festivals ?? []} lineupByFestival={Object.fromEntries(lineupByFestival)} />
     </main>
   );
 }

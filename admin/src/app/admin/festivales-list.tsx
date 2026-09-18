@@ -55,7 +55,13 @@ function GroupSection({ label, festivals, defaultOpen }: { label: string; festiv
   );
 }
 
-export function FestivalesList({ festivals }: { festivals: Festival[] }) {
+export function FestivalesList({
+  festivals,
+  lineupByFestival = {},
+}: {
+  festivals: Festival[];
+  lineupByFestival?: Record<string, string[]>;
+}) {
   const [query, setQuery] = useState('');
   const [groupBy, setGroupBy] = useState<GroupBy>('evento');
   const [categoryFilter, setCategoryFilter] = useState<EventCategory | null>(null);
@@ -74,9 +80,11 @@ export function FestivalesList({ festivals }: { festivals: Festival[] }) {
     return festivals.filter((f) => {
       if (categoryFilter && categorizeEvent(f) !== categoryFilter) return false;
       if (!q) return true;
-      return normalizeText(`${f.nombre} ${f.ciudad}`).includes(q);
+      const artistas = lineupByFestival[f.id] ?? [];
+      const haystack = normalizeText([f.nombre, f.ciudad, ...artistas].join(' | '));
+      return haystack.includes(q);
     });
-  }, [festivals, query, categoryFilter]);
+  }, [festivals, lineupByFestival, query, categoryFilter]);
 
   const groups = useMemo(() => {
     if (groupBy === 'evento') return [{ key: '__all__', label: null as string | null, items: filtered }];
@@ -121,7 +129,7 @@ export function FestivalesList({ festivals }: { festivals: Festival[] }) {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Buscar por nombre o ciudad…"
+          placeholder="Buscar por nombre, ciudad o artista…"
           className="min-w-[16rem] flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm"
         />
         <div className="flex items-center gap-2 text-sm">
