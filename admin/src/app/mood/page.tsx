@@ -2,6 +2,7 @@ import { requireAdmin } from '@/lib/admin';
 import { createClient } from '@/lib/supabase/server';
 import { CandidateActions } from './candidate-actions';
 import { AddManualForm } from './add-manual-form';
+import { ItunesSearchForm } from './itunes-search-form';
 import { SyncButton } from './sync-button';
 
 // Suggested Last.fm tag per mood — a starting point in the sync form, not a
@@ -110,7 +111,8 @@ export default async function MoodPage() {
         )}
       </div>
 
-      <div className="mt-8">
+      <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <ItunesSearchForm moods={(moods ?? []).map((m) => ({ id: m.id, label: `${m.emoji} ${m.label}` }))} />
         <AddManualForm moods={(moods ?? []).map((m) => ({ id: m.id, label: `${m.emoji} ${m.label}` }))} />
       </div>
     </main>

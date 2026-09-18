@@ -52,6 +52,35 @@ export async function addManualTrack(formData: FormData): Promise<{ error?: stri
   return {};
 }
 
+// Resultado elegido de la iTunes Search API — Claudia ya lo confirmó al
+// hacer clic sobre un resultado real, así que se guarda directo como
+// 'aprobado' (mismo criterio que addManualTrack: la confirmación humana de
+// un track específico no necesita pasar otra vez por la bandeja de
+// pendientes, a diferencia de lo que trae syncFromLastfm sin curar).
+export async function addFromItunes(
+  moodId: string,
+  titulo: string,
+  artista: string,
+  genero: string | null,
+): Promise<{ error?: string }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) return { error: 'No autorizado.' };
+
+  if (!moodId || !titulo.trim() || !artista.trim()) {
+    return { error: 'Mood, título y artista son obligatorios.' };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('mood_playlists')
+    .insert({ mood_id: moodId, titulo: titulo.trim(), artista: artista.trim(), genero, fuente: 'itunes', estado: 'aprobado' });
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/mood');
+  return {};
+}
+
 export async function syncFromLastfm(
   moodId: string,
   tag: string,

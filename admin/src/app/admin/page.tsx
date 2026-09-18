@@ -56,6 +56,9 @@ export default async function DashboardPage() {
           <Link href="/moderacion" className="text-sm underline">
             Moderación
           </Link>
+          <Link href="/admin/pendientes" className="text-sm underline">
+            Pendientes
+          </Link>
           <Link href="/candidatos" className="text-sm underline">
             Candidatos
           </Link>
