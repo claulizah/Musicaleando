@@ -19,10 +19,14 @@ export default async function DashboardPage() {
   }
 
   const supabase = await createClient();
-  const { data: festivals } = await supabase
-    .from('festivals')
-    .select('id, nombre, tipo, ciudad, fecha_inicio, fecha_fin, link_boletos')
-    .order('fecha_inicio', { ascending: true });
+  const [{ data: festivals }, { count: eventPendingCount }, { count: songPendingCount }] = await Promise.all([
+    supabase
+      .from('festivals')
+      .select('id, nombre, tipo, ciudad, fecha_inicio, fecha_fin, link_boletos')
+      .order('fecha_inicio', { ascending: true }),
+    supabase.from('event_candidates').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
+    supabase.from('mood_playlists').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
+  ]);
 
   // festival_lineup ya tiene 1400+ filas (más que el límite de 1000 filas
   // por página que aplica PostgREST por default) — se pagina explícito para
@@ -76,6 +80,44 @@ export default async function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* Resumen + acciones rápidas — punto de entrada consolidado. Enlaza a
+          /admin/pendientes y /admin/calendario (ya construidos en otros
+          tickets) en vez de reconstruir esas vistas aquí; el buscador ya
+          vive en FestivalesList justo debajo, tampoco se duplica. */}
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Link
+          href="/admin/pendientes"
+          className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4 hover:bg-gray-50"
+        >
+          <div>
+            <p className="font-medium">Pendientes de revisión</p>
+            <p className="text-sm text-gray-500">
+              {eventPendingCount ?? 0} candidato{eventPendingCount === 1 ? '' : 's'} de eventos ·{' '}
+              {songPendingCount ?? 0} canción{songPendingCount === 1 ? '' : 'es'}
+            </p>
+          </div>
+          <span className="rounded-full bg-black px-3 py-1 text-sm text-white">
+            {(eventPendingCount ?? 0) + (songPendingCount ?? 0)}
+          </span>
+        </Link>
+
+        <div className="flex flex-col gap-2 rounded-lg border border-gray-200 bg-white p-4">
+          <p className="font-medium">Acciones rápidas</p>
+          <div className="flex flex-wrap gap-2 text-sm">
+            <Link href="/festivals/new" className="rounded-md bg-black px-3 py-1.5 text-white">
+              + Evento
+            </Link>
+            <Link href="/mood" className="rounded-md bg-gray-100 px-3 py-1.5 text-gray-700">
+              + Canción
+            </Link>
+            <Link href="/admin/calendario" className="rounded-md bg-gray-100 px-3 py-1.5 text-gray-700">
+              📅 Calendario
+            </Link>
+          </div>
+        </div>
+      </div>
+
       <FestivalesList festivals={festivals ?? []} lineupByFestival={Object.fromEntries(lineupByFestival)} />
     </main>
   );
