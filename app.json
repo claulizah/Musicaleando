@@ -14,7 +14,7 @@
     },
     "android": {
       "package": "com.musicaleando.app",
-      "versionCode": 4,
+      "versionCode": 5,
       "adaptiveIcon": {
         "backgroundColor": "#14111F",
         "foregroundImage": "./assets/android-icon-foreground.png",
