@@ -8,7 +8,14 @@ import type { PostgrestError } from '@supabase/supabase-js';
 // 762+ filas reales y sigue creciendo — cualquier .in('festival_id', ...)
 // con TODOS los IDs revienta apenas cruza ese límite. Se trae en lotes
 // chicos y se combinan los resultados en vez de una sola llamada gigante.
-const CHUNK_SIZE = 100;
+//
+// 100 IDs por lote (~3.8-3.9KB de URL) cabía bajo el límite de Cloudflare/
+// Supabase, pero reventó igual en un dispositivo real sobre datos móviles
+// de AT&T con "Bad Request" — los proxies transparentes de algunas
+// operadoras celulares imponen límites de URL bastante más estrictos que
+// el de la infraestructura de Supabase, y no se detectan probando por
+// WiFi o escritorio. 40 IDs por lote (~1.5KB) da margen real también ahí.
+const CHUNK_SIZE = 40;
 
 export async function fetchAllByIds<T>(
   ids: string[],

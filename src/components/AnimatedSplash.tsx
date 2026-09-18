@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -101,8 +101,8 @@ export function AnimatedSplash({ onMinDurationElapsed, minDurationMs = 1500 }: P
       <Animated.View style={[styles.content, fadeStyle]}>
         {!reducedMotion && NOTES.map((note, i) => <Note key={i} config={note} />)}
         <Image source={require('../../assets/splash-icon.png')} style={styles.mark} resizeMode="contain" />
-        <Text style={styles.wordmark}>Musicaleando</Text>
       </Animated.View>
+      <Animated.Text style={[styles.wordmark, fadeStyle]}>Musicaleando</Animated.Text>
     </View>
   );
 }
@@ -132,7 +132,6 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     marginTop: 16,
     letterSpacing: 0.5,
-    position: 'absolute',
-    bottom: -40,
+    textAlign: 'center',
   },
 });
