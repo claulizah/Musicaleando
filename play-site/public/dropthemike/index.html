@@ -426,6 +426,34 @@ const WORD_CATEGORIES = {
   fiesta: {
     label: '🎉 Modo fiesta',
     words: ['amor','fiesta','nostalgia','copas','baile','media noche','confeti','brindis','reencuentro','pasado','abrazo','risas','despedida','juventud','locura','corazón roto','celebrar','amigos','verano','magia']
+  },
+  emociones: {
+    label: '💗 Emociones',
+    words: ['amor','tristeza','alegría','miedo','ira','celos','ansiedad','paz','nostalgia','orgullo','culpa','esperanza','desesperación','ternura','pasión','rencor','vergüenza','envidia','gratitud','soledad','euforia','melancolía','calma','angustia','confianza','decepción','admiración','compasión','rabia','dulzura','nervios','incertidumbre','plenitud','vacío','ilusión','desamor','cariño','indiferencia','arrepentimiento','valentía','debilidad','sorpresa','alivio']
+  },
+  tiempo_espacio: {
+    label: '🌌 Tiempo y espacio',
+    words: ['ahora','siempre','nunca','ayer','mañana','madrugada','instante','eternidad','momento','futuro','pasado','presente','minuto','segundo','año','semana','aquí','allá','cerca','lejos','arriba','abajo','adentro','afuera','horizonte','universo','infinito','distancia','rincón','frontera','camino','destino','rumbo','atardecer','amanecer','medianoche','invierno','verano','otoño','primavera','día','noche','tiempo']
+  },
+  acciones_movimiento: {
+    label: '🏃 Acciones y movimiento',
+    words: ['baila','corre','salta','gira','vuela','camina','abraza','besa','grita','susurra','llora','ríe','sueña','despierta','escapa','regresa','persigue','escucha','mira','toca','canta','suelta','agarra','empuja','cae','levanta','tropieza','avanza','retrocede','choca','brinca','nada','conduce','maneja','viaja','construye','destruye','rompe','arregla','enciende','apaga','respira','tiembla']
+  },
+  relaciones_personas: {
+    label: '👥 Relaciones y personas',
+    words: ['amigo','amiga','novio','novia','ex','hermano','hermana','madre','padre','familia','extraño','vecino','rival','aliado','compañero','pareja','amante','desconocido','mejor amigo','cómplice','enemigo','confidente','mentor','jefe','colega','exnovio','exnovia','crush','alma gemela','media naranja','compadre','comadre','tío','tía','abuelo','abuela','primo','prima','suegra','cuñado','gente','multitud','squad']
+  },
+  fiesta_diversion: {
+    label: '🎊 Fiesta y diversión',
+    words: ['antro','borrachera','resaca','shot','brindis','karaoke','pista','DJ','altavoz','luces','botella','cover','entrada','previa','after','disfraz','cumpleaños','boda','graduación','despedida de soltera','asado','carnaval','feria','concierto','mosh pit','banda','playlist','remix','coreografía','conga','trago','cheve','tequila','cotorreo','desmadre','relajo','vacilón','alboroto','algarabía','jolgorio','parranda','reventón','pachanga']
+  },
+  lugares_viajes: {
+    label: '🗺️ Lugares y viajes',
+    words: ['playa','ciudad','pueblo','montaña','desierto','selva','río','mar','océano','isla','aeropuerto','estación','carretera','avión','tren','barco','maleta','pasaporte','hotel','casa','calle','plaza','mercado','bar','cielo','tierra','puente','túnel','faro','bosque','valle','cascada','volcán','capital','barrio','terminal','andén','mapa','brújula','aventura','excursión','campamento','litoral']
+  },
+  conceptos_simbolos: {
+    label: '🔮 Conceptos y símbolos',
+    words: ['libertad','destino','suerte','magia','fe','verdad','mentira','poder','dinero','éxito','fracaso','honor','justicia','karma','energía','aura','símbolo','corona','espejo','sombra','luz','oscuridad','equilibrio','caos','orden','misterio','secreto','ilusión','realidad','sueño','pesadilla','alma','espíritu','corazón','mente','universo','infinito','eternidad','paraíso','infierno','milagro','destello','esencia']
   }
 };
 
@@ -444,6 +472,12 @@ let state = {
   round: 1,
   currentWord: null,
   usedWords: [],
+  // Palabras descartadas con "Cambiar palabra" — a diferencia de usedWords,
+  // esto NUNCA se vacía dentro de la misma partida (ni siquiera cuando
+  // usedWords se reinicia por agotar el banco), porque una palabra
+  // descartada debe quedar fuera por el resto de la partida completa.
+  // Sí se reinicia al empezar una partida nueva (revancha/modo fiesta).
+  discardedWords: [],
   selectedCategories: ['general'],
   mode: 'clasico', // clasico, rapido, actuacion, duelo
   gamePlus: false,
@@ -694,9 +728,15 @@ function renderSetup(){
 
 // ---------- ROUND ----------
 function pickWord(){
-  const bank = currentWordPool();
-  const available = bank.filter(w => !state.usedWords.includes(w));
-  const pool = available.length ? available : bank;
+  const fullBank = currentWordPool();
+  // discardedWords se resta primero y nunca se reinicia dentro de la
+  // partida (a diferencia de usedWords, que sí se reinicia abajo cuando se
+  // agota) — si llegara a excluir el banco entero, se ignora esa vez para
+  // no trabar el juego (caso extremo, categorías chicas + muchos descartes).
+  const bank = fullBank.filter(w => !state.discardedWords.includes(w));
+  const effectiveBank = bank.length ? bank : fullBank;
+  const available = effectiveBank.filter(w => !state.usedWords.includes(w));
+  const pool = available.length ? available : effectiveBank;
   if(!available.length) state.usedWords = [];
   const word = pool[Math.floor(Math.random() * pool.length)];
   state.usedWords.push(word);
@@ -1173,7 +1213,11 @@ function attachHandlers(){
     };
   });
   const skipWord = document.getElementById('skipWord');
-  if(skipWord) skipWord.onclick = () => { pickWord(); render(); };
+  if(skipWord) skipWord.onclick = () => {
+    if(state.currentWord) state.discardedWords.push(state.currentWord);
+    pickWord();
+    render();
+  };
   const seeScores = document.getElementById('seeScores');
   if(seeScores) seeScores.onclick = () => {
     alert(state.players.map(p => `${p.emoji} ${p.name}: ${p.score} pts`).sort().join('\n'));
@@ -1242,6 +1286,7 @@ function attachHandlers(){
   if(revancha) revancha.onclick = () => {
     state.players.forEach(p => p.score = 0);
     state.usedWords = [];
+    state.discardedWords = [];
     state.round = 1;
     state.turnIndex = 0;
     state.carreraWinnerIndex = null;
@@ -1255,6 +1300,7 @@ function attachHandlers(){
   if(modoFiesta) modoFiesta.onclick = () => {
     state.players.forEach(p => p.score = 0);
     state.usedWords = [];
+    state.discardedWords = [];
     state.round = 1;
     state.turnIndex = 0;
     state.carreraWinnerIndex = null;
