@@ -151,3 +151,26 @@ test('métricas: un usuario normal no puede llamar admin_metrics', async () => {
   assert.notEqual(res.status, 200);
   assert.match(JSON.stringify(await res.json()), /No autorizado/);
 });
+
+test('descuentos: un usuario normal no puede cambiar descuentos/preventas de un evento', async () => {
+  const fest = await fetch(`${URL_}/rest/v1/festivals?select=id&estado_evento=eq.activo&limit=1`, { headers: headers() });
+  const festivalId = ((await fest.json()) as { id: string }[])[0].id;
+  const res = await fetch(`${URL_}/rest/v1/festivals?id=eq.${festivalId}`, {
+    method: 'PATCH',
+    headers: headers({ Prefer: 'return=representation' }),
+    body: JSON.stringify({ tipo_descuento: '2x1', descuento_detalle: 'intento no-admin' }),
+  });
+  const rows = res.ok ? ((await res.json()) as unknown[]) : [];
+  assert.deepEqual(rows, [], 'RLS no debe dejar modificar el evento');
+  const after = await fetch(`${URL_}/rest/v1/festivals?select=tipo_descuento&id=eq.${festivalId}`, { headers: headers() });
+  assert.deepEqual(await after.json(), [{ tipo_descuento: null }], 'el evento sigue sin descuento');
+});
+
+test('descuentos: el banner es legible por la app pero no editable por un usuario normal', async () => {
+  const write = await fetch(`${URL_}/rest/v1/app_config`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ key: 'banner_descuentos', value: 'intento no-admin' }),
+  });
+  assert.equal(write.status, 403);
+});

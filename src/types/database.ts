@@ -736,6 +736,12 @@ export type Database = {
           mapa_url: string | null
           nombre: string
           tipo: string
+          descuento_detalle: string | null
+          descuento_vigente_hasta: string | null
+          preventa_detalle: string | null
+          preventa_fin: string | null
+          preventa_inicio: string | null
+          tipo_descuento: string | null
         }
         Insert: {
           ciudad: string
@@ -748,6 +754,12 @@ export type Database = {
           mapa_url?: string | null
           nombre: string
           tipo?: string
+          descuento_detalle?: string | null
+          descuento_vigente_hasta?: string | null
+          preventa_detalle?: string | null
+          preventa_fin?: string | null
+          preventa_inicio?: string | null
+          tipo_descuento?: string | null
         }
         Update: {
           ciudad?: string
@@ -760,6 +772,12 @@ export type Database = {
           mapa_url?: string | null
           nombre?: string
           tipo?: string
+          descuento_detalle?: string | null
+          descuento_vigente_hasta?: string | null
+          preventa_detalle?: string | null
+          preventa_fin?: string | null
+          preventa_inicio?: string | null
+          tipo_descuento?: string | null
         }
         Relationships: []
       }

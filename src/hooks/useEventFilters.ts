@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { FestivalWithIntent } from '../store/useFestivalStore';
 import { fetchFestivalPersonalization } from '../lib/spotify';
+import { descuentoVigente, mexicoToday, preventaVigente } from '../lib/descuentos';
 
 export type DateFilter = 'todos' | 'proximos7' | 'este_mes';
 export type TipoFilter = 'todos' | 'festival' | 'concierto';
@@ -57,12 +58,24 @@ export function useEventFilters(allEntries: FestivalWithIntent[], misGeneros: st
   const [dateFilter, setDateFilter] = useState<DateFilter>('todos');
   const [tipoFilter, setTipoFilter] = useState<TipoFilter>('todos');
   const [soloMisGeneros, setSoloMisGeneros] = useState(false);
+  const [soloDescuento, setSoloDescuento] = useState(false);
+  const [soloPreventa, setSoloPreventa] = useState(false);
   const [generoMatchArtists, setGeneroMatchArtists] = useState<Set<string> | null>(null);
   const [generoLoading, setGeneroLoading] = useState(false);
 
   const ciudades = useMemo(() => {
     const set = new Set(entries.map((e) => e.festival.ciudad).filter((c): c is string => Boolean(c)));
     return [...set].sort();
+  }, [entries]);
+
+  // Cuántos eventos tienen hoy un descuento / una preventa vigente: el chip
+  // solo se ofrece si hay algo que filtrar (o ya está activado).
+  const promoCounts = useMemo(() => {
+    const hoy = mexicoToday(new Date());
+    return {
+      descuento: entries.filter((e) => descuentoVigente(e.festival, hoy)).length,
+      preventa: entries.filter((e) => preventaVigente(e.festival, hoy) !== null).length,
+    };
   }, [entries]);
 
   const textFiltered = useMemo(() => {
@@ -77,8 +90,11 @@ export function useEventFilters(allEntries: FestivalWithIntent[], misGeneros: st
   }, [entries, query]);
 
   const filtered = useMemo(() => {
+    const hoy = mexicoToday(new Date());
     return textFiltered.filter((e) => {
       if (ciudad && e.festival.ciudad !== ciudad) return false;
+      if (soloDescuento && !descuentoVigente(e.festival, hoy)) return false;
+      if (soloPreventa && preventaVigente(e.festival, hoy) === null) return false;
       if (tipoFilter !== 'todos' && e.festival.tipo !== tipoFilter) return false;
       if (!matchesDateFilter(e.festival.fecha_inicio, dateFilter)) return false;
       if (soloMisGeneros && generoMatchArtists) {
@@ -87,7 +103,7 @@ export function useEventFilters(allEntries: FestivalWithIntent[], misGeneros: st
       }
       return true;
     });
-  }, [textFiltered, ciudad, tipoFilter, dateFilter, soloMisGeneros, generoMatchArtists]);
+  }, [textFiltered, ciudad, tipoFilter, dateFilter, soloMisGeneros, generoMatchArtists, soloDescuento, soloPreventa]);
 
   const runGenreMatch = async () => {
     if (misGeneros.length === 0) return;
@@ -123,6 +139,11 @@ export function useEventFilters(allEntries: FestivalWithIntent[], misGeneros: st
     setTipoFilter,
     soloMisGeneros,
     toggleSoloMisGeneros,
+    soloDescuento,
+    toggleSoloDescuento: () => setSoloDescuento((v) => !v),
+    soloPreventa,
+    toggleSoloPreventa: () => setSoloPreventa((v) => !v),
+    promoCounts,
     generoLoading,
     filtered,
   };

@@ -8,6 +8,7 @@ import { LinkBoletosForm } from './link-boletos-form';
 import { TipoForm } from './tipo-form';
 import { EventDetailsForm } from './event-details-form';
 import { EstadoEventoForm } from './estado-evento-form';
+import { DescuentoForm } from './descuento-form';
 import { DeleteLineupRowButton } from './delete-lineup-row-button';
 import { AnnouncementForm } from './announcement-form';
 import { AnnouncementSegment } from './announcement-segment';
@@ -42,7 +43,9 @@ export default async function FestivalDetailPage({
 
   const { data: festival } = await supabase
     .from('festivals')
-    .select('id, nombre, ciudad, tipo, fecha_inicio, fecha_fin, link_boletos, mapa_url, estado_evento')
+    .select(
+      'id, nombre, ciudad, tipo, fecha_inicio, fecha_fin, link_boletos, mapa_url, estado_evento, tipo_descuento, descuento_detalle, descuento_vigente_hasta, preventa_inicio, preventa_fin, preventa_detalle',
+    )
     .eq('id', id)
     .maybeSingle();
 
@@ -152,6 +155,21 @@ export default async function FestivalDetailPage({
       <section className="mt-8">
         <h2 className="mb-2 font-medium">Estado</h2>
         <EstadoEventoForm festivalId={festival.id} initialEstado={festival.estado_evento} />
+      </section>
+
+      <section className="mt-8">
+        <h2 className="mb-2 font-medium">Descuento y preventa</h2>
+        <DescuentoForm
+          festivalId={festival.id}
+          initial={{
+            tipo: festival.tipo_descuento,
+            detalle: festival.descuento_detalle,
+            vigenteHasta: festival.descuento_vigente_hasta,
+            preventaInicio: festival.preventa_inicio,
+            preventaFin: festival.preventa_fin,
+            preventaDetalle: festival.preventa_detalle,
+          }}
+        />
       </section>
 
       <section className="mt-8">

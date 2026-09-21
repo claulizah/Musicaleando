@@ -186,6 +186,11 @@ export function SquadsScreen({ navigation }: Props) {
             onToggleSoloMisGeneros={filters.toggleSoloMisGeneros}
             generoLoading={filters.generoLoading}
             showGeneroFilter={generos.length > 0}
+            soloDescuento={filters.soloDescuento}
+            onToggleSoloDescuento={filters.toggleSoloDescuento}
+            soloPreventa={filters.soloPreventa}
+            onToggleSoloPreventa={filters.toggleSoloPreventa}
+            promoCounts={filters.promoCounts}
           />
           <View style={styles.genreWrap}>
             {filters.filtered.map((e) => (

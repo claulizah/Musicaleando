@@ -92,16 +92,28 @@ export type Database = {
           mapa_url: string | null;
           created_at: string;
           estado_evento: string;
+          descuento_detalle: string | null;
+          descuento_vigente_hasta: string | null;
+          preventa_detalle: string | null;
+          preventa_fin: string | null;
+          preventa_inicio: string | null;
+          tipo_descuento: string | null;
         };
         Insert: Omit<
           Database['public']['Tables']['festivals']['Row'],
-          'id' | 'created_at' | 'mapa_url' | 'tipo' | 'estado_evento'
+          'id' | 'created_at' | 'mapa_url' | 'tipo' | 'estado_evento' | 'descuento_detalle' | 'descuento_vigente_hasta' | 'preventa_detalle' | 'preventa_fin' | 'preventa_inicio' | 'tipo_descuento'
         > & {
           id?: string;
           created_at?: string;
           mapa_url?: string | null;
           tipo?: string;
           estado_evento?: string;
+          descuento_detalle?: string | null;
+          descuento_vigente_hasta?: string | null;
+          preventa_detalle?: string | null;
+          preventa_fin?: string | null;
+          preventa_inicio?: string | null;
+          tipo_descuento?: string | null;
         };
         Update: Partial<Database['public']['Tables']['festivals']['Row']>;
         Relationships: [];

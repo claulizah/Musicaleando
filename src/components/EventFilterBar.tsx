@@ -35,6 +35,14 @@ export type EventFilterBarProps = {
   onToggleSoloMisGeneros: () => void;
   generoLoading: boolean;
   showGeneroFilter: boolean;
+  // Descuentos y preventas vigentes (ver lib/descuentos.ts). Los chips solo
+  // aparecen si hay algo que filtrar, o si ya están activados (para poder
+  // apagarlos).
+  soloDescuento: boolean;
+  onToggleSoloDescuento: () => void;
+  soloPreventa: boolean;
+  onToggleSoloPreventa: () => void;
+  promoCounts: { descuento: number; preventa: number };
 };
 
 // Barra de búsqueda + chips reusable — misma instancia en el catálogo
@@ -65,6 +73,11 @@ export function EventFilterBar({
   onToggleSoloMisGeneros,
   generoLoading,
   showGeneroFilter,
+  soloDescuento,
+  onToggleSoloDescuento,
+  soloPreventa,
+  onToggleSoloPreventa,
+  promoCounts,
 }: EventFilterBarProps) {
   const [showMore, setShowMore] = useState(false);
   const activeExtraCount = (dateFilter !== 'todos' ? 1 : 0) + (ciudad ? 1 : 0) + (soloMisGeneros ? 1 : 0);
@@ -83,6 +96,12 @@ export function EventFilterBar({
         {TIPO_OPTIONS.map((opt) => (
           <Chip key={opt.id} label={opt.label} selected={tipoFilter === opt.id} onPress={() => onTipoFilterChange(opt.id)} />
         ))}
+        {(promoCounts.descuento > 0 || soloDescuento) && (
+          <Chip label={`🏷 En descuento (${promoCounts.descuento})`} selected={soloDescuento} onPress={onToggleSoloDescuento} />
+        )}
+        {(promoCounts.preventa > 0 || soloPreventa) && (
+          <Chip label={`Preventa (${promoCounts.preventa})`} selected={soloPreventa} onPress={onToggleSoloPreventa} />
+        )}
       </FadingChipRow>
 
       <Pressable onPress={() => setShowMore((v) => !v)} style={styles.moreToggle}>

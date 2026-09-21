@@ -21,6 +21,7 @@ import { useSquadStore } from '../../store/useSquadStore';
 import { useEventFilters } from '../../hooks/useEventFilters';
 import { EventFilterBar } from '../../components/EventFilterBar';
 import { LineupSection } from '../../components/LineupSection';
+import { descuentoBadge, descuentoVigenciaLabel, descuentoVigente, mexicoToday, preventaVigente } from '../../lib/descuentos';
 import { buildTicketUrl } from '../../lib/ticketLinks';
 import { trackTicketClick } from '../../lib/trackTicketClick';
 import { useAppConfigStore } from '../../store/useAppConfigStore';
@@ -66,6 +67,7 @@ export function FestivalHubScreen({ navigation, route }: Props) {
   const generos = useProfileStore((s) => (s.profile?.generos as string[] | undefined) ?? []);
   const festivals = useFestivalStore((s) => s.festivals);
   const status = useFestivalStore((s) => s.status);
+  const bannerDescuentos = useAppConfigStore((s) => s.bannerDescuentos);
   const error = useFestivalStore((s) => s.error);
   const fetchFestivals = useFestivalStore((s) => s.fetch);
   const setFestivalStatus = useFestivalStore((s) => s.setStatus);
@@ -128,7 +130,18 @@ export function FestivalHubScreen({ navigation, route }: Props) {
           onToggleSoloMisGeneros={filters.toggleSoloMisGeneros}
           generoLoading={filters.generoLoading}
           showGeneroFilter={generos.length > 0}
+          soloDescuento={filters.soloDescuento}
+          onToggleSoloDescuento={filters.toggleSoloDescuento}
+          soloPreventa={filters.soloPreventa}
+          onToggleSoloPreventa={filters.toggleSoloPreventa}
+          promoCounts={filters.promoCounts}
         />
+
+        {bannerDescuentos && (
+          <View style={styles.promoBanner}>
+            <Text style={styles.promoBannerText}>🏷 {bannerDescuentos}</Text>
+          </View>
+        )}
 
         {status === 'loading' && festivals.length === 0 && (
           <Text style={styles.hint}>Cargando eventos...</Text>
@@ -333,6 +346,39 @@ function FestivalCard({
       <Text style={styles.meta} numberOfLines={1}>
         {festival.ciudad} · {formatRange(festival.fecha_inicio, festival.fecha_fin)}
       </Text>
+      {(() => {
+        // Descuento / preventa vigentes (se apagan solos al vencer, ver
+        // lib/descuentos.ts). Visibles aun con la tarjeta colapsada: es lo
+        // que el usuario quiere ver al escanear la lista.
+        const hoy = mexicoToday(new Date());
+        const descuento = descuentoBadge(festival, hoy);
+        const preventa = preventaVigente(festival, hoy);
+        if (!descuento && !preventa) return null;
+        const vigencia = descuentoVigenciaLabel(festival);
+        return (
+          <View style={styles.promoBlock}>
+            <View style={styles.promoChipRow}>
+              {descuento && (
+                <View style={styles.promoChip}>
+                  <Text style={styles.promoChipText}>🏷 {descuento}</Text>
+                </View>
+              )}
+              {preventa && (
+                <View style={[styles.promoChip, styles.promoChipPreventa]}>
+                  <Text style={styles.promoChipText}>{preventa.label}</Text>
+                </View>
+              )}
+            </View>
+            {descuento && (
+              <Text style={styles.promoDetail}>
+                {festival.descuento_detalle}
+                {vigencia ? ` · ${vigencia}` : ''}
+              </Text>
+            )}
+            {preventa && festival.preventa_detalle ? <Text style={styles.promoDetail}>{festival.preventa_detalle}</Text> : null}
+          </View>
+        );
+      })()}
 
       {/* Colapsada por default (solo nombre/tipo/ciudad-fecha, una línea) —
           antes esto mostraba siempre el aviso de squad, los 3 botones de
@@ -780,6 +826,46 @@ const styles = StyleSheet.create({
   },
   meta: {
     ...type.body,
+    color: colors.textSecondary,
+  },
+  promoBanner: {
+    backgroundColor: colors.accentPrimaryMuted,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.accentPrimary,
+    padding: spacing.sm,
+  },
+  promoBannerText: {
+    ...type.label,
+    color: colors.accentPrimary,
+  },
+  promoBlock: {
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  promoChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  promoChip: {
+    backgroundColor: colors.accentPrimaryMuted,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: colors.accentPrimary,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+  },
+  promoChipPreventa: {
+    backgroundColor: colors.bgElevated,
+    borderColor: colors.border,
+  },
+  promoChipText: {
+    ...type.caption,
+    color: colors.textPrimary,
+  },
+  promoDetail: {
+    ...type.caption,
     color: colors.textSecondary,
   },
   squadHint: {

@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 import { resolveArtistIds } from '@/lib/artists';
 import { normalizeHorario } from '@/lib/normalizeHorario';
 import { buildHorarios } from '@/lib/lineupTimes';
+import { validateDescuento, type DescuentoInput } from '@/lib/descuentosForm';
 import { logAdminAction } from '@/lib/adminActionsLog';
 
 export type LineupRow = {
@@ -68,6 +69,31 @@ export async function updateTipo(
 // migración archive_past_festivals); esto permite reactivar un evento que se
 // archivó por una fecha mal capturada, o archivar uno cancelado antes de
 // tiempo — nunca borra nada.
+// Descuento y preventa del evento (los ve la app en la tarjeta del evento y en
+// los filtros "En descuento" / "Preventa"). Sin tipo de descuento el bloque de
+// descuento se borra — es la forma de apagarlo.
+export async function updateDescuento(
+  festivalId: string,
+  input: DescuentoInput,
+): Promise<{ error?: string }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) return { error: 'No autorizado.' };
+
+  const result = validateDescuento(input);
+  if ('error' in result) return { error: result.error };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from('festivals').update(result.values).eq('id', festivalId);
+  if (error) return { error: error.message };
+
+  await logAdminAction(supabase, admin.userId, 'editar', 'festival', festivalId, {
+    detail: { campo: 'descuento_preventa', ...result.values },
+  });
+  revalidatePath(`/festivals/${festivalId}`);
+  revalidatePath('/admin/descuentos');
+  return {};
+}
+
 export async function updateEstadoEvento(
   festivalId: string,
   estado: string,
