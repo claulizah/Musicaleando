@@ -31,6 +31,7 @@ export function ArtistDetailScreen({ route, navigation }: Props) {
   const status = useFestivalStore((s) => s.status);
 
   const appearances = festivals
+    .filter((entry) => entry.festival.estado_evento !== 'archivado')
     .filter((entry) => entry.lineup.some((l) => l.artist_id === artistId))
     .slice()
     .sort((a, b) => a.festival.fecha_inicio.localeCompare(b.festival.fecha_inicio));

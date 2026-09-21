@@ -28,6 +28,9 @@ export function ExtractedEventPreview({
   onCancel: () => void;
 }) {
   const [pending, startTransition] = useTransition();
+  // 'archivado' es solo una pista (mismo nombre, otra fecha): no ofrece
+  // "actualizar el existente" ni relega el botón de crear a segundo plano.
+  const blockingDuplicate = duplicate && duplicate.type !== 'archivado' ? duplicate : null;
 
   const updateField = <K extends keyof ExtractedEvent>(key: K, value: ExtractedEvent[K]) => {
     onChange({ ...extracted, [key]: value });
@@ -41,9 +44,9 @@ export function ExtractedEventPreview({
   };
 
   const handleMerge = () => {
-    if (!duplicate) return;
+    if (!blockingDuplicate) return;
     startTransition(async () => {
-      const res = await mergeLineupIntoExisting(duplicate, extracted.lineup);
+      const res = await mergeLineupIntoExisting(blockingDuplicate, extracted.lineup);
       if (!res.error) onDone();
     });
   };
@@ -127,18 +130,28 @@ export function ExtractedEventPreview({
         <p className="text-xs text-gray-400">No se detectó ningún line-up.</p>
       )}
 
-      {duplicate && (
+      {duplicate?.type === 'archivado' && (
+        <div className="rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-800">
+          Ya hubo un evento archivado con este mismo nombre:{' '}
+          <strong>
+            {duplicate.nombre}
+            {duplicate.fecha_inicio ? ` (${duplicate.fecha_inicio})` : ''}
+          </strong>
+          . Probablemente es un re-anuncio — se puede crear como evento nuevo.
+        </div>
+      )}
+      {blockingDuplicate && (
         <div className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
           Ya existe algo parecido:{' '}
           <strong>
-            {duplicate.nombre} ({duplicate.type === 'festival' ? 'festival aprobado' : 'candidato pendiente'})
+            {blockingDuplicate.nombre} ({blockingDuplicate.type === 'festival' ? 'festival aprobado' : 'candidato pendiente'})
           </strong>
           . ¿Actualizas su line-up en vez de crear un evento nuevo?
         </div>
       )}
 
       <div className="flex flex-wrap gap-3">
-        {duplicate && (
+        {blockingDuplicate && (
           <button
             type="button"
             disabled={pending}
@@ -153,12 +166,12 @@ export function ExtractedEventPreview({
           disabled={pending || !extracted.nombre}
           onClick={handleCreateNew}
           className={
-            duplicate
+            blockingDuplicate
               ? 'text-xs text-gray-600 underline disabled:opacity-50'
               : 'rounded-md bg-black px-3 py-1.5 text-xs text-white disabled:opacity-50'
           }
         >
-          {duplicate ? 'Crear como nuevo de todas formas' : 'Agregar a candidatos'}
+          {blockingDuplicate ? 'Crear como nuevo de todas formas' : 'Agregar a candidatos'}
         </button>
         <button type="button" onClick={onCancel} className="text-xs text-gray-500 underline">
           Cancelar

@@ -85,15 +85,38 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
   fetch: async (userId) => {
     set({ status: 'loading', error: null });
 
-    const { data: festivalRows, error: festErr } = await supabase
-      .from('festivals')
-      .select('*')
-      .order('fecha_inicio');
+    // Eventos vencidos se archivan (estado_evento='archivado'), no se borran.
+    // Las listas de la app solo deben mostrar los activos — pero el Álbum de
+    // conciertos (ConcertAlbumScreen) lista justo los eventos donde marcaste
+    // "Voy", que por definición ya pasaron, y la encuesta post-evento
+    // (survey.due) también necesita un evento ya terminado. Por eso además de
+    // los activos se traen los archivados a los que el usuario dijo "Voy"
+    // (una consulta chica sobre sus propias filas, en paralelo con la
+    // principal). Ver useEventFilters/ArtistDetailScreen para cómo se ocultan
+    // de las listas de exploración.
+    const [{ data: activeRows, error: festErr }, { data: myVoyRows }] = await Promise.all([
+      supabase.from('festivals').select('*').eq('estado_evento', 'activo').order('fecha_inicio'),
+      supabase.from('festival_intent').select('festival_id').eq('user_id', userId).eq('status', 'voy'),
+    ]);
 
     if (festErr) {
       set({ status: 'error', error: festErr.message });
       return;
     }
+
+    const activeIds = new Set((activeRows ?? []).map((f) => f.id));
+    const archivedAttendedIds = (myVoyRows ?? []).map((r) => r.festival_id).filter((id) => !activeIds.has(id));
+    const { data: archivedRows, error: archivedErr } = await fetchAllByIds(archivedAttendedIds, (chunk) =>
+      supabase.from('festivals').select('*').eq('estado_evento', 'archivado').in('id', chunk),
+    );
+    if (archivedErr) {
+      set({ status: 'error', error: archivedErr.message });
+      return;
+    }
+
+    const festivalRows = [...(activeRows ?? []), ...archivedRows].sort((a, b) =>
+      a.fecha_inicio.localeCompare(b.fecha_inicio),
+    );
 
     const festivalIds = (festivalRows ?? []).map((f) => f.id);
     if (festivalIds.length === 0) {

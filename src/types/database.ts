@@ -626,6 +626,7 @@ export type Database = {
         Row: {
           ciudad: string
           created_at: string
+          estado_evento: string
           fecha_fin: string
           fecha_inicio: string
           id: string
@@ -637,6 +638,7 @@ export type Database = {
         Insert: {
           ciudad: string
           created_at?: string
+          estado_evento?: string
           fecha_fin: string
           fecha_inicio: string
           id?: string
@@ -648,6 +650,7 @@ export type Database = {
         Update: {
           ciudad?: string
           created_at?: string
+          estado_evento?: string
           fecha_fin?: string
           fecha_inicio?: string
           id?: string

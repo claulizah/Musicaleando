@@ -22,7 +22,7 @@ export default async function DashboardPage() {
   const [{ data: festivals }, { count: eventPendingCount }, { count: songPendingCount }] = await Promise.all([
     supabase
       .from('festivals')
-      .select('id, nombre, tipo, ciudad, fecha_inicio, fecha_fin, link_boletos')
+      .select('id, nombre, tipo, ciudad, fecha_inicio, fecha_fin, link_boletos, estado_evento')
       .order('fecha_inicio', { ascending: true }),
     supabase.from('event_candidates').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
     supabase.from('mood_playlists').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
@@ -110,6 +110,9 @@ export default async function DashboardPage() {
             </Link>
             <Link href="/mood" className="rounded-md bg-gray-100 px-3 py-1.5 text-gray-700">
               + Canción
+            </Link>
+            <Link href="/festivals/importar" className="rounded-md bg-gray-100 px-3 py-1.5 text-gray-700">
+              ⬆ Importar CSV
             </Link>
             <Link href="/admin/calendario" className="rounded-md bg-gray-100 px-3 py-1.5 text-gray-700">
               📅 Calendario

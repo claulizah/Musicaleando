@@ -53,6 +53,33 @@ export async function updateTipo(
   return {};
 }
 
+// Archivar/restaurar a mano. El archivado automático corre a diario (ver
+// migración archive_past_festivals); esto permite reactivar un evento que se
+// archivó por una fecha mal capturada, o archivar uno cancelado antes de
+// tiempo — nunca borra nada.
+export async function updateEstadoEvento(
+  festivalId: string,
+  estado: string,
+): Promise<{ error?: string }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) return { error: 'No autorizado.' };
+
+  if (estado !== 'activo' && estado !== 'archivado') {
+    return { error: 'Estado inválido.' };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from('festivals').update({ estado_evento: estado }).eq('id', festivalId);
+  if (error) return { error: error.message };
+
+  await logAdminAction(supabase, admin.userId, 'editar', 'festival', festivalId, {
+    detail: { campo: 'estado_evento', valor: estado },
+  });
+  revalidatePath(`/festivals/${festivalId}`);
+  revalidatePath('/admin');
+  return {};
+}
+
 // El catálogo aprobado solo dejaba editar tipo y link_boletos — nombre,
 // ciudad y fechas quedaban fijos desde que se aprobó el candidato, sin forma
 // de corregirlos si el dato llegó mal (ej. el bug de ciudad="México"

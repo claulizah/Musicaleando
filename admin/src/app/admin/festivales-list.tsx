@@ -14,7 +14,10 @@ type Festival = {
   fecha_inicio: string;
   fecha_fin: string;
   link_boletos: string | null;
+  estado_evento: string;
 };
+
+type EstadoFilter = 'activo' | 'archivado';
 
 type GroupBy = 'evento' | 'artista' | 'estado' | 'categoria' | 'fecha';
 
@@ -32,6 +35,9 @@ function FestivalRow({ festival }: { festival: Festival }) {
       <Link href={`/festivals/${festival.id}`} className="font-medium underline">
         {festival.nombre}
       </Link>
+      {festival.estado_evento === 'archivado' && (
+        <span className="ml-2 rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-600">Archivado</span>
+      )}
       <p className="text-sm text-gray-500">
         {festival.ciudad} · {festival.fecha_inicio} → {festival.fecha_fin}
       </p>
@@ -65,26 +71,40 @@ export function FestivalesList({
   const [query, setQuery] = useState('');
   const [groupBy, setGroupBy] = useState<GroupBy>('evento');
   const [categoryFilter, setCategoryFilter] = useState<EventCategory | null>(null);
+  // Activos por default (lo que ve la app); Archivados = historial de eventos
+  // ya vencidos, que no se borran para poder consultarlos y reutilizarlos.
+  const [estadoFilter, setEstadoFilter] = useState<EstadoFilter>('activo');
+
+  const estadoCounts = useMemo(() => {
+    let archivado = 0;
+    for (const f of festivals) if (f.estado_evento === 'archivado') archivado++;
+    return { activo: festivals.length - archivado, archivado };
+  }, [festivals]);
+
+  const scoped = useMemo(
+    () => festivals.filter((f) => (estadoFilter === 'archivado') === (f.estado_evento === 'archivado')),
+    [festivals, estadoFilter],
+  );
 
   const categoryCounts = useMemo(() => {
     const counts = new Map<EventCategory, number>();
-    for (const f of festivals) {
+    for (const f of scoped) {
       const cat = categorizeEvent(f);
       counts.set(cat, (counts.get(cat) ?? 0) + 1);
     }
     return counts;
-  }, [festivals]);
+  }, [scoped]);
 
   const filtered = useMemo(() => {
     const q = normalizeText(query.trim());
-    return festivals.filter((f) => {
+    return scoped.filter((f) => {
       if (categoryFilter && categorizeEvent(f) !== categoryFilter) return false;
       if (!q) return true;
       const artistas = lineupByFestival[f.id] ?? [];
       const haystack = normalizeText([f.nombre, f.ciudad, ...artistas].join(' | '));
       return haystack.includes(q);
     });
-  }, [festivals, lineupByFestival, query, categoryFilter]);
+  }, [scoped, lineupByFestival, query, categoryFilter]);
 
   const groups = useMemo(() => {
     if (groupBy === 'evento') return [{ key: '__all__', label: null as string | null, items: filtered }];
@@ -158,6 +178,27 @@ export function FestivalesList({
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-gray-500">Estado:</span>
+        {(
+          [
+            { id: 'activo', label: 'Activos' },
+            { id: 'archivado', label: 'Archivados (historial)' },
+          ] as { id: EstadoFilter; label: string }[]
+        ).map((opt) => (
+          <button
+            key={opt.id}
+            type="button"
+            onClick={() => setEstadoFilter(opt.id)}
+            className={`rounded-full px-3 py-1 text-xs ${
+              estadoFilter === opt.id ? 'bg-black text-white' : 'bg-gray-100 text-gray-600'
+            }`}
+          >
+            {opt.label} ({estadoCounts[opt.id]})
+          </button>
+        ))}
+      </div>
+
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
         <span className="text-gray-500">Categoría:</span>
         <button
           type="button"
@@ -186,7 +227,13 @@ export function FestivalesList({
 
       {filtered.length === 0 && (
         <p className="text-sm text-gray-500">
-          {festivals.length === 0 ? 'No hay festivales todavía.' : 'Nada coincide con esa búsqueda.'}
+          {festivals.length === 0
+            ? 'No hay festivales todavía.'
+            : scoped.length === 0
+              ? estadoFilter === 'archivado'
+                ? 'Todavía no hay eventos archivados — se archivan solos cuando pasa su fecha de fin.'
+                : 'No hay eventos activos.'
+              : 'Nada coincide con esa búsqueda.'}
         </p>
       )}
 

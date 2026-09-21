@@ -44,7 +44,14 @@ function matchesDateFilter(fechaInicio: string, filter: DateFilter): boolean {
 // vivo de Spotify — por eso es un toggle, no un selector de género
 // arbitrario, y por eso se llama UNA sola vez con el line-up combinado de
 // todo lo ya filtrado en vez de una vez por evento.
-export function useEventFilters(entries: FestivalWithIntent[], misGeneros: string[]) {
+export function useEventFilters(allEntries: FestivalWithIntent[], misGeneros: string[]) {
+  // Los eventos archivados (ya vencidos) no se muestran al explorar — salvo
+  // uno donde el usuario dijo "Voy" y todavía debe la encuesta post-evento,
+  // que vive dentro de la tarjeta del propio evento en esta lista.
+  const entries = useMemo(
+    () => allEntries.filter((e) => e.festival.estado_evento !== 'archivado' || e.survey.due),
+    [allEntries],
+  );
   const [query, setQuery] = useState('');
   const [ciudad, setCiudad] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState<DateFilter>('todos');

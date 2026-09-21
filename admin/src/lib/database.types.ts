@@ -87,15 +87,17 @@ export type Database = {
           link_boletos: string | null;
           mapa_url: string | null;
           created_at: string;
+          estado_evento: string;
         };
         Insert: Omit<
           Database['public']['Tables']['festivals']['Row'],
-          'id' | 'created_at' | 'mapa_url' | 'tipo'
+          'id' | 'created_at' | 'mapa_url' | 'tipo' | 'estado_evento'
         > & {
           id?: string;
           created_at?: string;
           mapa_url?: string | null;
           tipo?: string;
+          estado_evento?: string;
         };
         Update: Partial<Database['public']['Tables']['festivals']['Row']>;
         Relationships: [];

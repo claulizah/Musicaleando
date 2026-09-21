@@ -26,7 +26,9 @@ function MultiEventPicker({ events, onDone }: { events: ExtractedEventWithDuplic
   // silently recreates something that already exists — the curator has to
   // deliberately check one of those if they really want a new candidate
   // anyway.
-  const [checked, setChecked] = useState<boolean[]>(events.map((e) => !e.duplicate));
+  const [checked, setChecked] = useState<boolean[]>(
+    events.map((e) => !e.duplicate || e.duplicate.type === 'archivado'),
+  );
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<{ created: number; errors: string[] } | null>(null);
 
@@ -60,7 +62,12 @@ function MultiEventPicker({ events, onDone }: { events: ExtractedEventWithDuplic
             />
             <div>
               <p>{summarize(e)}</p>
-              {e.duplicate && (
+              {e.duplicate?.type === 'archivado' && (
+                <p className="text-xs text-blue-700">
+                  Ya hubo un evento archivado con este nombre ({e.duplicate.fecha_inicio}) — probable re-anuncio.
+                </p>
+              )}
+              {e.duplicate && e.duplicate.type !== 'archivado' && (
                 <p className="text-xs text-amber-700">
                   Posible duplicado de {e.duplicate.type === 'festival' ? 'un festival ya aprobado' : 'un candidato pendiente'}:{' '}
                   {e.duplicate.nombre}

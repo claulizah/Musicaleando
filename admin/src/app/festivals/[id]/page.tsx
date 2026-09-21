@@ -7,6 +7,7 @@ import type { LineupCandidate } from './actions';
 import { LinkBoletosForm } from './link-boletos-form';
 import { TipoForm } from './tipo-form';
 import { EventDetailsForm } from './event-details-form';
+import { EstadoEventoForm } from './estado-evento-form';
 import { DeleteLineupRowButton } from './delete-lineup-row-button';
 import { AnnouncementForm } from './announcement-form';
 import { AnnouncementSegment } from './announcement-segment';
@@ -40,7 +41,7 @@ export default async function FestivalDetailPage({
 
   const { data: festival } = await supabase
     .from('festivals')
-    .select('id, nombre, ciudad, tipo, fecha_inicio, fecha_fin, link_boletos, mapa_url')
+    .select('id, nombre, ciudad, tipo, fecha_inicio, fecha_fin, link_boletos, mapa_url, estado_evento')
     .eq('id', id)
     .maybeSingle();
 
@@ -132,6 +133,11 @@ export default async function FestivalDetailPage({
       <section className="mt-8">
         <h2 className="mb-2 font-medium">Tipo de evento</h2>
         <TipoForm festivalId={festival.id} initialTipo={festival.tipo} />
+      </section>
+
+      <section className="mt-8">
+        <h2 className="mb-2 font-medium">Estado</h2>
+        <EstadoEventoForm festivalId={festival.id} initialEstado={festival.estado_evento} />
       </section>
 
       <section className="mt-8">

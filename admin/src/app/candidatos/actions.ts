@@ -385,7 +385,16 @@ export type ExtractedEvent = {
   esHorarioConTiempos: boolean;
 };
 
-export type DuplicateMatch = { type: 'festival' | 'candidate'; id: string; nombre: string };
+// 'archivado' = mismo nombre que un evento ya vencido/archivado pero otra
+// fecha (probable re-anuncio, ej. una gira nueva del mismo artista) — es solo
+// una pista informativa, no bloquea ni desmarca la creación como sí hacen
+// 'festival'/'candidate' (mismo evento, misma fecha).
+export type DuplicateMatch = {
+  type: 'festival' | 'candidate' | 'archivado';
+  id: string;
+  nombre: string;
+  fecha_inicio?: string | null;
+};
 
 function normalizeText(s: string): string {
   return s
@@ -406,7 +415,7 @@ function normalizeText(s: string): string {
 // Ticketmaster y sigue sin aprobarse.
 function findDuplicateMatch(
   event: { nombre: string; ciudad: string | null; fecha_inicio: string | null },
-  festivals: { id: string; nombre: string; ciudad: string; fecha_inicio: string }[],
+  festivals: { id: string; nombre: string; ciudad: string; fecha_inicio: string; estado_evento?: string }[],
   candidates: { id: string; nombre: string; ciudad: string | null; fecha_inicio: string | null }[],
 ): DuplicateMatch | null {
   const normName = normalizeText(event.nombre);
@@ -436,6 +445,15 @@ function findDuplicateMatch(
   for (const c of candidates) {
     if (namesAndDatesMatch(c.nombre, c.ciudad, c.fecha_inicio)) {
       return { type: 'candidate', id: c.id, nombre: c.nombre };
+    }
+  }
+  // Ninguno coincide en fecha: buscar en el historial archivado el MISMO
+  // nombre (igualdad exacta normalizada, no "contiene" — sin el ancla de la
+  // fecha, "contiene" daría demasiado ruido) para avisar de un probable
+  // re-anuncio en vez de crear un registro sin relación con el anterior.
+  for (const f of festivals) {
+    if (f.estado_evento === 'archivado' && normalizeText(f.nombre) === normName) {
+      return { type: 'archivado', id: f.id, nombre: f.nombre, fecha_inicio: f.fecha_inicio };
     }
   }
   return null;
@@ -489,7 +507,7 @@ export async function extractEventFromImage(
   let duplicate: DuplicateMatch | null = null;
   if (extracted.nombre) {
     const [{ data: festivals }, { data: pendingCandidates }] = await Promise.all([
-      supabase.from('festivals').select('id, nombre, ciudad, fecha_inicio'),
+      supabase.from('festivals').select('id, nombre, ciudad, fecha_inicio, estado_evento'),
       supabase.from('event_candidates').select('id, nombre, ciudad, fecha_inicio').eq('estado', 'pendiente'),
     ]);
     duplicate = findDuplicateMatch(
@@ -645,7 +663,7 @@ export async function extractEventFromLink(
   // dedup check — a listing page can propose dozens of events, no reason to
   // re-query the same two tables that many times.
   const [{ data: festivals }, { data: pendingCandidates }] = await Promise.all([
-    supabase.from('festivals').select('id, nombre, ciudad, fecha_inicio'),
+    supabase.from('festivals').select('id, nombre, ciudad, fecha_inicio, estado_evento'),
     supabase.from('event_candidates').select('id, nombre, ciudad, fecha_inicio').eq('estado', 'pendiente'),
   ]);
 
