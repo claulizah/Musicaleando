@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Screen } from '../../components/Screen';
@@ -7,6 +7,8 @@ import { RootStackParamList } from '../../navigation/types';
 import { useMoodStore } from '../../store/useMoodStore';
 import { useSessionStore } from '../../store/useSessionStore';
 import { Mood } from '../../types/database';
+import { trackOnboardingStep } from '../../lib/trackOnboarding';
+import { PASO_MOOD } from '../../lib/onboardingTracking';
 import { colors, spacing, type } from '../../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'MoodPick'>;
@@ -15,6 +17,10 @@ export function MoodPickScreen({ navigation }: Props) {
   const userId = useSessionStore((s) => s.userId);
   const today = useMoodStore((s) => s.today);
   const setMood = useMoodStore((s) => s.setMood);
+
+  useEffect(() => {
+    trackOnboardingStep(userId, PASO_MOOD);
+  }, [userId]);
 
   const choose = async (mood: Mood) => {
     if (!userId) return;

@@ -25,6 +25,10 @@ export type Database = {
         Args: Record<string, never>;
         Returns: unknown;
       };
+      admin_onboarding_funnel: {
+        Args: Record<string, never>;
+        Returns: unknown;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

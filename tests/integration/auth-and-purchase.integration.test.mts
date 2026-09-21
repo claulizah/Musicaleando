@@ -174,3 +174,31 @@ test('descuentos: el banner es legible por la app pero no editable por un usuari
   });
   assert.equal(write.status, 403);
 });
+
+test('onboarding: cada paso se registra a nombre propio y el duplicado se ignora', async () => {
+  const send = () =>
+    fetch(`${URL_}/rest/v1/onboarding_progress?on_conflict=user_id,paso`, {
+      method: 'POST',
+      headers: headers({ Prefer: 'resolution=ignore-duplicates' }),
+      body: JSON.stringify({ user_id: userId, paso: 3, paso_nombre: 'quiz_02_generos' }),
+    });
+  assert.equal((await send()).status, 201);
+  assert.equal((await send()).status, 201, 'reintentar el mismo paso no da error');
+  const rows = await fetch(`${URL_}/rest/v1/onboarding_progress?select=paso,paso_nombre`, { headers: headers() });
+  assert.deepEqual(await rows.json(), [{ paso: 3, paso_nombre: 'quiz_02_generos' }], 'queda una sola fila');
+});
+
+test('onboarding: no se puede registrar un paso a nombre de otro usuario', async () => {
+  const res = await fetch(`${URL_}/rest/v1/onboarding_progress`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ user_id: '00000000-0000-0000-0000-000000000001', paso: 2, paso_nombre: 'quiz_01_duelo_visual' }),
+  });
+  assert.equal(res.status, 403);
+});
+
+test('onboarding: un usuario normal no puede llamar al embudo del admin', async () => {
+  const res = await fetch(`${URL_}/rest/v1/rpc/admin_onboarding_funnel`, { method: 'POST', headers: headers(), body: '{}' });
+  assert.notEqual(res.status, 200);
+  assert.match(JSON.stringify(await res.json()), /No autorizado/);
+});

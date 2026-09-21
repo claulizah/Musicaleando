@@ -18,6 +18,8 @@ import { ARCHETYPES, ArchetypeId, buildFlavorLine } from '../../lib/archetypes';
 import { ARCHETYPE_IMAGES } from '../../lib/images';
 import { colors, spacing, type } from '../../theme';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { trackOnboardingStep } from '../../lib/trackOnboarding';
+import { PASO_REVELACION } from '../../lib/onboardingTracking';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Reveal'>;
 
@@ -36,6 +38,10 @@ export function RevealScreen({ navigation }: Props) {
   const [sharing, setSharing] = useState(false);
   const confettiRef = useRef<ConfettiCannon>(null);
   const cardRef = useRef<View>(null);
+
+  useEffect(() => {
+    trackOnboardingStep(userId, PASO_REVELACION);
+  }, [userId]);
 
   useEffect(() => {
     let cancelled = false;

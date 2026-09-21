@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -8,11 +8,20 @@ import { PrimaryButton } from '../../components/PrimaryButton';
 import { RootStackParamList } from '../../navigation/types';
 import { colors, spacing, type } from '../../theme';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useSessionStore } from '../../store/useSessionStore';
+import { trackOnboardingStep } from '../../lib/trackOnboarding';
+import { PASO_BIENVENIDA } from '../../lib/onboardingTracking';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Welcome'>;
 
 export function WelcomeScreen({ navigation }: Props) {
   const reducedMotion = useReducedMotion();
+  const userId = useSessionStore((s) => s.userId);
+
+  // Embudo de onboarding: en segundo plano, sin esperar (ver onboardingTracking.ts).
+  useEffect(() => {
+    trackOnboardingStep(userId, PASO_BIENVENIDA);
+  }, [userId]);
 
   return (
     <Screen style={styles.container}>

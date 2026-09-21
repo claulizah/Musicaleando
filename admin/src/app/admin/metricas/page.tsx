@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { requireAdmin } from '@/lib/admin';
 import { createClient } from '@/lib/supabase/server';
+import { OnboardingFunnel, type FunnelData } from './onboarding-funnel';
 
 type Metrics = {
   generado_en: string;
@@ -91,6 +92,9 @@ export default async function MetricasPage() {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('admin_metrics');
   const m = data as Metrics | null;
+  // El embudo viene de su propia función: si su migración aún no se corre, solo
+  // esa sección avisa, el resto del panel sigue funcionando.
+  const { data: funnelRaw, error: funnelError } = await supabase.rpc('admin_onboarding_funnel');
 
   if (error || !m) {
     return (
@@ -169,6 +173,8 @@ export default async function MetricasPage() {
           />
         </div>
       </section>
+
+      <OnboardingFunnel data={funnelRaw as FunnelData | null} error={funnelError?.message} />
 
       <div className="grid grid-cols-1 gap-8 sm:grid-cols-2">
         <section>

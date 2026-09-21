@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Screen } from '../../components/Screen';
@@ -8,6 +8,8 @@ import { useSessionStore } from '../../store/useSessionStore';
 import { useProfileStore } from '../../store/useProfileStore';
 import { ESTADOS_MEXICO } from '../../lib/estadosMexico';
 import { saveUserEstado } from '../../lib/userEstado';
+import { trackOnboardingStep } from '../../lib/trackOnboarding';
+import { PASO_COMPLETO, PASO_UBICACION } from '../../lib/onboardingTracking';
 import { Dropdown } from '../../components/EventFilterBar';
 import { colors, radii, spacing, type } from '../../theme';
 
@@ -23,6 +25,10 @@ export function EstadosInteresScreen({ navigation }: Props) {
   const updateEstadosInteres = useProfileStore((s) => s.updateEstadosInteres);
   const [selected, setSelected] = useState<string[]>([]);
   const [estadoResidencia, setEstadoResidencia] = useState('');
+
+  useEffect(() => {
+    trackOnboardingStep(userId, PASO_UBICACION);
+  }, [userId]);
   const [saving, setSaving] = useState(false);
 
   const toggle = (estado: string) => {
@@ -34,6 +40,8 @@ export function EstadosInteresScreen({ navigation }: Props) {
       navigation.replace('Home');
       return;
     }
+    // Guardar o "Saltar" cuentan igual: el usuario terminó el onboarding.
+    trackOnboardingStep(userId, PASO_COMPLETO);
     setSaving(true);
     try {
       if (estadoResidencia) await saveUserEstado(userId, estadoResidencia);

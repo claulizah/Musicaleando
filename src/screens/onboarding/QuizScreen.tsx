@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Screen } from '../../components/Screen';
@@ -6,6 +6,9 @@ import { QuizProgressBar } from '../../components/QuizProgressBar';
 import { QuizCardStack } from '../../components/QuizCardStack';
 import { RootStackParamList } from '../../navigation/types';
 import { QUIZ_STEP_COUNT, useQuizStore } from '../../store/useQuizStore';
+import { useSessionStore } from '../../store/useSessionStore';
+import { trackOnboardingStep } from '../../lib/trackOnboarding';
+import { pasoDeQuiz } from '../../lib/onboardingTracking';
 import { colors, spacing, type } from '../../theme';
 import { Step1DuelVisual } from './quizSteps/Step1DuelVisual';
 import { Step2Generos } from './quizSteps/Step2Generos';
@@ -25,6 +28,13 @@ export function QuizScreen({ navigation }: Props) {
   const next = useQuizStore((s) => s.next);
   const back = useQuizStore((s) => s.back);
   const [direction, setDirection] = useState<1 | -1>(1);
+  const userId = useSessionStore((s) => s.userId);
+
+  // Embudo de onboarding: cada pregunta a la que se llega se registra en
+  // segundo plano (una vez por pregunta; volver atrás no repite).
+  useEffect(() => {
+    trackOnboardingStep(userId, pasoDeQuiz(stepIndex));
+  }, [userId, stepIndex]);
 
   const goBack = () => {
     if (stepIndex === 0) {

@@ -679,6 +679,27 @@ export type Database = {
         }
         Relationships: []
       }
+      onboarding_progress: {
+        Row: {
+          alcanzado_en: string
+          paso: number
+          paso_nombre: string
+          user_id: string
+        }
+        Insert: {
+          alcanzado_en?: string
+          paso: number
+          paso_nombre: string
+          user_id: string
+        }
+        Update: {
+          alcanzado_en?: string
+          paso?: number
+          paso_nombre?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       app_config: {
         Row: {
           key: string
