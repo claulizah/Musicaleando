@@ -102,6 +102,40 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['festivals']['Row']>;
         Relationships: [];
       };
+      app_config: {
+        Row: {
+          key: string;
+          value: string;
+          updated_at: string;
+        };
+        Insert: {
+          key: string;
+          value: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['app_config']['Row']>;
+        Relationships: [];
+      };
+      ticket_clicks: {
+        Row: {
+          id: string;
+          festival_id: string | null;
+          user_id: string | null;
+          plataforma: string;
+          afiliado: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          festival_id?: string | null;
+          user_id?: string | null;
+          plataforma: string;
+          afiliado?: boolean;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['ticket_clicks']['Row']>;
+        Relationships: [];
+      };
       festival_lineup: {
         Row: {
           id: string;

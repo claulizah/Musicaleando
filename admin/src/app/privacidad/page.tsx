@@ -12,7 +12,7 @@ export default function PrivacidadPage() {
     <main className="mx-auto max-w-2xl px-4 py-16 text-sm leading-relaxed text-gray-700">
       <h1 className="text-2xl font-semibold text-gray-900">Aviso de Privacidad — Musicaleando</h1>
       <p className="mt-1 text-gray-500">
-        Última actualización: 18 de septiembre de 2026
+        Última actualización: 21 de septiembre de 2026
       </p>
 
       <div className="mt-8 flex flex-col gap-6">
@@ -58,6 +58,12 @@ export default function PrivacidadPage() {
             <li>
               <b>Datos técnicos:</b> información del dispositivo y datos de uso necesarios para
               el funcionamiento y seguridad de la app.
+            </li>
+            <li>
+              <b>Clics en &quot;Comprar boletos&quot;:</b> registramos qué evento tocaste, la
+              plataforma de destino y la fecha y hora, ligado solo a tu identificador anónimo de
+              sesión (sin correo, sin IP). Sirve para entender qué eventos interesan y para
+              medir ventas referidas.
             </li>
           </ul>
           <p className="mt-2">
@@ -125,7 +131,9 @@ export default function PrivacidadPage() {
             <li>
               Terceros de boletaje (por ejemplo, Ticketmaster) únicamente cuando decides
               comprar un boleto a través de un enlace del Festival Hub — en ese caso, sales de
-              Musicaleando y quedas sujeto al aviso de privacidad de ese tercero.
+              Musicaleando y quedas sujeto al aviso de privacidad de ese tercero. Algunos enlaces
+              de compra pueden ser enlaces de afiliado: si compras a través de ellos, Musicaleando
+              puede recibir una comisión de la boletera, sin costo adicional para ti.
             </li>
             <li>
               Patrocinadores, únicamente en forma de conteos agregados y anónimos, conforme a

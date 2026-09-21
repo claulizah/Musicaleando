@@ -114,6 +114,9 @@ export default async function DashboardPage() {
             <Link href="/festivals/importar" className="rounded-md bg-gray-100 px-3 py-1.5 text-gray-700">
               ⬆ Importar CSV
             </Link>
+            <Link href="/admin/clics" className="rounded-md bg-gray-100 px-3 py-1.5 text-gray-700">
+              🎟 Clics de compra
+            </Link>
             <Link href="/admin/calendario" className="rounded-md bg-gray-100 px-3 py-1.5 text-gray-700">
               📅 Calendario
             </Link>

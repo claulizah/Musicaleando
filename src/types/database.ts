@@ -622,6 +622,51 @@ export type Database = {
           },
         ]
       }
+      app_config: {
+        Row: {
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
+      }
+      ticket_clicks: {
+        Row: {
+          afiliado: boolean
+          created_at: string
+          festival_id: string | null
+          id: string
+          plataforma: string
+          user_id: string | null
+        }
+        Insert: {
+          afiliado?: boolean
+          created_at?: string
+          festival_id?: string | null
+          id?: string
+          plataforma: string
+          user_id?: string | null
+        }
+        Update: {
+          afiliado?: boolean
+          created_at?: string
+          festival_id?: string | null
+          id?: string
+          plataforma?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       festivals: {
         Row: {
           ciudad: string

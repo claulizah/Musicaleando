@@ -21,6 +21,9 @@ import { useSquadStore } from '../../store/useSquadStore';
 import { useEventFilters } from '../../hooks/useEventFilters';
 import { EventFilterBar } from '../../components/EventFilterBar';
 import { groupLineupByDay } from '../../lib/lineupByDay';
+import { buildTicketUrl } from '../../lib/ticketLinks';
+import { trackTicketClick } from '../../lib/trackTicketClick';
+import { useAppConfigStore } from '../../store/useAppConfigStore';
 import { dateBucketFor, DATE_BUCKET_LABEL, DATE_BUCKET_ORDER } from '../../lib/dateBuckets';
 import { colors, radii, spacing, type } from '../../theme';
 
@@ -85,6 +88,10 @@ export function FestivalHubScreen({ navigation, route }: Props) {
     if (userId) fetchMySquads(userId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
+
+  useEffect(() => {
+    useAppConfigStore.getState().load();
+  }, []);
 
   // "Mapa social": squadmates' arquetipo, resolved from squads already
   // loaded via squad_members_with_profile — no new query for this screen.
@@ -374,7 +381,11 @@ function FestivalCard({
       {festival.link_boletos && (
         <Pressable
           style={styles.ticketsButton}
-          onPress={() => Linking.openURL(festival.link_boletos!)}
+          onPress={() => {
+            const link = buildTicketUrl(festival.link_boletos!, useAppConfigStore.getState().affiliateTemplate);
+            trackTicketClick(festival.id, userId, link.plataforma, link.afiliado);
+            Linking.openURL(link.url);
+          }}
         >
           <Text style={styles.ticketsButtonText}>Comprar boletos ↗</Text>
         </Pressable>
