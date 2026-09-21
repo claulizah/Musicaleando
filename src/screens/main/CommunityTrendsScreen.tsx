@@ -182,13 +182,13 @@ export function CommunityTrendsScreen({ navigation }: Props) {
             onPress={() => setScope('ciudad')}
           >
             <Text style={[styles.scopeChipText, scope === 'ciudad' && styles.scopeChipTextSelected]}>
-              Mi ciudad{ciudad ? ` (${ciudad})` : ''}
+              Mi estado{ciudad ? ` (${ciudad})` : ''}
             </Text>
           </Pressable>
         </View>
 
         {scope === 'ciudad' && !ciudad && (
-          <Text style={styles.hint}>Tu perfil todavía no tiene ciudad guardada — no habrá resultados.</Text>
+          <Text style={styles.hint}>Elige tu estado en Perfil para ver lo que comparte tu gente — por ahora no habrá resultados.</Text>
         )}
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.genreFilterRow}>

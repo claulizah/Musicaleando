@@ -3,5 +3,5 @@
   "compilerOptions": {
     "strict": true
   },
-  "exclude": ["admin", "node_modules", "supabase"]
+  "exclude": ["admin", "node_modules", "supabase", "tests"]
 }

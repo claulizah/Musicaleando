@@ -158,7 +158,7 @@ function Chip({ label, selected, onPress }: { label: string; selected: boolean; 
 // visible (bug reportado por Claudia). Un modal con lista vertical no tiene
 // ese problema de corte, y dentro de un mismo filtro las opciones son
 // mutuamente excluyentes de por sí (una sola fila seleccionada).
-function Dropdown({
+export function Dropdown({
   label,
   options,
   value,

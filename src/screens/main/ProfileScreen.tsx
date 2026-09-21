@@ -19,6 +19,9 @@ import { parseListeningHistory, topArtists, fetchImportGenres } from '../../lib/
 import { badgeFor } from '../../lib/badges';
 import { nextLevel } from '../../lib/levels';
 import { supabase } from '../../lib/supabase';
+import { ESTADOS_MEXICO } from '../../lib/estadosMexico';
+import { fetchUserEstado, saveUserEstado } from '../../lib/userEstado';
+import { Dropdown } from '../../components/EventFilterBar';
 import { colors, radii, spacing, type } from '../../theme';
 import { WhatsNewCard } from '../../components/WhatsNewCard';
 
@@ -40,25 +43,43 @@ export function ProfileScreen({ navigation }: Props) {
   const [importing, setImporting] = useState(false);
   const [sharingLevel, setSharingLevel] = useState(false);
   const [cityComparison, setCityComparison] = useState<CityEnergiaComparison | null>(null);
+  const [estado, setEstado] = useState('');
   const levelCardRef = useRef<View>(null);
 
   useEffect(() => {
     if (userId) fetchAchievements(userId);
   }, [userId, fetchAchievements]);
 
+  const loadEstadoComparison = async (ciudad: string | null) => {
+    if (!ciudad) {
+      setCityComparison(null);
+      return;
+    }
+    const { data } = await supabase.rpc('energia_ciudad_avg', { p_ciudad: ciudad }).single();
+    setCityComparison({ ciudad, promedio: data?.promedio ?? null, muestras: data?.muestras ?? 0 });
+  };
+
   useEffect(() => {
     if (!userId) return;
     (async () => {
-      const { data: userRow } = await supabase.from('users').select('ciudad').eq('id', userId).maybeSingle();
-      const ciudad = userRow?.ciudad ?? null;
-      if (!ciudad) {
-        setCityComparison(null);
-        return;
-      }
-      const { data } = await supabase.rpc('energia_ciudad_avg', { p_ciudad: ciudad }).single();
-      setCityComparison({ ciudad, promedio: data?.promedio ?? null, muestras: data?.muestras ?? 0 });
+      const guardado = await fetchUserEstado(userId);
+      setEstado(guardado ?? '');
+      await loadEstadoComparison(guardado);
     })();
   }, [userId]);
+
+  const handleEstadoChange = async (nuevo: string) => {
+    if (!userId) return;
+    const anterior = estado;
+    setEstado(nuevo);
+    try {
+      await saveUserEstado(userId, nuevo || null);
+      await loadEstadoComparison(nuevo || null);
+    } catch {
+      setEstado(anterior);
+      Alert.alert('No se pudo guardar', 'Revisa tu conexión e inténtalo de nuevo.');
+    }
+  };
 
   const handleShareLevel = async () => {
     if (!levelCardRef.current) return;
@@ -188,6 +209,16 @@ export function ProfileScreen({ navigation }: Props) {
         />
 
         <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Tu estado</Text>
+          <Dropdown
+            label="Estado donde vives"
+            options={[{ id: '', label: 'Sin elegir' }, ...ESTADOS_MEXICO.map((e) => ({ id: e, label: e }))]}
+            value={estado}
+            onChange={handleEstadoChange}
+          />
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionLabel}>Tu energía musical</Text>
           <View style={styles.energiaRow}>
             <Text style={styles.energiaEmoji}>{energiaEmoji(profile.energia)}</Text>
@@ -197,7 +228,7 @@ export function ProfileScreen({ navigation }: Props) {
           </View>
           {!cityComparison ? (
             <Text style={styles.hintText}>
-              Agrega tu ciudad para comparar tu energía con la de tu red.
+              Elige tu estado para comparar tu energía con la de tu red.
             </Text>
           ) : cityComparison.promedio === null ? (
             <Text style={styles.hintText}>

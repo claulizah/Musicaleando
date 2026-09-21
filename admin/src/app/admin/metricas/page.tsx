@@ -149,7 +149,7 @@ export default async function MetricasPage() {
         <h2 className="mb-2 font-medium">Perfil completo (embudo de onboarding)</h2>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Stat value={`${pctPerfil}%`} label="completó el perfil musical" hint={`${m.usuarios.con_perfil_musical} de ${m.usuarios.total}`} />
-          <Stat value={`${pctCiudad}%`} label="tiene ciudad" hint={`${m.usuarios.con_ciudad} de ${m.usuarios.total}`} />
+          <Stat value={`${pctCiudad}%`} label="tiene estado" hint={`${m.usuarios.con_ciudad} de ${m.usuarios.total}`} />
         </div>
       </section>
 
@@ -180,11 +180,11 @@ export default async function MetricasPage() {
           )}
         </section>
         <section>
-          <h2 className="mb-2 font-medium">Ciudades</h2>
+          <h2 className="mb-2 font-medium">Estados</h2>
           {ciudadesConDato.length === 0 ? (
             <p className="text-sm text-gray-500">
-              Ningún usuario tiene ciudad guardada todavía ({m.usuarios.total} sin ciudad) — la app hoy no ofrece
-              dónde capturarla.
+              Ningún usuario ha elegido su estado todavía ({m.usuarios.total} sin estado). Se pide en el
+              onboarding (opcional) y se puede cambiar en Perfil.
             </p>
           ) : (
             <Bars rows={ciudadesConDato.map((c) => ({ key: c.ciudad, n: c.n }))} />

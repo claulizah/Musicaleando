@@ -7,6 +7,8 @@ import { RootStackParamList } from '../../navigation/types';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useProfileStore } from '../../store/useProfileStore';
 import { ESTADOS_MEXICO } from '../../lib/estadosMexico';
+import { saveUserEstado } from '../../lib/userEstado';
+import { Dropdown } from '../../components/EventFilterBar';
 import { colors, radii, spacing, type } from '../../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EstadosInteres'>;
@@ -20,6 +22,7 @@ export function EstadosInteresScreen({ navigation }: Props) {
   const userId = useSessionStore((s) => s.userId);
   const updateEstadosInteres = useProfileStore((s) => s.updateEstadosInteres);
   const [selected, setSelected] = useState<string[]>([]);
+  const [estadoResidencia, setEstadoResidencia] = useState('');
   const [saving, setSaving] = useState(false);
 
   const toggle = (estado: string) => {
@@ -33,6 +36,7 @@ export function EstadosInteresScreen({ navigation }: Props) {
     }
     setSaving(true);
     try {
+      if (estadoResidencia) await saveUserEstado(userId, estadoResidencia);
       await updateEstadosInteres(userId, estados);
     } catch {
       // No bloquear el onboarding por esto — es opcional, se puede volver a
@@ -47,13 +51,23 @@ export function EstadosInteresScreen({ navigation }: Props) {
     <Screen>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <Text style={styles.title}>¿Qué estados te interesa seguir?</Text>
+          <Text style={styles.title}>¿Dónde estás?</Text>
           <Pressable hitSlop={12} onPress={() => finish([])} disabled={saving}>
             <Text style={styles.skip}>Saltar</Text>
           </Pressable>
         </View>
+        <Text style={styles.subtitle}>Opcional. Nos ayuda a mostrarte lo que pasa cerca de ti.</Text>
+
+        <Dropdown
+          label="Estado donde vives"
+          options={[{ id: '', label: 'Sin elegir' }, ...ESTADOS_MEXICO.map((e) => ({ id: e, label: e }))]}
+          value={estadoResidencia}
+          onChange={setEstadoResidencia}
+        />
+
+        <Text style={styles.sectionTitle}>¿Qué otros estados te interesa seguir?</Text>
         <Text style={styles.subtitle}>
-          Opcional. Te avisaremos de festivales y conciertos en estos estados aunque no vivas ahí.
+          Te avisaremos de festivales y conciertos en estos estados aunque no vivas ahí.
         </Text>
 
         <View style={styles.chipWrap}>
@@ -72,7 +86,7 @@ export function EstadosInteresScreen({ navigation }: Props) {
         </View>
 
         <PrimaryButton
-          label={selected.length > 0 ? `Guardar (${selected.length})` : 'Continuar'}
+          label={selected.length > 0 || estadoResidencia ? 'Guardar' : 'Continuar'}
           onPress={() => finish(selected)}
           loading={saving}
         />
@@ -101,6 +115,11 @@ const styles = StyleSheet.create({
   skip: {
     ...type.label,
     color: colors.textSecondary,
+  },
+  sectionTitle: {
+    ...type.h2,
+    color: colors.textPrimary,
+    marginTop: spacing.sm,
   },
   subtitle: {
     ...type.body,

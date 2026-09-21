@@ -36,3 +36,11 @@ export const ESTADOS_MEXICO: string[] = [
   'Yucatán',
   'Zacatecas',
 ];
+
+// Devuelve el estado tal como está en la lista oficial, o null si no es uno
+// de los 32 (o viene vacío). Es la única puerta de entrada para guardar el
+// estado de residencia del usuario: así nunca queda texto libre en la base.
+export function normalizeEstado(value: string | null | undefined): string | null {
+  const v = (value ?? '').trim();
+  return ESTADOS_MEXICO.find((e) => e === v) ?? null;
+}

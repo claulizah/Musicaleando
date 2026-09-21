@@ -106,3 +106,48 @@ test('compra: la plantilla de afiliado es legible por la app pero no editable', 
   });
   assert.equal(write.status, 403, 'un usuario normal no debe poder cambiar la plantilla de afiliado');
 });
+
+test('estado: el usuario guarda su propio estado y lo lee de vuelta', async () => {
+  const up = await fetch(`${URL_}/rest/v1/users?id=eq.${userId}`, {
+    method: 'PATCH',
+    headers: headers({ Prefer: 'return=representation' }),
+    body: JSON.stringify({ ciudad: 'Jalisco' }),
+  });
+  const rows = (await up.json()) as { id: string; ciudad: string | null }[];
+  assert.deepEqual([rows[0]?.id, rows[0]?.ciudad], [userId, 'Jalisco']);
+});
+
+test('estado: no se puede cambiar el estado de otro usuario', async () => {
+  const other = await fetch(`${URL_}/rest/v1/users?id=neq.${userId}`, {
+    method: 'PATCH',
+    headers: headers({ Prefer: 'return=representation' }),
+    body: JSON.stringify({ ciudad: 'Yucatán' }),
+  });
+  assert.deepEqual(await other.json(), [], 'RLS no debe dejar tocar filas ajenas');
+});
+
+test('novedades: cualquier usuario las lee pero no puede crearlas', async () => {
+  const read = await fetch(`${URL_}/rest/v1/novedades?select=id`, { headers: headers() });
+  assert.equal(read.status, 200);
+  const write = await fetch(`${URL_}/rest/v1/novedades`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ id: 'intento-no-admin', pantalla: 'Home', titulo: 'x', cuerpo: 'x' }),
+  });
+  assert.equal(write.status, 403);
+});
+
+test('novedades: un usuario solo marca avisos como vistos a su nombre', async () => {
+  const forged = await fetch(`${URL_}/rest/v1/novedades_vistas`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ user_id: '00000000-0000-0000-0000-000000000001', novedad_id: 'no-existe' }),
+  });
+  assert.equal(forged.status, 403);
+});
+
+test('métricas: un usuario normal no puede llamar admin_metrics', async () => {
+  const res = await fetch(`${URL_}/rest/v1/rpc/admin_metrics`, { method: 'POST', headers: headers(), body: '{}' });
+  assert.notEqual(res.status, 200);
+  assert.match(JSON.stringify(await res.json()), /No autorizado/);
+});
