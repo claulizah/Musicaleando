@@ -51,13 +51,19 @@ export default function PrivacidadPage() {
               interacciones con anuncios y promociones.
             </li>
             <li>
-              <b>Ubicación aproximada (ciudad):</b> para mostrarte contenido relevante de tu
-              zona y para que los patrocinadores puedan segmentar promociones por ciudad,
-              siempre de forma agregada (ver sección 4).
+              <b>Ubicación aproximada (estado):</b> el estado de la República donde vives, que
+              eliges tú (es opcional), para mostrarte contenido relevante de tu zona y para que
+              los patrocinadores puedan segmentar promociones por estado, siempre de forma
+              agregada (ver sección 4). No usamos tu ubicación GPS.
             </li>
             <li>
               <b>Datos técnicos:</b> información del dispositivo y datos de uso necesarios para
               el funcionamiento y seguridad de la app.
+            </li>
+            <li>
+              <b>Avance del onboarding:</b> hasta qué pantalla del cuestionario inicial llegaste
+              y cuándo, ligado solo a tu identificador anónimo de sesión. Sirve para detectar
+              en qué paso se pierde la gente y mejorarlo.
             </li>
             <li>
               <b>Clics en &quot;Comprar boletos&quot;:</b> registramos qué evento tocaste, la
@@ -161,7 +167,12 @@ export default function PrivacidadPage() {
             tus membresías de squad y tus solicitudes de contacto de forma permanente e inmediata
             — no hay periodo de gracia ni forma de recuperarlos después. Tus comentarios y
             reacciones en festivales permanecen visibles para no romper la conversación, pero
-            dejan de estar ligados a ti (se muestran como &quot;Usuario eliminado&quot;).
+            dejan de estar ligados a ti (se muestran como &quot;Usuario eliminado&quot;). Los
+            pasos para eliminar tu cuenta, incluso si ya no tienes la app, están en{' '}
+            <a href="/eliminar-cuenta" className="underline">
+              musicaleando.com/eliminar-cuenta
+            </a>
+            .
           </p>
         </section>
 

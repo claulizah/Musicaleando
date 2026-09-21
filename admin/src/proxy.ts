@@ -5,13 +5,13 @@ import { NextResponse, type NextRequest } from 'next/server';
 // admin dashboard itself lives at '/admin'. Exact-match it separately below
 // since `pathname.startsWith('/')` would otherwise match every route.
 const PUBLIC_EXACT_PATHS = ['/'];
-const PUBLIC_PREFIX_PATHS = ['/login', '/signup', '/forgot-password', '/reset-password', '/privacidad', '/terminos'];
+const PUBLIC_PREFIX_PATHS = ['/login', '/signup', '/forgot-password', '/reset-password', '/privacidad', '/terminos', '/eliminar-cuenta'];
 // A password-recovery link logs the visitor in via a short-lived recovery
 // session before they've set a new password — unlike /login or /signup,
 // being authenticated here is the expected state, not a reason to bounce
 // them away. Same for the public marketing/legal pages — a logged-in admin
 // browsing them isn't a reason to redirect either.
-const SKIP_LOGGED_IN_REDIRECT = ['/reset-password', '/', '/privacidad', '/terminos'];
+const SKIP_LOGGED_IN_REDIRECT = ['/reset-password', '/', '/privacidad', '/terminos', '/eliminar-cuenta'];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });

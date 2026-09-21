@@ -104,6 +104,9 @@ export default function LandingPage() {
           <Link href="/terminos" className="underline">
             Términos y Condiciones
           </Link>
+          <Link href="/eliminar-cuenta" className="underline">
+            Eliminar cuenta
+          </Link>
           <Link href="/login" className="underline">
             Panel de administración
           </Link>

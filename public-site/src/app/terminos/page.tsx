@@ -6,9 +6,8 @@ export const metadata: Metadata = {
   description: 'Términos y condiciones de uso de la aplicación Musicaleando.',
 };
 
-// Contenido final de producto (no un placeholder técnico). Todos los datos
-// legales/de contacto ya están llenos salvo la ruta de eliminar cuenta,
-// pendiente a propósito hasta que esa función exista en producción.
+// Contenido final de producto (no un placeholder técnico). La eliminación de
+// cuenta ya existe en producción y se documenta en la sección 9.
 // Nota: el texto original traía un link externo roto a
 // "https://claude.ai/privacidad" (artefacto de dónde se redactó) — se
 // corrigió a un link interno real hacia /privacidad.
@@ -17,7 +16,7 @@ export default function TerminosPage() {
     <main className="mx-auto max-w-2xl px-4 py-16 text-sm leading-relaxed text-gray-700">
       <h1 className="text-2xl font-semibold text-gray-900">Términos y Condiciones — Musicaleando</h1>
       <p className="mt-1 text-gray-500">
-        Última actualización: 14 de septiembre de 2026
+        Última actualización: 21 de septiembre de 2026
       </p>
 
       <div className="mt-8 flex flex-col gap-6">
@@ -145,11 +144,11 @@ export default function TerminosPage() {
           <h2 className="font-medium text-gray-900">9. Suspensión y cancelación de cuenta</h2>
           <p className="mt-1">
             Podemos suspender o cancelar tu cuenta si violas estos términos. Tú puedes eliminar
-            tu cuenta en cualquier momento desde{' '}
-            <span className="text-amber-600">
-              [PENDIENTE: se documentará una vez publicada la pantalla de Configuración/Cuenta con
-              la opción de eliminar cuenta]
-            </span>
+            tu cuenta en cualquier momento desde la app (Perfil &gt; Configuración &gt; Eliminar
+            mi cuenta) o siguiendo los pasos en{' '}
+            <Link href="/eliminar-cuenta" className="underline">
+              musicaleando.com/eliminar-cuenta
+            </Link>
             .
           </p>
         </section>

@@ -216,6 +216,7 @@ export default function LandingPage() {
           <div className={styles.footLinks}>
             <Link href="/privacidad">Privacidad</Link>
             <Link href="/terminos">Términos</Link>
+            <Link href="/eliminar-cuenta">Eliminar cuenta</Link>
             <a href="mailto:clauliz.acosta@gmail.com">Contacto</a>
           </div>
         </footer>
