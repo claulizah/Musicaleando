@@ -471,7 +471,9 @@ export type Database = {
           escenario: string | null
           festival_id: string
           horario: string | null
+          horario_fin: string | null
           id: string
+          nivel: string | null
         }
         Insert: {
           artista: string
@@ -479,7 +481,9 @@ export type Database = {
           escenario?: string | null
           festival_id: string
           horario?: string | null
+          horario_fin?: string | null
           id?: string
+          nivel?: string | null
         }
         Update: {
           artista?: string
@@ -487,7 +491,9 @@ export type Database = {
           escenario?: string | null
           festival_id?: string
           horario?: string | null
+          horario_fin?: string | null
           id?: string
+          nivel?: string | null
         }
         Relationships: [
           {

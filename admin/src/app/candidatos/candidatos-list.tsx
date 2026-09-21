@@ -15,7 +15,7 @@ import { resolveEstado, OTRO_ESTADO_LABEL } from '@/lib/mexicoEstados';
 import { cleanEventNameSafe } from '@/lib/cleanEventName';
 import { categorizeEvent, CATEGORY_LABEL, type EventCategory } from '@/lib/eventCategory';
 import { dateBucketFor, DATE_BUCKET_LABEL, DATE_BUCKET_ORDER } from '@/lib/dateBuckets';
-import { groupLineupByDay } from '@/lib/lineupByDay';
+import { groupLineupByDay } from '@/lib/lineupSchedule';
 import type { Database } from '@/lib/database.types';
 
 type Candidate = Database['public']['Tables']['event_candidates']['Row'];

@@ -171,11 +171,15 @@ export type Database = {
           artista: string;
           escenario: string | null;
           horario: string | null;
+          horario_fin: string | null;
+          nivel: string | null;
           artist_id: string | null;
         };
-        Insert: Omit<Database['public']['Tables']['festival_lineup']['Row'], 'id' | 'artist_id'> & {
+        Insert: Omit<Database['public']['Tables']['festival_lineup']['Row'], 'id' | 'artist_id' | 'horario_fin' | 'nivel'> & {
           id?: string;
           artist_id?: string | null;
+          horario_fin?: string | null;
+          nivel?: string | null;
         };
         Update: Partial<Database['public']['Tables']['festival_lineup']['Row']>;
         Relationships: [
@@ -361,16 +365,18 @@ export type Database = {
           hora_fin: string | null;
           confianza: string;
           nota: string | null;
+          nivel: string | null;
           estado: string;
           created_at: string;
         };
         Insert: Omit<
           Database['public']['Tables']['festival_lineup_candidates']['Row'],
-          'id' | 'created_at' | 'estado'
+          'id' | 'created_at' | 'estado' | 'nivel'
         > & {
           id?: string;
           created_at?: string;
           estado?: string;
+          nivel?: string | null;
         };
         Update: Partial<Database['public']['Tables']['festival_lineup_candidates']['Row']>;
         Relationships: [

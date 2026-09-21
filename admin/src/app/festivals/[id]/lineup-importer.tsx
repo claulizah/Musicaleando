@@ -4,7 +4,7 @@ import { useRef, useState, useTransition } from 'react';
 import Papa from 'papaparse';
 import { importLineup, type LineupRow } from './actions';
 
-const EXPECTED_COLUMNS = ['artista', 'escenario', 'horario'];
+const EXPECTED_COLUMNS = ['artista', 'escenario', 'horario', 'horario_fin', 'nivel'];
 
 export function LineupImporter({ festivalId }: { festivalId: string }) {
   const [rows, setRows] = useState<LineupRow[]>([]);
@@ -37,6 +37,8 @@ export function LineupImporter({ festivalId }: { festivalId: string }) {
           artista: r.artista ?? '',
           escenario: r.escenario ?? null,
           horario: r.horario ?? null,
+          horario_fin: r.horario_fin ?? null,
+          nivel: r.nivel ?? null,
         }));
         setRows(parsed);
       },
@@ -48,8 +50,10 @@ export function LineupImporter({ festivalId }: { festivalId: string }) {
     <div className="rounded-lg border border-dashed border-gray-300 p-4">
       <p className="mb-2 text-sm font-medium">Importar line-up desde CSV</p>
       <p className="mb-3 text-xs text-gray-500">
-        Columnas: <code>artista</code> (obligatoria), <code>escenario</code>, <code>horario</code>
-        {' '}(opcional, formato ISO como 2026-10-03T20:00:00-06:00).
+        Columnas: <code>artista</code> (obligatoria), <code>escenario</code>, <code>horario</code>,
+        {' '}<code>horario_fin</code> y <code>nivel</code> (estelar, destacado o general). Las
+        horas van en 24 h como 20:20 o 2026-10-03T20:20; se guardan tal como dice el cartel, sin
+        zona horaria (un -06:00 al final se ignora).
       </p>
       <input
         ref={fileInputRef}

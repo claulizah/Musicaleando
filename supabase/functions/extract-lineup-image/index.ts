@@ -37,10 +37,13 @@ Responde ÚNICAMENTE con un JSON válido (sin texto antes ni después, sin bloqu
       "hora_inicio": string | null,  // tal como aparece en la imagen, ej. "20:20" o "8:10" — no conviertas ni asumas AM/PM si no es claro
       "hora_fin": string | null,
       "confianza": "alta" | "media" | "baja",
-      "nota": string | null  // ej. "letra pequeña, posible error de lectura", "no legible"
+      "nota": string | null,  // ej. "letra pequeña, posible error de lectura", "no legible"
+      "nivel": "estelar" | "destacado" | "general" | null  // ver regla de nivel abajo
     }
   ]
 }
+
+Regla de "nivel" (solo cuando la imagen tiene jerarquía visual clara, típico de un cartel de anuncio): "estelar" = el nivel de letra más grande (los cabezas de cartel), "destacado" = el segundo nivel, "general" = el resto de nombres. Es una lectura del TAMAÑO del nombre en la imagen, no una opinión sobre qué tan famoso es el artista. En un grid de horarios donde todos los nombres tienen el mismo peso, o si no estás seguro, deja "nivel" en null.
 
 Si la imagen no contiene ningún artista identificable de un festival, responde con "bloques": [] y "es_horario_con_tiempos": false.`;
 
@@ -76,10 +79,13 @@ Responde ÚNICAMENTE con un JSON válido (sin texto antes ni después, sin bloqu
       "hora_inicio": string | null,
       "hora_fin": string | null,
       "confianza": "alta" | "media" | "baja",
-      "nota": string | null
+      "nota": string | null,
+      "nivel": "estelar" | "destacado" | "general" | null
     }
   ]
 }
+
+Regla de "nivel" (solo cuando el póster tiene jerarquía visual clara): "estelar" = el nivel de letra más grande (cabezas de cartel), "destacado" = el segundo nivel, "general" = el resto. Es una lectura del TAMAÑO del nombre en la imagen, no una opinión sobre qué tan famoso es el artista. Si todos los nombres pesan igual o no estás seguro, deja "nivel" en null.
 
 Si la imagen no es un póster de evento reconocible, responde con "evento" con todos los campos en null, "bloques": [] y "es_horario_con_tiempos": false.`;
 
@@ -90,6 +96,7 @@ type ExtractedBlock = {
   hora_fin: string | null;
   confianza: "alta" | "media" | "baja";
   nota: string | null;
+  nivel?: "estelar" | "destacado" | "general" | null;
 };
 
 Deno.serve(async (req: Request) => {

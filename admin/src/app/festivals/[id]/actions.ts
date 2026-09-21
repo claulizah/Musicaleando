@@ -5,13 +5,24 @@ import { requireAdmin } from '@/lib/admin';
 import { createClient } from '@/lib/supabase/server';
 import { resolveArtistIds } from '@/lib/artists';
 import { normalizeHorario } from '@/lib/normalizeHorario';
+import { buildHorarios } from '@/lib/lineupTimes';
 import { logAdminAction } from '@/lib/adminActionsLog';
 
 export type LineupRow = {
   artista: string;
   escenario: string | null;
   horario: string | null;
+  horario_fin?: string | null;
+  nivel?: string | null;
 };
+
+// 'estelar' | 'destacado' | 'general'; cualquier otra cosa (o vacío) = sin nivel.
+function cleanNivel(value: string | null | undefined): 'estelar' | 'destacado' | 'general' | null {
+  const v = (value ?? '').trim().toLowerCase();
+  return v === 'estelar' || v === 'destacado' || v === 'general' ? v : null;
+}
+
+const HHMM = /^([01]?\d|2[0-3]):([0-5]\d)$/;
 
 export async function updateLinkBoletos(
   festivalId: string,
@@ -142,6 +153,8 @@ export async function importLineup(
       artista: r.artista,
       escenario: r.escenario?.trim() || null,
       horario: festival ? normalizeHorario(festival.fecha_inicio, r.horario?.trim() || null) : null,
+      horario_fin: festival ? normalizeHorario(festival.fecha_inicio, r.horario_fin?.trim() || null) : null,
+      nivel: cleanNivel(r.nivel),
       artist_id: artistIds.get(r.artista) ?? null,
     })),
   );
@@ -150,6 +163,26 @@ export async function importLineup(
 
   revalidatePath(`/festivals/${festivalId}`);
   return { imported: validRows.length };
+}
+
+export async function updateLineupNivel(
+  festivalId: string,
+  rowId: string,
+  nivel: string | null,
+): Promise<{ error?: string }> {
+  const admin = await requireAdmin();
+  if (!admin.authorized) return { error: 'No autorizado.' };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('festival_lineup')
+    .update({ nivel: cleanNivel(nivel) })
+    .eq('id', rowId)
+    .eq('festival_id', festivalId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/festivals/${festivalId}`);
+  return {};
 }
 
 export async function deleteLineupRow(festivalId: string, rowId: string): Promise<{ error?: string }> {
@@ -342,6 +375,7 @@ export type LineupCandidate = {
   hora_fin: string | null;
   confianza: string;
   nota: string | null;
+  nivel: string | null;
 };
 
 // Sends the image to Claude (vision, via the extract-lineup-image Edge
@@ -367,6 +401,7 @@ export async function extractLineupFromImage(
       hora_fin: string | null;
       confianza: string;
       nota: string | null;
+      nivel?: string | null;
     }[];
     error?: string;
   }>('extract-lineup-image', { body: { image_base64: imageBase64, media_type: mediaType } });
@@ -394,6 +429,7 @@ export async function extractLineupFromImage(
         | 'media'
         | 'baja',
       nota: b.nota,
+      nivel: cleanNivel(b.nivel),
     })),
   );
 
@@ -406,7 +442,17 @@ export async function extractLineupFromImage(
 export async function approveLineupCandidate(
   festivalId: string,
   candidateId: string,
-  values: { artista: string; escenario: string | null; horario: string | null },
+  // dia = fecha del cartel (YYYY-MM-DD); inicio / fin = "HH:MM" en 24 horas
+  // (el formulario ya convirtió las horas de 12 h). El servidor arma los
+  // timestamps con buildHorarios para que TODA hora use la misma convención.
+  values: {
+    artista: string;
+    escenario: string | null;
+    dia: string;
+    inicio: string | null;
+    fin: string | null;
+    nivel: string | null;
+  },
 ): Promise<{ error?: string }> {
   const admin = await requireAdmin();
   if (!admin.authorized) return { error: 'No autorizado.' };
@@ -414,18 +460,26 @@ export async function approveLineupCandidate(
   const artista = values.artista.trim();
   if (!artista) return { error: 'Falta el nombre del artista.' };
 
+  const inicio = values.inicio?.trim() || null;
+  const fin = values.fin?.trim() || null;
+  if ((inicio && !HHMM.test(inicio)) || (fin && !HHMM.test(fin))) {
+    return { error: 'Las horas deben ir como HH:MM en 24 horas (ej. 20:20).' };
+  }
+  if (inicio && !/^\d{4}-\d{2}-\d{2}$/.test(values.dia)) return { error: 'Falta el día del cartel.' };
+  const horarios = buildHorarios(values.dia, inicio, inicio ? fin : null);
+  if (horarios.error) return { error: horarios.error };
+
   const supabase = await createClient();
-  const { data: festival } = await supabase
-    .from('festivals')
-    .select('fecha_inicio')
-    .eq('id', festivalId)
-    .maybeSingle();
   const artistIds = await resolveArtistIds(supabase, [artista]);
   const { error: insertError } = await supabase.from('festival_lineup').insert({
     festival_id: festivalId,
     artista,
     escenario: values.escenario?.trim() || null,
-    horario: festival ? normalizeHorario(festival.fecha_inicio, values.horario) : null,
+    // Sin hora pero con día: se guarda el día como placeholder (00:00) para
+    // que el line-up multi-día agrupe bien aunque no haya hora todavía.
+    horario: horarios.horario ?? (/^\d{4}-\d{2}-\d{2}$/.test(values.dia) ? normalizeHorario(values.dia, values.dia) : null),
+    horario_fin: horarios.horario_fin,
+    nivel: cleanNivel(values.nivel),
     artist_id: artistIds.get(artista) ?? null,
   });
   if (insertError) return { error: insertError.message };

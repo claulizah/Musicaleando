@@ -20,7 +20,7 @@ import { promptReportContent } from '../../lib/moderation';
 import { useSquadStore } from '../../store/useSquadStore';
 import { useEventFilters } from '../../hooks/useEventFilters';
 import { EventFilterBar } from '../../components/EventFilterBar';
-import { groupLineupByDay } from '../../lib/lineupByDay';
+import { LineupSection } from '../../components/LineupSection';
 import { buildTicketUrl } from '../../lib/ticketLinks';
 import { trackTicketClick } from '../../lib/trackTicketClick';
 import { useAppConfigStore } from '../../store/useAppConfigStore';
@@ -249,16 +249,6 @@ function FestivalCard({
     mapPins,
     survey,
   } = entry;
-  const [showLineup, setShowLineup] = useState(highlighted);
-  const [openDays, setOpenDays] = useState<Set<string>>(new Set(['0']));
-  const toggleDay = (key: string) => {
-    setOpenDays((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
   const [showSquadGoing, setShowSquadGoing] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [selectedEscenario, setSelectedEscenario] = useState<string | null>(null);
@@ -416,87 +406,16 @@ function FestivalCard({
         </View>
       )}
 
-      {lineup.length > 0 && (
-        <Pressable onPress={() => setShowLineup((v) => !v)}>
-          <Text style={styles.lineupToggle}>
-            {showLineup ? '▾' : '▸'} Line-up ({lineup.length})
-          </Text>
-        </Pressable>
-      )}
-      {showLineup &&
-        (() => {
-          const byDay = groupLineupByDay(lineup, festival.fecha_inicio, festival.fecha_fin);
-          // Se vio en datos reales (Corona Capital 2026): TODOS los artistas
-          // de un mismo día comparten exactamente el mismo horario
-          // ("2026-11-20T06:00:00+00:00" = medianoche en hora de México para
-          // los 5 de ese día) — no es que todos toquen a medianoche, es que
-          // ese campo se llenó a nivel día, no por artista. Mostrar esa hora
-          // como si fuera real es peor que no mostrar hora — se oculta
-          // cuando cae justo en medianoche local, que es la señal de que es
-          // un placeholder y no una hora capturada de verdad.
-          const hasRealHorario = (horario: string | null) => {
-            if (!horario) return false;
-            const d = new Date(horario);
-            return !(d.getHours() === 0 && d.getMinutes() === 0);
-          };
-          const renderArtist = (artist: (typeof lineup)[number]) => {
-            const showHorario = hasRealHorario(artist.horario);
-            const metaParts = [
-              artist.escenario ?? null,
-              showHorario
-                ? new Date(artist.horario!).toLocaleString('es-MX', {
-                    day: 'numeric',
-                    month: 'short',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })
-                : null,
-            ].filter((p): p is string => Boolean(p));
-            return (
-              <Pressable
-                key={artist.id}
-                disabled={!artist.artist_id}
-                style={styles.lineupArtistRow}
-                onPress={() =>
-                  artist.artist_id &&
-                  navigation.navigate('ArtistDetail', { artistId: artist.artist_id, artistName: artist.artista })
-                }
-              >
-                <Text style={styles.lineupArtistName} numberOfLines={1}>
-                  {artist.artista}
-                </Text>
-                {metaParts.length > 0 && (
-                  <Text style={styles.lineupArtistMeta} numberOfLines={1}>
-                    {metaParts.join(' · ')}
-                  </Text>
-                )}
-              </Pressable>
-            );
-          };
-          // Multi-día (ej. Corona Capital, 3 días): se agrupa por fecha con
-          // encabezados colapsables para que un line-up largo no sea una
-          // sola tira de texto. Un festival de un solo día no cambia nada
-          // de su presentación — groupLineupByDay devuelve null y cae al
-          // mismo .map plano de siempre.
-          if (byDay) {
-            return byDay.map((group, i) => {
-              const dayKey = String(i);
-              const isOpen = openDays.has(dayKey);
-              return (
-                <View key={group.day ?? 'sin-dia'}>
-                  <Pressable onPress={() => toggleDay(dayKey)}>
-                    <Text style={styles.lineupToggle}>
-                      {'  '}
-                      {isOpen ? '▾' : '▸'} {group.label} ({group.items.length})
-                    </Text>
-                  </Pressable>
-                  {isOpen && group.items.map(renderArtist)}
-                </View>
-              );
-            });
-          }
-          return lineup.map(renderArtist);
-        })()}
+      <LineupSection
+        lineup={lineup}
+        fechaInicio={festival.fecha_inicio}
+        fechaFin={festival.fecha_fin}
+        initiallyOpen={highlighted}
+        onArtistPress={(artist) =>
+          artist.artist_id &&
+          navigation.navigate('ArtistDetail', { artistId: artist.artist_id, artistName: artist.artista })
+        }
+      />
 
       {festival.mapa_url && (
         <View>
@@ -822,25 +741,10 @@ const styles = StyleSheet.create({
     ...type.label,
     color: colors.textSecondary,
   },
-  lineupArtistRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    paddingVertical: spacing.xs,
-    paddingLeft: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
   lineupArtistName: {
     ...type.body,
     color: colors.textPrimary,
     flexShrink: 1,
-  },
-  lineupArtistMeta: {
-    ...type.caption,
-    color: colors.textSecondary,
-    flexShrink: 0,
   },
   card: {
     backgroundColor: colors.bgElevated,

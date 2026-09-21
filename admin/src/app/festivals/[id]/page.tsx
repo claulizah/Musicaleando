@@ -14,7 +14,8 @@ import { AnnouncementSegment } from './announcement-segment';
 import { DeleteAnnouncementButton } from './delete-announcement-button';
 import { SelectWinnerButton } from './select-winner-button';
 import { MapUploader } from './map-uploader';
-import { groupLineupByDay } from '@/lib/lineupByDay';
+import { groupLineupByDay, formatRango } from '@/lib/lineupSchedule';
+import { LineupNivelSelect } from './lineup-nivel-select';
 
 const TIPO_LABEL: Record<string, string> = {
   simple: '📣 Anuncio',
@@ -50,7 +51,7 @@ export default async function FestivalDetailPage({
 
   const { data: lineup } = await supabase
     .from('festival_lineup')
-    .select('id, artista, escenario, horario')
+    .select('id, artista, escenario, horario, horario_fin, nivel')
     .eq('festival_id', id)
     .order('horario', { ascending: true, nullsFirst: false });
 
@@ -73,7 +74,7 @@ export default async function FestivalDetailPage({
 
   const { data: lineupCandidates } = await supabase
     .from('festival_lineup_candidates')
-    .select('id, batch_id, dia_label, escenario, artista, hora_inicio, hora_fin, confianza, nota')
+    .select('id, batch_id, dia_label, escenario, artista, hora_inicio, hora_fin, confianza, nota, nivel')
     .eq('festival_id', id)
     .order('created_at', { ascending: true });
 
@@ -96,7 +97,17 @@ export default async function FestivalDetailPage({
   const escenarios = [...new Set((lineup ?? []).map((l) => l.escenario).filter((e): e is string => !!e))];
   const lineupByDay = groupLineupByDay(lineup ?? [], festival.fecha_inicio, festival.fecha_fin);
 
-  function renderLineupRow(row: { id: string; artista: string; escenario: string | null; horario: string | null }) {
+  function renderLineupRow(row: {
+    id: string;
+    artista: string;
+    escenario: string | null;
+    horario: string | null;
+    horario_fin: string | null;
+    nivel: string | null;
+  }) {
+    // Hora de pared del cartel, en 24 h (ver lineupSchedule.ts); un horario a
+    // las 00:00 es solo el día y no se muestra como hora.
+    const rango = formatRango(row.horario, row.horario_fin);
     return (
       <li
         key={row.id}
@@ -105,9 +116,12 @@ export default async function FestivalDetailPage({
         <span>
           <span className="font-medium">{row.artista}</span>
           {row.escenario && <span className="text-gray-500"> · {row.escenario}</span>}
-          {row.horario && <span className="text-gray-400"> · {new Date(row.horario).toLocaleString('es-MX')}</span>}
+          {rango && <span className="text-gray-400"> · {rango}</span>}
         </span>
-        <DeleteLineupRowButton festivalId={festivalId} rowId={row.id} />
+        <span className="flex items-center gap-3">
+          <LineupNivelSelect festivalId={festivalId} rowId={row.id} nivel={row.nivel} />
+          <DeleteLineupRowButton festivalId={festivalId} rowId={row.id} />
+        </span>
       </li>
     );
   }
@@ -171,6 +185,7 @@ export default async function FestivalDetailPage({
           <LineupImageImporter
             festivalId={festival.id}
             fechaInicio={festival.fecha_inicio}
+            fechaFin={festival.fecha_fin}
             pendingByBatch={pendingByBatch}
           />
         </div>
