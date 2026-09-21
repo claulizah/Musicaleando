@@ -20,6 +20,7 @@ import { badgeFor } from '../../lib/badges';
 import { nextLevel } from '../../lib/levels';
 import { supabase } from '../../lib/supabase';
 import { colors, radii, spacing, type } from '../../theme';
+import { WhatsNewCard } from '../../components/WhatsNewCard';
 
 type CityEnergiaComparison = { ciudad: string; promedio: number | null; muestras: number };
 
@@ -178,6 +179,7 @@ export function ProfileScreen({ navigation }: Props) {
             <Text style={styles.settingsIcon}>⚙️</Text>
           </Pressable>
         </View>
+        <WhatsNewCard screen="Profile" />
 
         <ArchetypeCard
           archetype={archetype}

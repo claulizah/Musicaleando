@@ -1,0 +1,21 @@
+name: Pruebas automatizadas
+
+# Corre las pruebas unitarias en cada push y pull request. No instala
+# dependencias del proyecto (las pruebas usan solo el ejecutor de pruebas que
+# ya trae Node) y no toca la red ni la base de datos, así que tarda segundos.
+# Las pruebas de integración contra el backend real NO corren aquí: se lanzan
+# a mano con `npm run test:integration` (crean y borran una cuenta descartable).
+on:
+  push:
+  pull_request:
+  workflow_dispatch: {}
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm test

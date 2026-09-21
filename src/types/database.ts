@@ -622,6 +622,57 @@ export type Database = {
           },
         ]
       }
+      novedades: {
+        Row: {
+          activa: boolean
+          created_at: string
+          cuerpo: string
+          id: string
+          pantalla: string
+          publicada_en: string
+          titulo: string
+          vigente_hasta: string | null
+        }
+        Insert: {
+          activa?: boolean
+          created_at?: string
+          cuerpo: string
+          id: string
+          pantalla: string
+          publicada_en?: string
+          titulo: string
+          vigente_hasta?: string | null
+        }
+        Update: {
+          activa?: boolean
+          created_at?: string
+          cuerpo?: string
+          id?: string
+          pantalla?: string
+          publicada_en?: string
+          titulo?: string
+          vigente_hasta?: string | null
+        }
+        Relationships: []
+      }
+      novedades_vistas: {
+        Row: {
+          novedad_id: string
+          user_id: string
+          visto_en: string
+        }
+        Insert: {
+          novedad_id: string
+          user_id: string
+          visto_en?: string
+        }
+        Update: {
+          novedad_id?: string
+          user_id?: string
+          visto_en?: string
+        }
+        Relationships: []
+      }
       app_config: {
         Row: {
           key: string

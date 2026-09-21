@@ -9,6 +9,7 @@ import { useSessionStore } from '../../store/useSessionStore';
 import { useFestivalStore } from '../../store/useFestivalStore';
 import { useConcertAlbumStore } from '../../store/useConcertAlbumStore';
 import { colors, radii, spacing, type } from '../../theme';
+import { WhatsNewCard } from '../../components/WhatsNewCard';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ConcertAlbum'>;
 
@@ -87,6 +88,7 @@ export function ConcertAlbumScreen({ navigation }: Props) {
           <Text style={styles.headerTitle}>Mi álbum de conciertos</Text>
           <View style={styles.headerSpacer} />
         </View>
+        <WhatsNewCard screen="ConcertAlbum" />
 
         <Text style={styles.hint}>
           Solo tú y tu squad pueden ver estas fotos — nunca son públicas para el resto de la

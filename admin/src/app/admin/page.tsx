@@ -117,6 +117,12 @@ export default async function DashboardPage() {
             <Link href="/admin/clics" className="rounded-md bg-gray-100 px-3 py-1.5 text-gray-700">
               🎟 Clics de compra
             </Link>
+            <Link href="/admin/metricas" className="rounded-md bg-gray-100 px-3 py-1.5 text-gray-700">
+              📊 Métricas
+            </Link>
+            <Link href="/admin/novedades" className="rounded-md bg-gray-100 px-3 py-1.5 text-gray-700">
+              ✨ Novedades
+            </Link>
             <Link href="/admin/calendario" className="rounded-md bg-gray-100 px-3 py-1.5 text-gray-700">
               📅 Calendario
             </Link>

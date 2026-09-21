@@ -12,6 +12,7 @@ import { useFestivalStore } from '../../store/useFestivalStore';
 import { useEventFilters } from '../../hooks/useEventFilters';
 import { Tables } from '../../types/database';
 import { colors, radii, spacing, type } from '../../theme';
+import { WhatsNewCard } from '../../components/WhatsNewCard';
 
 type FestivalOption = Pick<Tables<'festivals'>, 'id' | 'nombre'>;
 
@@ -109,6 +110,7 @@ export function SquadsScreen({ navigation }: Props) {
           <Text style={styles.headerTitle}>Tus squads</Text>
           <View style={styles.headerSpacer} />
         </View>
+        <WhatsNewCard screen="Squads" />
 
         {status === 'loading' && squads.length === 0 && (
           <Text style={styles.hint}>Cargando tus squads...</Text>

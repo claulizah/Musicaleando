@@ -13,6 +13,7 @@ import { openListenLink } from '../../lib/musicLinks';
 import { resolveOrCreateSong } from '../../lib/resolveOrCreateSong';
 import { ContentReportMotivo } from '../../types/database';
 import { colors, radii, spacing, type } from '../../theme';
+import { WhatsNewCard } from '../../components/WhatsNewCard';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'CommunityTrends'>;
 
@@ -165,6 +166,7 @@ export function CommunityTrendsScreen({ navigation }: Props) {
           <Text style={styles.headerTitle}>Trends comunitarios</Text>
           <View style={styles.headerSpacer} />
         </View>
+        <WhatsNewCard screen="CommunityTrends" />
 
         <View style={styles.scopeRow}>
           <Pressable

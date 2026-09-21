@@ -26,6 +26,7 @@ import { trackTicketClick } from '../../lib/trackTicketClick';
 import { useAppConfigStore } from '../../store/useAppConfigStore';
 import { dateBucketFor, DATE_BUCKET_LABEL, DATE_BUCKET_ORDER } from '../../lib/dateBuckets';
 import { colors, radii, spacing, type } from '../../theme';
+import { WhatsNewCard } from '../../components/WhatsNewCard';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Festivals'>;
 
@@ -111,6 +112,7 @@ export function FestivalHubScreen({ navigation, route }: Props) {
           <Text style={styles.headerTitle}>Conciertos y festivales</Text>
           <View style={styles.headerSpacer} />
         </View>
+        <WhatsNewCard screen="Festivals" />
 
         <EventFilterBar
           query={filters.query}

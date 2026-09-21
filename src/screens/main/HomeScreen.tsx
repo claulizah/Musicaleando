@@ -24,6 +24,7 @@ import { formatTrend } from '../../lib/trends';
 import { supabase } from '../../lib/supabase';
 import { currentWeeklyChallenge, startOfWeekIso, WeeklyChallenge } from '../../lib/weeklyChallenge';
 import { colors, radii, spacing, type } from '../../theme';
+import { WhatsNewCard } from '../../components/WhatsNewCard';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
@@ -134,6 +135,7 @@ export function HomeScreen({ navigation }: Props) {
                 más adelante; solo se le quitan los puntos de entrada. */}
           </View>
         </View>
+        <WhatsNewCard screen="Home" />
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>Tu mood de hoy</Text>

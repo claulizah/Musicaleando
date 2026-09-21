@@ -21,6 +21,10 @@ export type Database = {
         Args: { p_festival_id: string; p_ciudad: string | null; p_genero: string | null };
         Returns: number;
       };
+      admin_metrics: {
+        Args: Record<string, never>;
+        Returns: unknown;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
@@ -114,6 +118,30 @@ export type Database = {
           updated_at?: string;
         };
         Update: Partial<Database['public']['Tables']['app_config']['Row']>;
+        Relationships: [];
+      };
+      novedades: {
+        Row: {
+          id: string;
+          pantalla: string;
+          titulo: string;
+          cuerpo: string;
+          publicada_en: string;
+          vigente_hasta: string | null;
+          activa: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          pantalla: string;
+          titulo: string;
+          cuerpo: string;
+          publicada_en?: string;
+          vigente_hasta?: string | null;
+          activa?: boolean;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['novedades']['Row']>;
         Relationships: [];
       };
       ticket_clicks: {
