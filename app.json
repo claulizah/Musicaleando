@@ -43,7 +43,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Musicaleando necesita acceso a tus fotos para agregarlas a tu álbum de conciertos."
+          "photosPermission": "Musicaleando necesita acceso a tus fotos para agregarlas a tu álbum de conciertos.",
+          "cameraPermission": false,
+          "microphonePermission": false
         }
       ],
       "@sentry/react-native"
