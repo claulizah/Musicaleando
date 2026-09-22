@@ -16,12 +16,15 @@ import { cleanEventNameSafe } from '@/lib/cleanEventName';
 import { categorizeEvent, CATEGORY_LABEL, type EventCategory } from '@/lib/eventCategory';
 import { dateBucketFor, DATE_BUCKET_LABEL, DATE_BUCKET_ORDER } from '@/lib/dateBuckets';
 import { groupLineupByDay } from '@/lib/lineupSchedule';
+import { csvFilename, downloadCsvAsync } from '@/lib/csvExport';
 import type { Database } from '@/lib/database.types';
 
 type Candidate = Database['public']['Tables']['event_candidates']['Row'];
 
 const SOURCE_LABEL: Record<string, string> = {
   ticketmaster: 'Ticketmaster',
+  eticket: 'eticket.mx',
+  superboletos: 'Superboletos',
   poster_image: '📷 Póster (admin)',
   sumision_publica: '🌐 Sumisión pública',
   link: '🔗 Link',
@@ -289,6 +292,7 @@ export function CandidatosList({
   candidates: Candidate[];
   festivalNameById: Map<string, string>;
 }) {
+  const [exporting, setExporting] = useState(false);
   const [query, setQuery] = useState('');
   const [groupBy, setGroupBy] = useState<GroupBy>('evento');
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
@@ -321,6 +325,29 @@ export function CandidatosList({
       return haystack.includes(q);
     });
   }, [candidates, query, sourceFilter, categoryFilter]);
+
+  // Exporta exactamente lo que está filtrado en pantalla (búsqueda + fuente
+  // + categoría) — así se puede exportar solo lo que se está revisando en
+  // ese momento, no siempre los 700+ candidatos completos.
+  const exportCsv = async () => {
+    setExporting(true);
+    try {
+      const headers = ['nombre', 'fecha', 'ciudad', 'venue', 'estado', 'fuente', 'posible_duplicado', 'artistas'];
+      const rows = filtered.map((c) => [
+        c.nombre,
+        c.fecha_inicio ?? '',
+        c.ciudad ?? '',
+        c.venue ?? '',
+        c.estado,
+        SOURCE_LABEL[c.source] ?? c.source,
+        c.possible_duplicate_of ? festivalNameById.get(c.possible_duplicate_of) ?? 'sí' : '',
+        lineupArtistNames(c.lineup).join(', '),
+      ]);
+      await downloadCsvAsync(csvFilename('candidatos'), headers, rows);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   // Conteo real por categoría sobre lo ya filtrado por texto/fuente — sirve
   // tanto para los chips del filtro como para saber cuántos entrarían al
@@ -477,6 +504,14 @@ export function CandidatosList({
           placeholder="Buscar por nombre, ciudad, venue o artista…"
           className="min-w-[16rem] flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm"
         />
+        <button
+          type="button"
+          onClick={exportCsv}
+          disabled={exporting}
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 disabled:opacity-50"
+        >
+          {exporting ? 'Generando…' : `⬇ Exportar CSV (${filtered.length})`}
+        </button>
         <div className="flex items-center gap-2 text-sm">
           <span className="text-gray-500">Agrupar:</span>
           {(

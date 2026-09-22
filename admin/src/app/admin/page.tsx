@@ -19,7 +19,7 @@ export default async function DashboardPage() {
   }
 
   const supabase = await createClient();
-  const [{ data: festivals }, { count: eventPendingCount }, { count: songPendingCount }, { data: venues }] =
+  const [{ data: festivals }, { count: eventPendingCount }, { count: songPendingCount }, { data: venues }, { data: approvedCandidates }] =
     await Promise.all([
       supabase
         .from('festivals')
@@ -28,8 +28,15 @@ export default async function DashboardPage() {
       supabase.from('event_candidates').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
       supabase.from('mood_playlists').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
       supabase.from('venues').select('id, name'),
+      // Fuente de origen de cada festival aprobado — event_candidates es la
+      // única tabla que guarda esto (festivals no tiene columna `source`);
+      // ver scripts/generate-venues-backfill.mts para el mismo criterio.
+      supabase.from('event_candidates').select('festival_id, source').not('festival_id', 'is', null),
     ]);
   const venueNameById = Object.fromEntries((venues ?? []).map((v) => [v.id, v.name]));
+  const sourceByFestival = Object.fromEntries(
+    (approvedCandidates ?? []).filter((c) => c.festival_id).map((c) => [c.festival_id as string, c.source]),
+  );
 
   // festival_lineup ya tiene 1400+ filas (más que el límite de 1000 filas
   // por página que aplica PostgREST por default) — se pagina explícito para
@@ -140,6 +147,7 @@ export default async function DashboardPage() {
         festivals={festivals ?? []}
         lineupByFestival={Object.fromEntries(lineupByFestival)}
         venueNameById={venueNameById}
+        sourceByFestival={sourceByFestival}
       />
     </main>
   );

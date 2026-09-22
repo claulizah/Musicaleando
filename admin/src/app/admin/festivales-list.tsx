@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { resolveEstado, OTRO_ESTADO_LABEL } from '@/lib/mexicoEstados';
 import { categorizeEvent, CATEGORY_LABEL, type EventCategory } from '@/lib/eventCategory';
 import { dateBucketFor, DATE_BUCKET_LABEL, DATE_BUCKET_ORDER } from '@/lib/dateBuckets';
+import { csvFilename, downloadCsvAsync } from '@/lib/csvExport';
 
 type Festival = {
   id: string;
@@ -23,6 +24,16 @@ type EstadoFilter = 'activo' | 'archivado';
 type GroupBy = 'evento' | 'artista' | 'estado' | 'lugar' | 'categoria' | 'fecha';
 
 const SIN_LUGAR_LABEL = '(sin lugar)';
+
+const SOURCE_LABEL: Record<string, string> = {
+  ticketmaster: 'Ticketmaster',
+  eticket: 'eticket.mx',
+  superboletos: 'Superboletos',
+  poster_image: 'Póster (admin)',
+  sumision_publica: 'Sumisión pública',
+  link: 'Link',
+  carga_inicial: 'Carga inicial',
+};
 
 function normalizeText(s: string): string {
   return s
@@ -69,11 +80,14 @@ export function FestivalesList({
   festivals,
   lineupByFestival = {},
   venueNameById = {},
+  sourceByFestival = {},
 }: {
   festivals: Festival[];
   lineupByFestival?: Record<string, string[]>;
   venueNameById?: Record<string, string>;
+  sourceByFestival?: Record<string, string>;
 }) {
+  const [exporting, setExporting] = useState(false);
   const [query, setQuery] = useState('');
   const [groupBy, setGroupBy] = useState<GroupBy>('evento');
   const [categoryFilter, setCategoryFilter] = useState<EventCategory | null>(null);
@@ -111,6 +125,32 @@ export function FestivalesList({
       return haystack.includes(q);
     });
   }, [scoped, lineupByFestival, query, categoryFilter]);
+
+  // Exporta exactamente lo que está filtrado en pantalla (búsqueda + tipo de
+  // categoría + activo/archivado) — mismo criterio que /candidatos.
+  const exportCsv = async () => {
+    setExporting(true);
+    try {
+      const headers = ['nombre', 'fecha_inicio', 'fecha_fin', 'ciudad', 'estado', 'lugar', 'categoria', 'fuente', 'artistas'];
+      const rows = filtered.map((f) => {
+        const artistas = lineupByFestival[f.id] ?? [];
+        return [
+          f.nombre,
+          f.fecha_inicio,
+          f.fecha_fin,
+          f.ciudad,
+          resolveEstado(f.ciudad),
+          (f.venue_id && venueNameById[f.venue_id]) || '',
+          CATEGORY_LABEL[categorizeEvent(f)],
+          SOURCE_LABEL[sourceByFestival[f.id] ?? ''] ?? sourceByFestival[f.id] ?? '',
+          artistas.join(', '),
+        ];
+      });
+      await downloadCsvAsync(csvFilename('catalogo'), headers, rows);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const groups = useMemo(() => {
     if (groupBy === 'evento') return [{ key: '__all__', label: null as string | null, items: filtered }];
@@ -174,6 +214,14 @@ export function FestivalesList({
           placeholder="Buscar por nombre, ciudad o artista…"
           className="min-w-[16rem] flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm"
         />
+        <button
+          type="button"
+          onClick={exportCsv}
+          disabled={exporting}
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 disabled:opacity-50"
+        >
+          {exporting ? 'Generando…' : `⬇ Exportar CSV (${filtered.length})`}
+        </button>
         <div className="flex items-center gap-2 text-sm">
           <span className="text-gray-500">Agrupar:</span>
           {(
