@@ -35,6 +35,15 @@ yarn-error.*
 .env*.local
 env.txt
 
+# Credenciales de Firebase (Android push / FCM V1) — nunca al repo.
+# google-services.json vive en la raíz del proyecto Expo (junto a app.json)
+# porque eas build lo necesita ahí; la clave de cuenta de servicio de
+# Firebase Admin (para subir a EAS vía `eas credentials`) NUNCA debe tocar
+# este repo — se sube directo desde donde Claudia la descargó.
+google-services.json
+*firebase-adminsdk*.json
+*service-account*.json
+
 # typescript
 *.tsbuildinfo
 

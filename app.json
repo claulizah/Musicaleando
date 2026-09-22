@@ -15,6 +15,7 @@
     "android": {
       "package": "com.musicaleando.app",
       "versionCode": 5,
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#14111F",
         "foregroundImage": "./assets/android-icon-foreground.png",
