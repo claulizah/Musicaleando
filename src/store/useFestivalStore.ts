@@ -54,6 +54,10 @@ type Status = 'idle' | 'loading' | 'ready' | 'error';
 
 type FestivalState = {
   festivals: FestivalWithIntent[];
+  // Catálogo completo de lugares (tabla chica, ~100 filas) — se trae entero
+  // en paralelo con lo demás para poder mostrar/enlazar el nombre del venue
+  // en cada tarjeta sin una consulta por festival.
+  venues: Tables<'venues'>[];
   status: Status;
   error: string | null;
   fetch: (userId: string) => Promise<void>;
@@ -79,6 +83,7 @@ type FestivalState = {
 
 export const useFestivalStore = create<FestivalState>((set, get) => ({
   festivals: [],
+  venues: [],
   status: 'idle',
   error: null,
 
@@ -120,7 +125,7 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
 
     const festivalIds = (festivalRows ?? []).map((f) => f.id);
     if (festivalIds.length === 0) {
-      set({ festivals: [], status: 'ready' });
+      set({ festivals: [], venues: [], status: 'ready' });
       return;
     }
 
@@ -142,6 +147,7 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
       { data: surveyRows, error: surveyErr },
       { data: myUserRow },
       { data: myProfileRow },
+      { data: venueRows },
     ] = await Promise.all([
       // RLS scopes this to my own rows + my squadmates' rows automatically.
       fetchAllByIds(festivalIds, (chunk) => supabase.from('festival_intent').select('*').in('festival_id', chunk)),
@@ -173,6 +179,7 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
       // otros usuarios aquí.
       supabase.from('users').select('ciudad').eq('id', userId).maybeSingle(),
       supabase.from('music_profile').select('generos').eq('user_id', userId).maybeSingle(),
+      supabase.from('venues').select('*'),
     ]);
 
     for (const err of [intentErr, lineupErr, reactionErr, feedbackErr, commentErr, announcementErr, mapPinErr, surveyErr]) {
@@ -257,7 +264,7 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
       };
     });
 
-    set({ festivals, status: 'ready' });
+    set({ festivals, venues: venueRows ?? [], status: 'ready' });
   },
 
   setStatus: async (userId, festivalId, newStatus) => {

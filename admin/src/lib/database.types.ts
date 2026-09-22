@@ -102,10 +102,11 @@ export type Database = {
           preventa_fin: string | null;
           preventa_inicio: string | null;
           tipo_descuento: string | null;
+          venue_id: string | null;
         };
         Insert: Omit<
           Database['public']['Tables']['festivals']['Row'],
-          'id' | 'created_at' | 'mapa_url' | 'tipo' | 'estado_evento' | 'descuento_detalle' | 'descuento_vigente_hasta' | 'preventa_detalle' | 'preventa_fin' | 'preventa_inicio' | 'tipo_descuento'
+          'id' | 'created_at' | 'mapa_url' | 'tipo' | 'estado_evento' | 'descuento_detalle' | 'descuento_vigente_hasta' | 'preventa_detalle' | 'preventa_fin' | 'preventa_inicio' | 'tipo_descuento' | 'venue_id'
         > & {
           id?: string;
           created_at?: string;
@@ -118,8 +119,29 @@ export type Database = {
           preventa_fin?: string | null;
           preventa_inicio?: string | null;
           tipo_descuento?: string | null;
+          venue_id?: string | null;
         };
         Update: Partial<Database['public']['Tables']['festivals']['Row']>;
+        Relationships: [];
+      };
+      venues: {
+        Row: {
+          id: string;
+          name: string;
+          city: string;
+          state: string;
+          normalized_name: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          city: string;
+          state: string;
+          normalized_name: string;
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['venues']['Row']>;
         Relationships: [];
       };
       app_config: {

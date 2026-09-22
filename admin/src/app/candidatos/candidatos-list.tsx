@@ -33,7 +33,9 @@ const TIPO_LABEL: Record<string, string> = {
   concierto: '🎤 Concierto',
 };
 
-type GroupBy = 'evento' | 'artista' | 'estado' | 'categoria' | 'fecha';
+type GroupBy = 'evento' | 'artista' | 'estado' | 'lugar' | 'categoria' | 'fecha';
+
+const SIN_LUGAR_LABEL = '(sin lugar)';
 
 function formatLineupItem(item: string | { artista: string; escenario: string | null; horario: string | null }): string {
   if (typeof item === 'string') return item;
@@ -358,6 +360,21 @@ export function CandidatosList({
         items: map.get(b)!,
       }));
     }
+    if (groupBy === 'lugar') {
+      const map = new Map<string, Candidate[]>();
+      for (const c of filtered) {
+        const key = c.venue?.trim() || SIN_LUGAR_LABEL;
+        if (!map.has(key)) map.set(key, []);
+        map.get(key)!.push(c);
+      }
+      return [...map.entries()]
+        .map(([key, items]) => ({ key, label: key, items }))
+        .sort((a, b) => {
+          if (a.label === SIN_LUGAR_LABEL) return 1;
+          if (b.label === SIN_LUGAR_LABEL) return -1;
+          return a.label.localeCompare(b.label);
+        });
+    }
     const map = new Map<string, { label: string; items: Candidate[] }>();
     for (const c of filtered) {
       const key = groupBy === 'artista' ? artistGroupKey(c) : resolveEstado(c.ciudad);
@@ -467,6 +484,7 @@ export function CandidatosList({
               { id: 'evento', label: 'Por evento' },
               { id: 'artista', label: 'Por artista' },
               { id: 'estado', label: 'Por estado' },
+              { id: 'lugar', label: 'Por lugar' },
               { id: 'categoria', label: 'Por categoría' },
               { id: 'fecha', label: 'Por fecha' },
             ] as { id: GroupBy; label: string }[]

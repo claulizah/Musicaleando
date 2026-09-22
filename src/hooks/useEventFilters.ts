@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { FestivalWithIntent } from '../store/useFestivalStore';
 import { fetchFestivalPersonalization } from '../lib/spotify';
 import { descuentoVigente, mexicoToday, preventaVigente } from '../lib/descuentos';
+import type { Tables } from '../types/database';
 
 export type DateFilter = 'todos' | 'proximos7' | 'este_mes';
 export type TipoFilter = 'todos' | 'festival' | 'concierto';
@@ -45,7 +46,15 @@ function matchesDateFilter(fechaInicio: string, filter: DateFilter): boolean {
 // vivo de Spotify — por eso es un toggle, no un selector de género
 // arbitrario, y por eso se llama UNA sola vez con el line-up combinado de
 // todo lo ya filtrado en vez de una vez por evento.
-export function useEventFilters(allEntries: FestivalWithIntent[], misGeneros: string[]) {
+export function useEventFilters(
+  allEntries: FestivalWithIntent[],
+  misGeneros: string[],
+  // Catálogo de lugares (ver useFestivalStore.venues), para el filtro por
+  // estado de la República — el estado vive en el venue, no en el festival.
+  // Opcional: si no se pasa, el filtro de estado simplemente no ofrece
+  // opciones (comportamiento igual al de antes de que existiera la ficha de lugar).
+  venues: Tables<'venues'>[] = [],
+) {
   // Los eventos archivados (ya vencidos) no se muestran al explorar — salvo
   // uno donde el usuario dijo "Voy" y todavía debe la encuesta post-evento,
   // que vive dentro de la tarjeta del propio evento en esta lista.
@@ -55,6 +64,7 @@ export function useEventFilters(allEntries: FestivalWithIntent[], misGeneros: st
   );
   const [query, setQuery] = useState('');
   const [ciudad, setCiudad] = useState<string | null>(null);
+  const [estadoRepublica, setEstadoRepublica] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState<DateFilter>('todos');
   const [tipoFilter, setTipoFilter] = useState<TipoFilter>('todos');
   const [soloMisGeneros, setSoloMisGeneros] = useState(false);
@@ -67,6 +77,17 @@ export function useEventFilters(allEntries: FestivalWithIntent[], misGeneros: st
     const set = new Set(entries.map((e) => e.festival.ciudad).filter((c): c is string => Boolean(c)));
     return [...set].sort();
   }, [entries]);
+
+  const venueById = useMemo(() => new Map(venues.map((v) => [v.id, v])), [venues]);
+
+  const estadosRepublica = useMemo(() => {
+    const set = new Set(
+      entries
+        .map((e) => (e.festival.venue_id ? venueById.get(e.festival.venue_id)?.state : null))
+        .filter((s): s is string => Boolean(s)),
+    );
+    return [...set].sort();
+  }, [entries, venueById]);
 
   // Cuántos eventos tienen hoy un descuento / una preventa vigente: el chip
   // solo se ofrece si hay algo que filtrar (o ya está activado).
@@ -93,6 +114,7 @@ export function useEventFilters(allEntries: FestivalWithIntent[], misGeneros: st
     const hoy = mexicoToday(new Date());
     return textFiltered.filter((e) => {
       if (ciudad && e.festival.ciudad !== ciudad) return false;
+      if (estadoRepublica && venueById.get(e.festival.venue_id ?? '')?.state !== estadoRepublica) return false;
       if (soloDescuento && !descuentoVigente(e.festival, hoy)) return false;
       if (soloPreventa && preventaVigente(e.festival, hoy) === null) return false;
       if (tipoFilter !== 'todos' && e.festival.tipo !== tipoFilter) return false;
@@ -103,7 +125,18 @@ export function useEventFilters(allEntries: FestivalWithIntent[], misGeneros: st
       }
       return true;
     });
-  }, [textFiltered, ciudad, tipoFilter, dateFilter, soloMisGeneros, generoMatchArtists, soloDescuento, soloPreventa]);
+  }, [
+    textFiltered,
+    ciudad,
+    estadoRepublica,
+    venueById,
+    tipoFilter,
+    dateFilter,
+    soloMisGeneros,
+    generoMatchArtists,
+    soloDescuento,
+    soloPreventa,
+  ]);
 
   const runGenreMatch = async () => {
     if (misGeneros.length === 0) return;
@@ -133,6 +166,9 @@ export function useEventFilters(allEntries: FestivalWithIntent[], misGeneros: st
     ciudad,
     setCiudad,
     ciudades,
+    estadoRepublica,
+    setEstadoRepublica,
+    estadosRepublica,
     dateFilter,
     setDateFilter,
     tipoFilter,

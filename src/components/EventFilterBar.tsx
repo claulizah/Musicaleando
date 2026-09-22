@@ -20,6 +20,7 @@ const DATE_OPTIONS: { id: DateFilter; label: string }[] = [
 // es `string | null`, pero un dropdown necesita un id de opción concreto
 // para el valor "sin filtro".
 const CIUDAD_TODAS = '__todas__';
+const ESTADO_TODOS = '__todos__';
 
 export type EventFilterBarProps = {
   query: string;
@@ -27,6 +28,9 @@ export type EventFilterBarProps = {
   ciudad: string | null;
   onCiudadChange: (c: string | null) => void;
   ciudades: string[];
+  estadoRepublica: string | null;
+  onEstadoRepublicaChange: (e: string | null) => void;
+  estadosRepublica: string[];
   dateFilter: DateFilter;
   onDateFilterChange: (f: DateFilter) => void;
   tipoFilter: TipoFilter;
@@ -65,6 +69,9 @@ export function EventFilterBar({
   ciudad,
   onCiudadChange,
   ciudades,
+  estadoRepublica,
+  onEstadoRepublicaChange,
+  estadosRepublica,
   dateFilter,
   onDateFilterChange,
   tipoFilter,
@@ -80,7 +87,8 @@ export function EventFilterBar({
   promoCounts,
 }: EventFilterBarProps) {
   const [showMore, setShowMore] = useState(false);
-  const activeExtraCount = (dateFilter !== 'todos' ? 1 : 0) + (ciudad ? 1 : 0) + (soloMisGeneros ? 1 : 0);
+  const activeExtraCount =
+    (dateFilter !== 'todos' ? 1 : 0) + (ciudad ? 1 : 0) + (estadoRepublica ? 1 : 0) + (soloMisGeneros ? 1 : 0);
 
   return (
     <View style={styles.wrap}>
@@ -125,6 +133,15 @@ export function EventFilterBar({
               options={[{ id: CIUDAD_TODAS, label: 'Todas las ciudades' }, ...ciudades.map((c) => ({ id: c, label: c }))]}
               value={ciudad ?? CIUDAD_TODAS}
               onChange={(v) => onCiudadChange(v === CIUDAD_TODAS ? null : v)}
+            />
+          )}
+
+          {estadosRepublica.length > 0 && (
+            <Dropdown
+              label="Estado"
+              options={[{ id: ESTADO_TODOS, label: 'Todos los estados' }, ...estadosRepublica.map((e) => ({ id: e, label: e }))]}
+              value={estadoRepublica ?? ESTADO_TODOS}
+              onChange={(v) => onEstadoRepublicaChange(v === ESTADO_TODOS ? null : v)}
             />
           )}
 

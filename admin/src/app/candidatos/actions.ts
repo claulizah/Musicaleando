@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requireAdmin } from '@/lib/admin';
 import { createClient } from '@/lib/supabase/server';
 import { resolveArtistIds } from '@/lib/artists';
+import { resolveVenueId } from '@/lib/venues';
 import { cleanEventNameSafe } from '@/lib/cleanEventName';
 import { normalizeHorario } from '@/lib/normalizeHorario';
 import { logAdminAction } from '@/lib/adminActionsLog';
@@ -49,7 +50,7 @@ export async function approveCandidate(
 
   const { data: candidate, error: candidateError } = await supabase
     .from('event_candidates')
-    .select('lineup, estado, source')
+    .select('lineup, estado, source, venue')
     .eq('id', candidateId)
     .maybeSingle();
   if (candidateError) return { error: candidateError.message };
@@ -61,9 +62,15 @@ export async function approveCandidate(
     return { error: 'Falta el link de boletos.' };
   }
 
+  // El lugar/recinto (ficha de venue) se resuelve del nombre que trae el
+  // candidato + la ciudad final del evento — igual que resolveArtistIds,
+  // crea el venue si no existe. Sin nombre de venue el evento igual se
+  // aprueba (el FK es opcional).
+  const venue_id = await resolveVenueId(supabase, candidate.venue, ciudad);
+
   const { data: festival, error: insertError } = await supabase
     .from('festivals')
-    .insert({ nombre, tipo: tipo ?? 'concierto', ciudad, fecha_inicio, fecha_fin, link_boletos: link_boletos || null })
+    .insert({ nombre, tipo: tipo ?? 'concierto', ciudad, fecha_inicio, fecha_fin, link_boletos: link_boletos || null, venue_id })
     .select('id')
     .single();
   if (insertError) return { error: insertError.message };

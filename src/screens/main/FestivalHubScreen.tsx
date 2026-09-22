@@ -80,7 +80,8 @@ export function FestivalHubScreen({ navigation, route }: Props) {
   const reportComment = useFestivalStore((s) => s.reportComment);
   const squads = useSquadStore((s) => s.squads);
   const fetchMySquads = useSquadStore((s) => s.fetchMySquads);
-  const filters = useEventFilters(festivals, generos);
+  const venues = useFestivalStore((s) => s.venues);
+  const filters = useEventFilters(festivals, generos, venues);
 
   useEffect(() => {
     if (userId) fetchFestivals(userId);
@@ -122,6 +123,9 @@ export function FestivalHubScreen({ navigation, route }: Props) {
           ciudad={filters.ciudad}
           onCiudadChange={filters.setCiudad}
           ciudades={filters.ciudades}
+          estadoRepublica={filters.estadoRepublica}
+          onEstadoRepublicaChange={filters.setEstadoRepublica}
+          estadosRepublica={filters.estadosRepublica}
           dateFilter={filters.dateFilter}
           onDateFilterChange={filters.setDateFilter}
           tipoFilter={filters.tipoFilter}
@@ -262,6 +266,7 @@ function FestivalCard({
     mapPins,
     survey,
   } = entry;
+  const venue = useFestivalStore((s) => s.venues).find((v) => v.id === festival.venue_id);
   const [showSquadGoing, setShowSquadGoing] = useState(false);
   const [showMap, setShowMap] = useState(false);
   const [selectedEscenario, setSelectedEscenario] = useState<string | null>(null);
@@ -346,6 +351,13 @@ function FestivalCard({
       <Text style={styles.meta} numberOfLines={1}>
         {festival.ciudad} · {formatRange(festival.fecha_inicio, festival.fecha_fin)}
       </Text>
+      {venue && (
+        <Pressable onPress={() => navigation.navigate('VenueDetail', { venueId: venue.id, venueName: venue.name })}>
+          <Text style={styles.venueLink} numberOfLines={1}>
+            📍 {venue.name}
+          </Text>
+        </Pressable>
+      )}
       {(() => {
         // Descuento / preventa vigentes (se apagan solos al vencer, ver
         // lib/descuentos.ts). Visibles aun con la tarjeta colapsada: es lo
@@ -827,6 +839,10 @@ const styles = StyleSheet.create({
   meta: {
     ...type.body,
     color: colors.textSecondary,
+  },
+  venueLink: {
+    ...type.caption,
+    color: colors.accentPrimary,
   },
   promoBanner: {
     backgroundColor: colors.accentPrimaryMuted,

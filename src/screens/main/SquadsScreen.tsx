@@ -40,7 +40,8 @@ export function SquadsScreen({ navigation }: Props) {
   // mismo shape de datos que el catálogo principal.
   const richFestivals = useFestivalStore((s) => s.festivals);
   const fetchFestivals = useFestivalStore((s) => s.fetch);
-  const filters = useEventFilters(richFestivals, generos);
+  const venues = useFestivalStore((s) => s.venues);
+  const filters = useEventFilters(richFestivals, generos, venues);
 
   const [nombre, setNombre] = useState('');
   const [code, setCode] = useState('');
@@ -178,6 +179,9 @@ export function SquadsScreen({ navigation }: Props) {
             ciudad={filters.ciudad}
             onCiudadChange={filters.setCiudad}
             ciudades={filters.ciudades}
+            estadoRepublica={filters.estadoRepublica}
+            onEstadoRepublicaChange={filters.setEstadoRepublica}
+            estadosRepublica={filters.estadosRepublica}
             dateFilter={filters.dateFilter}
             onDateFilterChange={filters.setDateFilter}
             tipoFilter={filters.tipoFilter}

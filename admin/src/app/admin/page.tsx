@@ -19,14 +19,17 @@ export default async function DashboardPage() {
   }
 
   const supabase = await createClient();
-  const [{ data: festivals }, { count: eventPendingCount }, { count: songPendingCount }] = await Promise.all([
-    supabase
-      .from('festivals')
-      .select('id, nombre, tipo, ciudad, fecha_inicio, fecha_fin, link_boletos, estado_evento')
-      .order('fecha_inicio', { ascending: true }),
-    supabase.from('event_candidates').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
-    supabase.from('mood_playlists').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
-  ]);
+  const [{ data: festivals }, { count: eventPendingCount }, { count: songPendingCount }, { data: venues }] =
+    await Promise.all([
+      supabase
+        .from('festivals')
+        .select('id, nombre, tipo, ciudad, fecha_inicio, fecha_fin, link_boletos, estado_evento, venue_id')
+        .order('fecha_inicio', { ascending: true }),
+      supabase.from('event_candidates').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
+      supabase.from('mood_playlists').select('id', { count: 'exact', head: true }).eq('estado', 'pendiente'),
+      supabase.from('venues').select('id, name'),
+    ]);
+  const venueNameById = Object.fromEntries((venues ?? []).map((v) => [v.id, v.name]));
 
   // festival_lineup ya tiene 1400+ filas (más que el límite de 1000 filas
   // por página que aplica PostgREST por default) — se pagina explícito para
@@ -133,7 +136,11 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <FestivalesList festivals={festivals ?? []} lineupByFestival={Object.fromEntries(lineupByFestival)} />
+      <FestivalesList
+        festivals={festivals ?? []}
+        lineupByFestival={Object.fromEntries(lineupByFestival)}
+        venueNameById={venueNameById}
+      />
     </main>
   );
 }

@@ -679,6 +679,33 @@ export type Database = {
         }
         Relationships: []
       }
+      venues: {
+        Row: {
+          city: string
+          created_at: string
+          id: string
+          name: string
+          normalized_name: string
+          state: string
+        }
+        Insert: {
+          city: string
+          created_at?: string
+          id?: string
+          name: string
+          normalized_name: string
+          state: string
+        }
+        Update: {
+          city?: string
+          created_at?: string
+          id?: string
+          name?: string
+          normalized_name?: string
+          state?: string
+        }
+        Relationships: []
+      }
       onboarding_progress: {
         Row: {
           alcanzado_en: string
@@ -763,6 +790,7 @@ export type Database = {
           preventa_fin: string | null
           preventa_inicio: string | null
           tipo_descuento: string | null
+          venue_id: string | null
         }
         Insert: {
           ciudad: string
@@ -781,6 +809,7 @@ export type Database = {
           preventa_fin?: string | null
           preventa_inicio?: string | null
           tipo_descuento?: string | null
+          venue_id?: string | null
         }
         Update: {
           ciudad?: string

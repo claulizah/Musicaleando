@@ -15,11 +15,14 @@ type Festival = {
   fecha_fin: string;
   link_boletos: string | null;
   estado_evento: string;
+  venue_id: string | null;
 };
 
 type EstadoFilter = 'activo' | 'archivado';
 
-type GroupBy = 'evento' | 'artista' | 'estado' | 'categoria' | 'fecha';
+type GroupBy = 'evento' | 'artista' | 'estado' | 'lugar' | 'categoria' | 'fecha';
+
+const SIN_LUGAR_LABEL = '(sin lugar)';
 
 function normalizeText(s: string): string {
   return s
@@ -29,7 +32,7 @@ function normalizeText(s: string): string {
     .trim();
 }
 
-function FestivalRow({ festival }: { festival: Festival }) {
+function FestivalRow({ festival, venueName }: { festival: Festival; venueName?: string }) {
   return (
     <li className="rounded-lg border border-gray-200 bg-white p-4">
       <Link href={`/festivals/${festival.id}`} className="font-medium underline">
@@ -39,14 +42,15 @@ function FestivalRow({ festival }: { festival: Festival }) {
         <span className="ml-2 rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-600">Archivado</span>
       )}
       <p className="text-sm text-gray-500">
-        {festival.ciudad} · {festival.fecha_inicio} → {festival.fecha_fin}
+        {festival.ciudad}
+        {venueName && ` · ${venueName}`} · {festival.fecha_inicio} → {festival.fecha_fin}
       </p>
       <p className="text-xs text-gray-400">{festival.link_boletos ? festival.link_boletos : 'Sin link de boletos'}</p>
     </li>
   );
 }
 
-function GroupSection({ label, festivals, defaultOpen }: { label: string; festivals: Festival[]; defaultOpen: boolean }) {
+function GroupSection({ label, festivals, defaultOpen, venueNameById }: { label: string; festivals: Festival[]; defaultOpen: boolean; venueNameById: Record<string, string> }) {
   return (
     <details className="rounded-lg border border-gray-200 bg-gray-50" open={defaultOpen}>
       <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-gray-700">
@@ -54,7 +58,7 @@ function GroupSection({ label, festivals, defaultOpen }: { label: string; festiv
       </summary>
       <ul className="flex flex-col gap-3 p-3 pt-0">
         {festivals.map((f) => (
-          <FestivalRow key={f.id} festival={f} />
+          <FestivalRow key={f.id} festival={f} venueName={f.venue_id ? venueNameById[f.venue_id] : undefined} />
         ))}
       </ul>
     </details>
@@ -64,9 +68,11 @@ function GroupSection({ label, festivals, defaultOpen }: { label: string; festiv
 export function FestivalesList({
   festivals,
   lineupByFestival = {},
+  venueNameById = {},
 }: {
   festivals: Festival[];
   lineupByFestival?: Record<string, string[]>;
+  venueNameById?: Record<string, string>;
 }) {
   const [query, setQuery] = useState('');
   const [groupBy, setGroupBy] = useState<GroupBy>('evento');
@@ -126,6 +132,22 @@ export function FestivalesList({
       }
       return DATE_BUCKET_ORDER.filter((b) => map.has(b)).map((b) => ({ key: b, label: DATE_BUCKET_LABEL[b], items: map.get(b)! }));
     }
+    if (groupBy === 'lugar') {
+      const map = new Map<string, { label: string; items: Festival[] }>();
+      for (const f of filtered) {
+        const label = (f.venue_id && venueNameById[f.venue_id]) || SIN_LUGAR_LABEL;
+        const key = f.venue_id ?? SIN_LUGAR_LABEL;
+        if (!map.has(key)) map.set(key, { label, items: [] });
+        map.get(key)!.items.push(f);
+      }
+      return [...map.entries()]
+        .map(([key, { label, items }]) => ({ key, label, items }))
+        .sort((a, b) => {
+          if (a.label === SIN_LUGAR_LABEL) return 1;
+          if (b.label === SIN_LUGAR_LABEL) return -1;
+          return a.label.localeCompare(b.label);
+        });
+    }
     const map = new Map<string, { label: string; items: Festival[] }>();
     for (const f of filtered) {
       const key = groupBy === 'artista' ? normalizeText(f.nombre) : resolveEstado(f.ciudad);
@@ -140,7 +162,7 @@ export function FestivalesList({
         if (b.label === OTRO_ESTADO_LABEL) return -1;
         return (a.label ?? '').localeCompare(b.label ?? '');
       });
-  }, [filtered, groupBy]);
+  }, [filtered, groupBy, venueNameById]);
 
   return (
     <div>
@@ -159,6 +181,7 @@ export function FestivalesList({
               { id: 'evento', label: 'Por evento' },
               { id: 'artista', label: 'Por artista' },
               { id: 'estado', label: 'Por estado' },
+              { id: 'lugar', label: 'Por lugar' },
               { id: 'categoria', label: 'Por categoría' },
               { id: 'fecha', label: 'Por fecha' },
             ] as { id: GroupBy; label: string }[]
@@ -240,13 +263,19 @@ export function FestivalesList({
       {groupBy === 'evento' ? (
         <ul className="flex flex-col gap-3">
           {filtered.map((f) => (
-            <FestivalRow key={f.id} festival={f} />
+            <FestivalRow key={f.id} festival={f} venueName={f.venue_id ? venueNameById[f.venue_id] : undefined} />
           ))}
         </ul>
       ) : (
         <div className="flex flex-col gap-2">
           {groups.map((g) => (
-            <GroupSection key={g.key} label={g.label ?? ''} festivals={g.items} defaultOpen={groups.length <= 5} />
+            <GroupSection
+              key={g.key}
+              label={g.label ?? ''}
+              festivals={g.items}
+              defaultOpen={groups.length <= 5}
+              venueNameById={venueNameById}
+            />
           ))}
         </div>
       )}

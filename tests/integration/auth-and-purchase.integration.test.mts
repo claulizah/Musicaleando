@@ -202,3 +202,37 @@ test('onboarding: un usuario normal no puede llamar al embudo del admin', async 
   assert.notEqual(res.status, 200);
   assert.match(JSON.stringify(await res.json()), /No autorizado/);
 });
+
+test('venues: cualquier usuario los lee pero no puede crearlos ni editarlos', async () => {
+  const read = await fetch(`${URL_}/rest/v1/venues?select=id,name&limit=1`, { headers: headers() });
+  assert.equal(read.status, 200);
+  const rows = (await read.json()) as { id: string; name: string }[];
+  assert.ok(rows.length > 0, 'debe haber al menos un venue (backfill ya corrido)');
+  const write = await fetch(`${URL_}/rest/v1/venues`, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({ name: 'intento no-admin', city: 'X', state: 'Y', normalized_name: 'intento-no-admin' }),
+  });
+  assert.equal(write.status, 403);
+  const upd = await fetch(`${URL_}/rest/v1/venues?id=eq.${rows[0].id}`, {
+    method: 'PATCH',
+    headers: headers({ Prefer: 'return=representation' }),
+    body: JSON.stringify({ name: 'hackeado' }),
+  });
+  const updRows = upd.ok ? ((await upd.json()) as unknown[]) : [];
+  assert.deepEqual(updRows, [], 'RLS no debe dejar editar un venue');
+});
+
+test('venues: un evento activo trae su venue_id y apunta a un venue real', async () => {
+  const res = await fetch(
+    `${URL_}/rest/v1/festivals?select=id,venue_id&estado_evento=eq.activo&venue_id=not.is.null&limit=1`,
+    { headers: headers() },
+  );
+  const rows = (await res.json()) as { id: string; venue_id: string }[];
+  assert.ok(rows.length > 0, 'debe haber al menos un evento activo con venue_id');
+  const venue = await fetch(`${URL_}/rest/v1/venues?id=eq.${rows[0].venue_id}&select=id,name,city,state`, {
+    headers: headers(),
+  });
+  const venueRows = (await venue.json()) as unknown[];
+  assert.equal(venueRows.length, 1);
+});
