@@ -5,8 +5,8 @@ import {
   createEventCandidate,
   mergeLineupIntoExisting,
   type ExtractedEvent,
-  type DuplicateMatch,
 } from '../../candidatos/actions';
+import type { DuplicateMatch } from '@/lib/candidateDuplicates';
 
 // Shared by EventImageImporter and EventLinkImporter — both produce the same
 // ExtractedEvent + optional DuplicateMatch shape, so the preview/edit/

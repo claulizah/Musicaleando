@@ -8,6 +8,7 @@ import { resolveVenueId } from '@/lib/venues';
 import { cleanEventNameSafe } from '@/lib/cleanEventName';
 import { normalizeHorario } from '@/lib/normalizeHorario';
 import { logAdminAction } from '@/lib/adminActionsLog';
+import { findDuplicateMatch, type DuplicateMatch } from '@/lib/candidateDuplicates';
 
 export type ApproveOverrides = {
   nombre: string;
@@ -392,79 +393,6 @@ export type ExtractedEvent = {
   esHorarioConTiempos: boolean;
 };
 
-// 'archivado' = mismo nombre que un evento ya vencido/archivado pero otra
-// fecha (probable re-anuncio, ej. una gira nueva del mismo artista) — es solo
-// una pista informativa, no bloquea ni desmarca la creación como sí hacen
-// 'festival'/'candidate' (mismo evento, misma fecha).
-export type DuplicateMatch = {
-  type: 'festival' | 'candidate' | 'archivado';
-  id: string;
-  nombre: string;
-  fecha_inicio?: string | null;
-};
-
-function normalizeText(s: string): string {
-  return s
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-}
-
-// Mismo criterio de dedup que ticketmaster-sync (nombre normalizado que se
-// contiene mutuamente + fecha dentro de 1 día + ciudad que se contiene
-// mutuamente cuando ambas existen) — porteado a TS porque las Edge Functions
-// (Deno) y los server actions de Next no comparten módulos en este repo. A
-// diferencia del sync de Ticketmaster, aquí también se revisa contra otros
-// candidatos pendientes (de cualquier fuente), no solo contra festivals ya
-// aprobados — un póster puede describir el mismo evento que ya sincronizó
-// Ticketmaster y sigue sin aprobarse.
-function findDuplicateMatch(
-  event: { nombre: string; ciudad: string | null; fecha_inicio: string | null },
-  festivals: { id: string; nombre: string; ciudad: string; fecha_inicio: string; estado_evento?: string }[],
-  candidates: { id: string; nombre: string; ciudad: string | null; fecha_inicio: string | null }[],
-): DuplicateMatch | null {
-  const normName = normalizeText(event.nombre);
-
-  const namesAndDatesMatch = (nombre: string, ciudad: string | null, fecha_inicio: string | null) => {
-    const normOther = normalizeText(nombre);
-    const namesMatch = normName === normOther || normName.includes(normOther) || normOther.includes(normName);
-    if (!namesMatch) return false;
-    if (event.fecha_inicio && fecha_inicio) {
-      const diffDays = Math.abs(new Date(event.fecha_inicio).getTime() - new Date(fecha_inicio).getTime()) / 86_400_000;
-      if (diffDays > 1) return false;
-    }
-    if (event.ciudad && ciudad) {
-      const ciudadesMatch =
-        normalizeText(event.ciudad).includes(normalizeText(ciudad)) ||
-        normalizeText(ciudad).includes(normalizeText(event.ciudad));
-      if (!ciudadesMatch) return false;
-    }
-    return true;
-  };
-
-  for (const f of festivals) {
-    if (namesAndDatesMatch(f.nombre, f.ciudad, f.fecha_inicio)) {
-      return { type: 'festival', id: f.id, nombre: f.nombre };
-    }
-  }
-  for (const c of candidates) {
-    if (namesAndDatesMatch(c.nombre, c.ciudad, c.fecha_inicio)) {
-      return { type: 'candidate', id: c.id, nombre: c.nombre };
-    }
-  }
-  // Ninguno coincide en fecha: buscar en el historial archivado el MISMO
-  // nombre (igualdad exacta normalizada, no "contiene" — sin el ancla de la
-  // fecha, "contiene" daría demasiado ruido) para avisar de un probable
-  // re-anuncio en vez de crear un registro sin relación con el anterior.
-  for (const f of festivals) {
-    if (f.estado_evento === 'archivado' && normalizeText(f.nombre) === normName) {
-      return { type: 'archivado', id: f.id, nombre: f.nombre, fecha_inicio: f.fecha_inicio };
-    }
-  }
-  return null;
-}
 
 // Solo extrae y revisa duplicados — no escribe nada. El curador decide en la
 // UI qué hacer con el resultado (crear candidato nuevo, o actualizar el
@@ -555,13 +483,12 @@ export async function createEventCandidate(
     price_min: null,
     price_max: null,
     price_currency: null,
-    // possible_duplicate_of es FK a `festivals` únicamente (ver migración
-    // de event_candidates) — un duplicado de otro candidato PENDIENTE
-    // (duplicate.type === 'candidate') no se puede guardar aquí, la FK lo
-    // rechazaría. Ese caso se sigue mostrando en el momento de la extracción
-    // (event-link-importer / extracted-event-preview), pero no persiste como
-    // badge en /candidatos — limitación real del esquema, no un descuido.
+    // Dos columnas separadas porque son dos FKs distintas (festivals vs.
+    // event_candidates) — ver migración 20260922030000. Un duplicado de
+    // 'archivado' (probable re-anuncio) es solo una pista informativa, nunca
+    // se persiste como badge en ninguna de las dos.
     possible_duplicate_of: duplicate?.type === 'festival' ? duplicate.id : null,
+    possible_duplicate_candidate_of: duplicate?.type === 'candidate' ? duplicate.id : null,
     festival_id: null,
   });
   if (error) return { error: error.message };

@@ -84,6 +84,25 @@ function rawPayloadExtras(raw: unknown): { submittedLink: string | null; posterU
   };
 }
 
+// Un candidato solo tiene UN tipo de posible duplicado a la vez (ver
+// migración 20260922030000) — evento ya aprobado, u otro candidato pendiente
+// (típico de imagen/link: el mismo cartel se sube dos veces, o Ticketmaster
+// ya trae lo que alguien también subió a mano).
+function resolveDuplicateLabel(
+  c: Candidate,
+  festivalNameById: Map<string, string>,
+  candidateNameById: Map<string, string>,
+): string | null {
+  if (c.possible_duplicate_of) {
+    return festivalNameById.get(c.possible_duplicate_of) ?? null;
+  }
+  if (c.possible_duplicate_candidate_of) {
+    const name = candidateNameById.get(c.possible_duplicate_candidate_of);
+    return `${name ?? 'otro candidato pendiente'} (candidato pendiente, no evento aprobado)`;
+  }
+  return null;
+}
+
 function normalizeText(s: string): string {
   return s
     .normalize('NFD')
@@ -254,6 +273,7 @@ function GroupSection({
   label,
   candidates,
   festivalNameById,
+  candidateNameById,
   defaultOpen,
   selectedIds,
   onToggleSelect,
@@ -261,6 +281,7 @@ function GroupSection({
   label: string;
   candidates: Candidate[];
   festivalNameById: Map<string, string>;
+  candidateNameById: Map<string, string>;
   defaultOpen: boolean;
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
@@ -275,7 +296,7 @@ function GroupSection({
           <CandidateCard
             key={c.id}
             candidate={c}
-            duplicateName={c.possible_duplicate_of ? festivalNameById.get(c.possible_duplicate_of) : null}
+            duplicateName={resolveDuplicateLabel(c, festivalNameById, candidateNameById)}
             selected={selectedIds.has(c.id)}
             onToggleSelect={onToggleSelect}
           />
@@ -294,6 +315,9 @@ export function CandidatosList({
 }) {
   const [exporting, setExporting] = useState(false);
   const [query, setQuery] = useState('');
+  // Nombres de otros candidatos pendientes, para mostrar el badge de
+  // duplicado candidato-vs-candidato (ver resolveDuplicateLabel).
+  const candidateNameById = useMemo(() => new Map(candidates.map((c) => [c.id, c.nombre])), [candidates]);
   const [groupBy, setGroupBy] = useState<GroupBy>('evento');
   const [sourceFilter, setSourceFilter] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<EventCategory | null>(null);
@@ -340,7 +364,7 @@ export function CandidatosList({
         c.venue ?? '',
         c.estado,
         SOURCE_LABEL[c.source] ?? c.source,
-        c.possible_duplicate_of ? festivalNameById.get(c.possible_duplicate_of) ?? 'sí' : '',
+        resolveDuplicateLabel(c, festivalNameById, candidateNameById) ?? '',
         lineupArtistNames(c.lineup).join(', '),
       ]);
       await downloadCsvAsync(csvFilename('candidatos'), headers, rows);
@@ -432,7 +456,7 @@ export function CandidatosList({
   // mismo criterio de seguridad que el importador de listados (agregar
   // desde link): la curadora los marca a mano si de verdad quiere aprobarlos.
   const selectAllVisible = () => {
-    setSelectedIds(new Set(filtered.filter((c) => !c.possible_duplicate_of).map((c) => c.id)));
+    setSelectedIds(new Set(filtered.filter((c) => !c.possible_duplicate_of && !c.possible_duplicate_candidate_of).map((c) => c.id)));
   };
 
   const clearSelection = () => setSelectedIds(new Set());
@@ -442,7 +466,7 @@ export function CandidatosList({
   // posibles duplicados que "Seleccionar todos visibles"), independiente del
   // filtro de texto/fuente activo en ese momento.
   const selectAllInCategory = (cat: EventCategory) => {
-    setSelectedIds(new Set(candidates.filter((c) => categorizeEvent(c) === cat && !c.possible_duplicate_of).map((c) => c.id)));
+    setSelectedIds(new Set(candidates.filter((c) => categorizeEvent(c) === cat && !c.possible_duplicate_of && !c.possible_duplicate_candidate_of).map((c) => c.id)));
   };
 
   const handleBulkApprove = () => {
@@ -676,7 +700,7 @@ export function CandidatosList({
             <CandidateCard
               key={c.id}
               candidate={c}
-              duplicateName={c.possible_duplicate_of ? festivalNameById.get(c.possible_duplicate_of) : null}
+              duplicateName={resolveDuplicateLabel(c, festivalNameById, candidateNameById)}
               selected={selectedIds.has(c.id)}
               onToggleSelect={toggleSelect}
             />
@@ -690,6 +714,7 @@ export function CandidatosList({
               label={g.label ?? ''}
               candidates={g.items}
               festivalNameById={festivalNameById}
+              candidateNameById={candidateNameById}
               defaultOpen={groups.length <= 5}
               selectedIds={selectedIds}
               onToggleSelect={toggleSelect}

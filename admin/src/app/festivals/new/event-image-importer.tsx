@@ -1,7 +1,8 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { extractEventFromImage, type ExtractedEvent, type DuplicateMatch } from '../../candidatos/actions';
+import { extractEventFromImage, type ExtractedEvent } from '../../candidatos/actions';
+import type { DuplicateMatch } from '@/lib/candidateDuplicates';
 import { ExtractedEventPreview } from './extracted-event-preview';
 
 function fileToBase64(file: File): Promise<{ base64: string; mediaType: string }> {

@@ -95,6 +95,7 @@ export async function POST(req: NextRequest) {
         completo: Boolean(ev.nombre && ev.ciudad && ev.fecha_iso && ev.link),
         estado: existingEstado ?? 'pendiente',
         possible_duplicate_of: possibleDup,
+        possible_duplicate_candidate_of: null,
         festival_id: null,
         updated_at: new Date().toISOString(),
         last_seen_at: new Date().toISOString(),

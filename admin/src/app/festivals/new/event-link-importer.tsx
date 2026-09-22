@@ -6,8 +6,8 @@ import {
   createEventCandidates,
   type ExtractedEvent,
   type ExtractedEventWithDuplicate,
-  type DuplicateMatch,
 } from '../../candidatos/actions';
+import type { DuplicateMatch } from '@/lib/candidateDuplicates';
 import { ExtractedEventPreview } from './extracted-event-preview';
 
 function summarize(e: ExtractedEvent): string {

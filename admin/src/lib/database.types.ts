@@ -451,6 +451,7 @@ export type Database = {
           completo: boolean;
           estado: string;
           possible_duplicate_of: string | null;
+          possible_duplicate_candidate_of: string | null;
           festival_id: string | null;
           created_at: string;
           updated_at: string;
@@ -475,6 +476,13 @@ export type Database = {
             columns: ['possible_duplicate_of'];
             isOneToOne: false;
             referencedRelation: 'festivals';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'event_candidates_possible_duplicate_candidate_of_fkey';
+            columns: ['possible_duplicate_candidate_of'];
+            isOneToOne: false;
+            referencedRelation: 'event_candidates';
             referencedColumns: ['id'];
           },
           {
