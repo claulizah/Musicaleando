@@ -1,27 +1,47 @@
 // Lógica pura de superboletos-sync (normalización + filtro de música +
 // deduplicación) — sin ningún import de Playwright/navegador, para poder
 // probarla con Node (ver tests/unit/superboletosSync.test.mts). runner.ts
-// importa esto y le agrega la lectura real del DOM (verificada en vivo, ver
-// el reporte del ticket para los selectores confirmados).
+// importa esto y le agrega la lectura real (navegar UNA vez y observar la
+// respuesta que el propio sitio ya recibe — ver runner.ts para el porqué).
 
 export type MusicCategoryLabel = 'Conciertos' | 'Festivales';
 export const MUSIC_CATEGORIES: MusicCategoryLabel[] = ['Conciertos', 'Festivales'];
 
 export type SuperboletosEvent = {
+  eventoId: string;
   nombre: string;
+  fecha_iso: string | null;
   fecha_texto: string | null;
   venue: string | null;
   ciudad: string;
   estado: string;
-  link: string | null;
+  link: string;
+  price_min: number | null;
+  price_max: number | null;
 };
 
-// El nombre del evento en Superboletos viene TODO EN MAYÚSCULAS en la
-// tarjeta ("PEQUEÑOS MUSICAL", "ALAN PARSONS THE SHOW MUST GO ON",
-// confirmado en vivo) — mismo criterio que eticket-sync (ver
-// supabase/functions/eticket-sync/normalize.ts): solo se re-castea a Title
-// Case si la cadena original viene 100% en mayúsculas, nunca si ya trae
-// mayúsculas y minúsculas mezcladas (podría ser una estilización real).
+// Forma real del registro que trae catalogos/search.json (confirmada en
+// vivo, no adivinada — ver el reporte del ticket). Se listan solo los
+// campos que se usan; el JSON real trae más (imágenes, comisiones, etc.)
+// que no hacen falta aquí.
+export type RawSearchEntry = {
+  eventoId: string;
+  nombreEvento: string;
+  nombreRecinto: string | null;
+  nombreCiudad: string;
+  nombreEstado: string;
+  claveTipoEvento: string;
+  claveEstatusFechaEvento: string;
+  fechaPrimeraPresentacion: string; // "DD/MM/YYYY HH:MM:SS" o "" si no hay
+  fechas: string; // texto para mostrar, ej. "25 de Octubre 18:00 Hrs."
+  precioMinimo: string;
+  precioMaximo: string;
+};
+
+// El nombre del evento en Superboletos viene TODO EN MAYÚSCULAS
+// ("PEQUEÑOS MUSICAL", confirmado en vivo) — mismo criterio que
+// eticket-sync: solo se re-castea a Title Case si la cadena original viene
+// 100% en mayúsculas, nunca si ya trae mayúsculas y minúsculas mezcladas.
 const CONECTORES = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'y', 'en', 'con', 'a', 'al', 'un', 'una']);
 export function titleCaseIfShouting(raw: string): string {
   const s = raw.trim().replace(/\s+/g, ' ');
@@ -33,26 +53,57 @@ export function titleCaseIfShouting(raw: string): string {
     .join(' ');
 }
 
-// La tarjeta trae la ubicación como un solo texto "Ciudad, Estado"
-// (confirmado en vivo: "Querétaro, Querétaro", "Ciudad de México, Ciudad de
-// México"). Sin coma, se usa el mismo texto para ambos — mejor un estado
-// igual a la ciudad que perder el dato.
-export function parseCityState(raw: string): { ciudad: string; estado: string } {
-  const s = raw.trim();
-  const i = s.indexOf(',');
-  if (i < 0) return { ciudad: s, estado: s };
-  return { ciudad: s.slice(0, i).trim(), estado: s.slice(i + 1).trim() };
+// "25/10/2026 18:30:00" -> "2026-10-25". Devuelve null si no viene (pasa en
+// ~11% de los eventos NORMAL, visto en datos reales) o no se puede parsear
+// — mejor un candidato con fecha vacía (Claudia la completa al aprobar,
+// igual que hoy con un póster) que una fecha inventada.
+export function parseFechaPrimeraPresentacion(raw: string): string | null {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(raw.trim());
+  if (!m) return null;
+  const [, d, mo, y] = m;
+  const iso = `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  const date = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return null;
+  return iso;
 }
 
-// Filtro de respaldo por si algún evento de otra categoría se cuela en la
-// lectura de "Conciertos"/"Festivales" — visto en la investigación en vivo:
-// "TRADICIONAL CORRIDA FIESTAS PATRIAS" (toros) apareció en la lista sin
-// filtrar; tras hacer clic en la pestaña "Conciertos" ya no salía, pero este
-// filtro queda como segunda capa. Deliberadamente conservador: solo
-// descarta lo que reconoce con certeza.
-const NO_MUSICA = /\b(globetrotters|circo|f[uú]tbol|beisbol|béisbol|lucha libre|box(eo)?|rodeo|toros|charrer[ií]a|corrida)\b/i;
-export function pareceMusica(nombre: string): boolean {
-  return !NO_MUSICA.test(nombre);
+// Filtro de respaldo — visto en datos reales: 726 de 1181 eventos vienen
+// marcados CANCELADO (se excluyen), y unos pocos claveTipoEvento son
+// variantes espurias ("CONCIERTO" singular, 1 caso) que no son las dos
+// etiquetas reales del sitio — se exige el valor exacto para no adivinar.
+export function esMusicaVigente(e: RawSearchEntry): boolean {
+  return (
+    (e.claveTipoEvento === 'Conciertos' || e.claveTipoEvento === 'Festivales') &&
+    e.claveEstatusFechaEvento === 'NORMAL'
+  );
+}
+
+// Un evento marcado NORMAL pero con fecha ya pasada es un dato viejo mal
+// etiquetado en la fuente (visto en datos reales: "MATUTE EN QUERETARO...",
+// fecha "15 Marzo de 2025" con estatus NORMAL) — no debería llegar como
+// candidato nuevo. Solo se descarta cuando SÍ hay fecha parseada y es
+// pasada; sin fecha parseable no se puede saber, así que se deja pasar
+// (Claudia lo revisa al aprobar).
+export function esFechaFutura(fechaIso: string | null, hoy: string): boolean {
+  return fechaIso === null || fechaIso >= hoy;
+}
+
+export function parseSearchEntry(e: RawSearchEntry): SuperboletosEvent {
+  const fecha_iso = parseFechaPrimeraPresentacion(e.fechaPrimeraPresentacion);
+  const min = Number(e.precioMinimo);
+  const max = Number(e.precioMaximo);
+  return {
+    eventoId: e.eventoId,
+    nombre: titleCaseIfShouting(e.nombreEvento),
+    fecha_iso,
+    fecha_texto: e.fechas?.trim() || null,
+    venue: e.nombreRecinto ? titleCaseIfShouting(e.nombreRecinto) : null,
+    ciudad: titleCaseIfShouting(e.nombreCiudad),
+    estado: e.nombreEstado,
+    link: `https://www.superboletos.com/landing-evento/${e.eventoId}`,
+    price_min: min > 0 ? min : null,
+    price_max: max > 0 ? max : null,
+  };
 }
 
 export function normalizeText(s: string): string {
@@ -65,27 +116,26 @@ export function normalizeText(s: string): string {
 }
 
 // Mismo criterio de "posible duplicado" que ticketmaster-sync/eticket-sync:
-// nombre normalizado que se contiene mutuamente + ciudad que se contiene
-// mutuamente cuando ambas existen. Sin fecha ISO real (fecha_texto es texto
-// libre, ej. "09 de Octubre 20:00 Hrs.", sin año en varios casos vistos en
-// vivo) no se puede exigir "misma fecha ±1 día" como en las otras fuentes —
-// se compara solo por nombre+ciudad, así que puede marcar como duplicado un
-// re-anuncio del mismo artista en la misma ciudad en otra fecha; es
-// intencionalmente conservador (mejor un falso "ya existe" que Claudia
-// revisa, que un duplicado real que se cuela).
+// nombre normalizado que se contiene mutuamente + fecha dentro de 1 día
+// (cuando ambas fechas existen) + ciudad que se contiene mutuamente cuando
+// ambas existen.
 export function findPossibleDuplicate(
-  event: { nombre: string; ciudad: string },
-  festivals: { id: string; nombre: string; ciudad: string }[],
+  event: { nombre: string; ciudad: string; fecha_iso: string | null },
+  festivals: { id: string; nombre: string; ciudad: string; fecha_inicio: string }[],
 ): string | null {
   const normName = normalizeText(event.nombre);
   for (const f of festivals) {
     const normFestName = normalizeText(f.nombre);
     const namesMatch = normName === normFestName || normName.includes(normFestName) || normFestName.includes(normName);
     if (!namesMatch) continue;
-    const ciudadesMatch =
-      normalizeText(event.ciudad).includes(normalizeText(f.ciudad)) ||
-      normalizeText(f.ciudad).includes(normalizeText(event.ciudad));
-    if (!ciudadesMatch) continue;
+    if (event.fecha_iso) {
+      const diffDays = Math.abs(new Date(event.fecha_iso).getTime() - new Date(f.fecha_inicio).getTime()) / 86_400_000;
+      if (diffDays > 1) continue;
+    }
+    if (event.ciudad && f.ciudad) {
+      const ciudadesMatch = normalizeText(event.ciudad).includes(normalizeText(f.ciudad)) || normalizeText(f.ciudad).includes(normalizeText(event.ciudad));
+      if (!ciudadesMatch) continue;
+    }
     return f.id;
   }
   return null;
