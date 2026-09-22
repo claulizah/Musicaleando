@@ -5,7 +5,10 @@ import { NextResponse, type NextRequest } from 'next/server';
 // admin dashboard itself lives at '/admin'. Exact-match it separately below
 // since `pathname.startsWith('/')` would otherwise match every route.
 const PUBLIC_EXACT_PATHS = ['/'];
-const PUBLIC_PREFIX_PATHS = ['/login', '/signup', '/forgot-password', '/reset-password', '/privacidad', '/terminos', '/eliminar-cuenta'];
+// /api/cron/* nunca tiene sesión de admin (lo llama un cron, no un
+// navegador) — cada ruta ahí adentro se autoriza sola con su propio secreto
+// compartido (x-sync-secret), igual que las Edge Functions de sync.
+const PUBLIC_PREFIX_PATHS = ['/login', '/signup', '/forgot-password', '/reset-password', '/privacidad', '/terminos', '/eliminar-cuenta', '/api/cron'];
 // A password-recovery link logs the visitor in via a short-lived recovery
 // session before they've set a new password — unlike /login or /signup,
 // being authenticated here is the expected state, not a reason to bounce
