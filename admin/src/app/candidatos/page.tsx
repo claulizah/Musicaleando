@@ -4,6 +4,10 @@ import { createClient } from '@/lib/supabase/server';
 import { CandidatosList } from './candidatos-list';
 import { RepublishSiteButton } from './republish-site-button';
 import { getLastSiteDeploy } from './deploy-actions';
+import { fetchAllRows } from '@/lib/fetchAllRows';
+import type { Database } from '@/lib/database.types';
+
+type EventCandidateRow = Database['public']['Tables']['event_candidates']['Row'];
 
 const ESTADO_LABEL: Record<string, string> = {
   cancelado: 'Cancelado en la fuente',
@@ -22,19 +26,32 @@ export default async function CandidatosPage() {
 
   const supabase = await createClient();
 
+  // Pendientes y el catálogo de nombres para dedup NUNCA deben cortarse en
+  // silencio en el límite de 1000 filas de PostgREST — hoy hay 146
+  // pendientes y 766 festivales (ambos por debajo, pero el segundo ya va
+  // acercándose), así que se traen paginados explícitamente en vez de
+  // confiar en que el conteo real se quede corto para siempre (ver
+  // fetchAllRows.ts — mismo bug ya visto dos veces en este proyecto, en
+  // otras consultas). "cancelado"/"desaparecido" sí llevan `.limit(30)` a
+  // propósito (es solo un aviso reciente, no hace falta el historial completo).
   const [{ data: pending }, { data: flagged }, { data: festivals }, { lastTriggeredAt }] = await Promise.all([
-    supabase
-      .from('event_candidates')
-      .select('*')
-      .eq('estado', 'pendiente')
-      .order('fecha_inicio', { ascending: true, nullsFirst: false }),
+    fetchAllRows<EventCandidateRow>((from, to) =>
+      supabase
+        .from('event_candidates')
+        .select('*')
+        .eq('estado', 'pendiente')
+        .order('fecha_inicio', { ascending: true, nullsFirst: false })
+        .range(from, to),
+    ),
     supabase
       .from('event_candidates')
       .select('id, nombre, ciudad, fecha_inicio, estado')
       .in('estado', ['cancelado', 'desaparecido'])
       .order('updated_at', { ascending: false })
       .limit(30),
-    supabase.from('festivals').select('id, nombre'),
+    fetchAllRows<{ id: string; nombre: string }>((from, to) =>
+      supabase.from('festivals').select('id, nombre').range(from, to),
+    ),
     getLastSiteDeploy(),
   ]);
 

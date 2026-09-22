@@ -95,7 +95,7 @@ export function EventFilterBar({
       <TextInput
         value={query}
         onChangeText={onQueryChange}
-        placeholder="Buscar evento o artista…"
+        placeholder="Buscar evento, artista, ciudad o lugar…"
         placeholderTextColor={colors.textMuted}
         style={styles.input}
       />

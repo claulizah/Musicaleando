@@ -99,16 +99,21 @@ export function useEventFilters(
     };
   }, [entries]);
 
+  // Texto libre: nombre del evento, artistas del line-up, ciudad y nombre
+  // del lugar — mismo alcance que el buscador de /candidatos en el admin,
+  // para que "busca por ciudad o recinto" funcione igual en los dos lados.
   const textFiltered = useMemo(() => {
     const q = normalizeText(query.trim());
     if (!q) return entries;
     return entries.filter((e) => {
-      const haystack = [e.festival.nombre, ...e.lineup.map((l) => l.artista)]
+      const venueName = e.festival.venue_id ? venueById.get(e.festival.venue_id)?.name : null;
+      const haystack = [e.festival.nombre, e.festival.ciudad, venueName, ...e.lineup.map((l) => l.artista)]
+        .filter((v): v is string => Boolean(v))
         .map(normalizeText)
         .join(' | ');
       return haystack.includes(q);
     });
-  }, [entries, query]);
+  }, [entries, query, venueById]);
 
   const filtered = useMemo(() => {
     const hoy = mexicoToday(new Date());
