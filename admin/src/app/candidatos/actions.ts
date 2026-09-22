@@ -122,6 +122,23 @@ export async function approveCandidate(
     .eq('id', candidateId);
   if (updateError) return { error: updateError.message };
 
+  // Si OTRO candidato pendiente marcaba a este como su posible duplicado
+  // ("candidato pendiente, ¿cuál apruebo?"), ese candidato acaba de dejar de
+  // ser ambiguo: ya sabemos que el evento real es el festival recién creado.
+  // Se "sube de categoría" el aviso al mismo que ya existe para
+  // festival-aprobado (mismo texto, misma exclusión de bulk-select) en vez
+  // de dejarlo señalando a un candidato que ya no está pendiente — evitar
+  // justo el estado inconsistente que pedía este ticket. Best-effort: si
+  // falla, no debe tumbar la aprobación que sí se completó.
+  const { error: propagateError } = await supabase
+    .from('event_candidates')
+    .update({ possible_duplicate_of: festival.id, possible_duplicate_candidate_of: null })
+    .eq('possible_duplicate_candidate_of', candidateId)
+    .eq('estado', 'pendiente');
+  if (propagateError) {
+    console.error('No se pudo propagar el duplicado a otros candidatos pendientes (no bloqueante):', propagateError);
+  }
+
   await logAdminAction(supabase, admin.userId, 'aprobar', 'candidato', candidateId, {
     isBulk,
     detail: { nombre, festival_id: festival.id },
