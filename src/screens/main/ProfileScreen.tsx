@@ -332,6 +332,11 @@ export function ProfileScreen({ navigation }: Props) {
           </View>
         </View>
 
+        <PrimaryButton
+          label="🔔 Artistas seguidos"
+          variant="secondary"
+          onPress={() => navigation.navigate('FollowedArtists')}
+        />
         <PrimaryButton label="Jugar Torneo Sonoro" variant="secondary" onPress={() => navigation.navigate('Torneo')} />
         <PrimaryButton
           label="📸 Mi álbum de conciertos"

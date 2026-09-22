@@ -10,6 +10,7 @@ export type RootStackParamList = {
   SquadDetail: { squadId: string };
   Festivals: { highlightFestivalId?: string } | undefined;
   ArtistDetail: { artistId: string; artistName: string };
+  FollowedArtists: undefined;
   VenueDetail: { venueId: string; venueName: string };
   Torneo: undefined;
   SquadTorneo: { squadId: string };

@@ -48,7 +48,13 @@
           "microphonePermission": false
         }
       ],
-      "@sentry/react-native"
+      "@sentry/react-native",
+      [
+        "expo-notifications",
+        {
+          "color": "#14111F"
+        }
+      ]
     ],
     "owner": "clauliz",
     "extra": {

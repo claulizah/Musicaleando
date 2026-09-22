@@ -543,6 +543,54 @@ export type Database = {
         Update: Partial<Database['public']['Tables']['concert_album']['Row']>;
         Relationships: [];
       };
+      followed_artists: {
+        Row: { user_id: string; artist_id: string; created_at: string };
+        Insert: Omit<Database['public']['Tables']['followed_artists']['Row'], 'created_at'> & {
+          created_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['followed_artists']['Row']>;
+        Relationships: [
+          {
+            foreignKeyName: 'followed_artists_artist_id_fkey';
+            columns: ['artist_id'];
+            isOneToOne: false;
+            referencedRelation: 'artists';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'followed_artists_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
+      user_push_tokens: {
+        Row: {
+          id: string;
+          user_id: string;
+          push_token: string;
+          platform: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Omit<Database['public']['Tables']['user_push_tokens']['Row'], 'id' | 'created_at' | 'updated_at'> & {
+          id?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database['public']['Tables']['user_push_tokens']['Row']>;
+        Relationships: [
+          {
+            foreignKeyName: 'user_push_tokens_user_id_fkey';
+            columns: ['user_id'];
+            isOneToOne: false;
+            referencedRelation: 'users';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
     };
   };
 };

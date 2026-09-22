@@ -17,6 +17,76 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_actions_log: {
+        Row: {
+          action: string
+          admin_id: string
+          created_at: string
+          detail: Json
+          id: string
+          is_bulk: boolean
+          target_id: string
+          target_type: string
+        }
+        Insert: {
+          action: string
+          admin_id: string
+          created_at?: string
+          detail?: Json
+          id?: string
+          is_bulk?: boolean
+          target_id: string
+          target_type: string
+        }
+        Update: {
+          action?: string
+          admin_id?: string
+          created_at?: string
+          detail?: Json
+          id?: string
+          is_bulk?: boolean
+          target_id?: string
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_actions_log_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_ai_calls: {
+        Row: {
+          admin_id: string
+          created_at: string
+          function_name: string
+          id: string
+        }
+        Insert: {
+          admin_id: string
+          created_at?: string
+          function_name: string
+          id?: string
+        }
+        Update: {
+          admin_id?: string
+          created_at?: string
+          function_name?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_ai_calls_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       announcement_interest: {
         Row: {
           announcement_id: string
@@ -119,6 +189,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      app_config: {
+        Row: {
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
       }
       artists: {
         Row: {
@@ -344,6 +432,124 @@ export type Database = {
           },
         ]
       }
+      event_candidates: {
+        Row: {
+          ciudad: string | null
+          completo: boolean
+          created_at: string
+          estado: string
+          fecha_fin: string | null
+          fecha_inicio: string | null
+          festival_id: string | null
+          id: string
+          last_seen_at: string
+          lineup: Json
+          link_boletos: string | null
+          nombre: string
+          possible_duplicate_candidate_of: string | null
+          possible_duplicate_of: string | null
+          price_currency: string | null
+          price_max: number | null
+          price_min: number | null
+          raw_payload: Json
+          source: string
+          source_id: string
+          tipo: string | null
+          updated_at: string
+          venue: string | null
+        }
+        Insert: {
+          ciudad?: string | null
+          completo?: boolean
+          created_at?: string
+          estado?: string
+          fecha_fin?: string | null
+          fecha_inicio?: string | null
+          festival_id?: string | null
+          id?: string
+          last_seen_at?: string
+          lineup?: Json
+          link_boletos?: string | null
+          nombre: string
+          possible_duplicate_candidate_of?: string | null
+          possible_duplicate_of?: string | null
+          price_currency?: string | null
+          price_max?: number | null
+          price_min?: number | null
+          raw_payload?: Json
+          source?: string
+          source_id: string
+          tipo?: string | null
+          updated_at?: string
+          venue?: string | null
+        }
+        Update: {
+          ciudad?: string | null
+          completo?: boolean
+          created_at?: string
+          estado?: string
+          fecha_fin?: string | null
+          fecha_inicio?: string | null
+          festival_id?: string | null
+          id?: string
+          last_seen_at?: string
+          lineup?: Json
+          link_boletos?: string | null
+          nombre?: string
+          possible_duplicate_candidate_of?: string | null
+          possible_duplicate_of?: string | null
+          price_currency?: string | null
+          price_max?: number | null
+          price_min?: number | null
+          raw_payload?: Json
+          source?: string
+          source_id?: string
+          tipo?: string | null
+          updated_at?: string
+          venue?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_candidates_festival_id_fkey"
+            columns: ["festival_id"]
+            isOneToOne: false
+            referencedRelation: "festivals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_candidates_possible_duplicate_candidate_of_fkey"
+            columns: ["possible_duplicate_candidate_of"]
+            isOneToOne: false
+            referencedRelation: "event_candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_candidates_possible_duplicate_of_fkey"
+            columns: ["possible_duplicate_of"]
+            isOneToOne: false
+            referencedRelation: "festivals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_submission_attempts: {
+        Row: {
+          created_at: string
+          id: string
+          ip_hash: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ip_hash: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ip_hash?: string
+        }
+        Relationships: []
+      }
       festival_comments: {
         Row: {
           created_at: string
@@ -466,8 +672,8 @@ export type Database = {
       }
       festival_lineup: {
         Row: {
-          artista: string
           artist_id: string | null
+          artista: string
           escenario: string | null
           festival_id: string
           horario: string | null
@@ -476,8 +682,8 @@ export type Database = {
           nivel: string | null
         }
         Insert: {
-          artista: string
           artist_id?: string | null
+          artista: string
           escenario?: string | null
           festival_id: string
           horario?: string | null
@@ -486,8 +692,8 @@ export type Database = {
           nivel?: string | null
         }
         Update: {
-          artista?: string
           artist_id?: string | null
+          artista?: string
           escenario?: string | null
           festival_id?: string
           horario?: string | null
@@ -497,17 +703,73 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "festival_lineup_artist_id_fkey"
+            columns: ["artist_id"]
+            isOneToOne: false
+            referencedRelation: "artists"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "festival_lineup_festival_id_fkey"
             columns: ["festival_id"]
             isOneToOne: false
             referencedRelation: "festivals"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      festival_lineup_candidates: {
+        Row: {
+          artista: string
+          batch_id: string
+          confianza: string
+          created_at: string
+          dia_label: string | null
+          escenario: string | null
+          estado: string
+          festival_id: string
+          hora_fin: string | null
+          hora_inicio: string | null
+          id: string
+          nivel: string | null
+          nota: string | null
+        }
+        Insert: {
+          artista: string
+          batch_id: string
+          confianza?: string
+          created_at?: string
+          dia_label?: string | null
+          escenario?: string | null
+          estado?: string
+          festival_id: string
+          hora_fin?: string | null
+          hora_inicio?: string | null
+          id?: string
+          nivel?: string | null
+          nota?: string | null
+        }
+        Update: {
+          artista?: string
+          batch_id?: string
+          confianza?: string
+          created_at?: string
+          dia_label?: string | null
+          escenario?: string | null
+          estado?: string
+          festival_id?: string
+          hora_fin?: string | null
+          hora_inicio?: string | null
+          id?: string
+          nivel?: string | null
+          nota?: string | null
+        }
+        Relationships: [
           {
-            foreignKeyName: "festival_lineup_artist_id_fkey"
-            columns: ["artist_id"]
+            foreignKeyName: "festival_lineup_candidates_festival_id_fkey"
+            columns: ["festival_id"]
             isOneToOne: false
-            referencedRelation: "artists"
+            referencedRelation: "festivals"
             referencedColumns: ["id"]
           },
         ]
@@ -628,154 +890,12 @@ export type Database = {
           },
         ]
       }
-      novedades: {
-        Row: {
-          activa: boolean
-          created_at: string
-          cuerpo: string
-          id: string
-          pantalla: string
-          publicada_en: string
-          titulo: string
-          vigente_hasta: string | null
-        }
-        Insert: {
-          activa?: boolean
-          created_at?: string
-          cuerpo: string
-          id: string
-          pantalla: string
-          publicada_en?: string
-          titulo: string
-          vigente_hasta?: string | null
-        }
-        Update: {
-          activa?: boolean
-          created_at?: string
-          cuerpo?: string
-          id?: string
-          pantalla?: string
-          publicada_en?: string
-          titulo?: string
-          vigente_hasta?: string | null
-        }
-        Relationships: []
-      }
-      novedades_vistas: {
-        Row: {
-          novedad_id: string
-          user_id: string
-          visto_en: string
-        }
-        Insert: {
-          novedad_id: string
-          user_id: string
-          visto_en?: string
-        }
-        Update: {
-          novedad_id?: string
-          user_id?: string
-          visto_en?: string
-        }
-        Relationships: []
-      }
-      venues: {
-        Row: {
-          city: string
-          created_at: string
-          id: string
-          name: string
-          normalized_name: string
-          state: string
-        }
-        Insert: {
-          city: string
-          created_at?: string
-          id?: string
-          name: string
-          normalized_name: string
-          state: string
-        }
-        Update: {
-          city?: string
-          created_at?: string
-          id?: string
-          name?: string
-          normalized_name?: string
-          state?: string
-        }
-        Relationships: []
-      }
-      onboarding_progress: {
-        Row: {
-          alcanzado_en: string
-          paso: number
-          paso_nombre: string
-          user_id: string
-        }
-        Insert: {
-          alcanzado_en?: string
-          paso: number
-          paso_nombre: string
-          user_id: string
-        }
-        Update: {
-          alcanzado_en?: string
-          paso?: number
-          paso_nombre?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      app_config: {
-        Row: {
-          key: string
-          updated_at: string
-          value: string
-        }
-        Insert: {
-          key: string
-          updated_at?: string
-          value: string
-        }
-        Update: {
-          key?: string
-          updated_at?: string
-          value?: string
-        }
-        Relationships: []
-      }
-      ticket_clicks: {
-        Row: {
-          afiliado: boolean
-          created_at: string
-          festival_id: string | null
-          id: string
-          plataforma: string
-          user_id: string | null
-        }
-        Insert: {
-          afiliado?: boolean
-          created_at?: string
-          festival_id?: string | null
-          id?: string
-          plataforma: string
-          user_id?: string | null
-        }
-        Update: {
-          afiliado?: boolean
-          created_at?: string
-          festival_id?: string | null
-          id?: string
-          plataforma?: string
-          user_id?: string | null
-        }
-        Relationships: []
-      }
       festivals: {
         Row: {
           ciudad: string
           created_at: string
+          descuento_detalle: string | null
+          descuento_vigente_hasta: string | null
           estado_evento: string
           fecha_fin: string
           fecha_inicio: string
@@ -783,18 +903,18 @@ export type Database = {
           link_boletos: string | null
           mapa_url: string | null
           nombre: string
-          tipo: string
-          descuento_detalle: string | null
-          descuento_vigente_hasta: string | null
           preventa_detalle: string | null
           preventa_fin: string | null
           preventa_inicio: string | null
+          tipo: string
           tipo_descuento: string | null
           venue_id: string | null
         }
         Insert: {
           ciudad: string
           created_at?: string
+          descuento_detalle?: string | null
+          descuento_vigente_hasta?: string | null
           estado_evento?: string
           fecha_fin: string
           fecha_inicio: string
@@ -802,18 +922,18 @@ export type Database = {
           link_boletos?: string | null
           mapa_url?: string | null
           nombre: string
-          tipo?: string
-          descuento_detalle?: string | null
-          descuento_vigente_hasta?: string | null
           preventa_detalle?: string | null
           preventa_fin?: string | null
           preventa_inicio?: string | null
+          tipo?: string
           tipo_descuento?: string | null
           venue_id?: string | null
         }
         Update: {
           ciudad?: string
           created_at?: string
+          descuento_detalle?: string | null
+          descuento_vigente_hasta?: string | null
           estado_evento?: string
           fecha_fin?: string
           fecha_inicio?: string
@@ -821,15 +941,55 @@ export type Database = {
           link_boletos?: string | null
           mapa_url?: string | null
           nombre?: string
-          tipo?: string
-          descuento_detalle?: string | null
-          descuento_vigente_hasta?: string | null
           preventa_detalle?: string | null
           preventa_fin?: string | null
           preventa_inicio?: string | null
+          tipo?: string
           tipo_descuento?: string | null
+          venue_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "festivals_venue_id_fkey"
+            columns: ["venue_id"]
+            isOneToOne: false
+            referencedRelation: "venues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      followed_artists: {
+        Row: {
+          artist_id: string
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          artist_id: string
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          artist_id?: string
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "followed_artists_artist_id_fkey"
+            columns: ["artist_id"]
+            isOneToOne: false
+            referencedRelation: "artists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "followed_artists_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       mood_catalog: {
         Row: {
@@ -976,6 +1136,101 @@ export type Database = {
           },
         ]
       }
+      novedades: {
+        Row: {
+          activa: boolean
+          created_at: string
+          cuerpo: string
+          id: string
+          pantalla: string
+          publicada_en: string
+          titulo: string
+          vigente_hasta: string | null
+        }
+        Insert: {
+          activa?: boolean
+          created_at?: string
+          cuerpo: string
+          id: string
+          pantalla: string
+          publicada_en?: string
+          titulo: string
+          vigente_hasta?: string | null
+        }
+        Update: {
+          activa?: boolean
+          created_at?: string
+          cuerpo?: string
+          id?: string
+          pantalla?: string
+          publicada_en?: string
+          titulo?: string
+          vigente_hasta?: string | null
+        }
+        Relationships: []
+      }
+      novedades_vistas: {
+        Row: {
+          novedad_id: string
+          user_id: string
+          visto_en: string
+        }
+        Insert: {
+          novedad_id: string
+          user_id: string
+          visto_en?: string
+        }
+        Update: {
+          novedad_id?: string
+          user_id?: string
+          visto_en?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "novedades_vistas_novedad_id_fkey"
+            columns: ["novedad_id"]
+            isOneToOne: false
+            referencedRelation: "novedades"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "novedades_vistas_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      onboarding_progress: {
+        Row: {
+          alcanzado_en: string
+          paso: number
+          paso_nombre: string
+          user_id: string
+        }
+        Insert: {
+          alcanzado_en?: string
+          paso: number
+          paso_nombre: string
+          user_id: string
+        }
+        Update: {
+          alcanzado_en?: string
+          paso?: number
+          paso_nombre?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_progress_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       recommendation_cache: {
         Row: {
           artista_id: string
@@ -1008,6 +1263,32 @@ export type Database = {
           {
             foreignKeyName: "recommendation_cache_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_deploys: {
+        Row: {
+          id: string
+          triggered_at: string
+          triggered_by: string
+        }
+        Insert: {
+          id?: string
+          triggered_at?: string
+          triggered_by: string
+        }
+        Update: {
+          id?: string
+          triggered_at?: string
+          triggered_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_deploys_triggered_by_fkey"
+            columns: ["triggered_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
@@ -1278,6 +1559,48 @@ export type Database = {
           },
         ]
       }
+      ticket_clicks: {
+        Row: {
+          afiliado: boolean
+          created_at: string
+          festival_id: string | null
+          id: string
+          plataforma: string
+          user_id: string | null
+        }
+        Insert: {
+          afiliado?: boolean
+          created_at?: string
+          festival_id?: string | null
+          id?: string
+          plataforma: string
+          user_id?: string | null
+        }
+        Update: {
+          afiliado?: boolean
+          created_at?: string
+          festival_id?: string | null
+          id?: string
+          plataforma?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ticket_clicks_festival_id_fkey"
+            columns: ["festival_id"]
+            isOneToOne: false
+            referencedRelation: "festivals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ticket_clicks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       torneo_campeon_historial: {
         Row: {
           artist_id: string
@@ -1377,6 +1700,41 @@ export type Database = {
           },
         ]
       }
+      user_push_tokens: {
+        Row: {
+          created_at: string
+          id: string
+          platform: string
+          push_token: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          platform: string
+          push_token: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          platform?: string
+          push_token?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_push_tokens_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       users: {
         Row: {
           ciudad: string | null
@@ -1398,6 +1756,33 @@ export type Database = {
           id?: string
           is_admin?: boolean
           nombre?: string | null
+        }
+        Relationships: []
+      }
+      venues: {
+        Row: {
+          city: string
+          created_at: string
+          id: string
+          name: string
+          normalized_name: string
+          state: string
+        }
+        Insert: {
+          city: string
+          created_at?: string
+          id?: string
+          name: string
+          normalized_name: string
+          state: string
+        }
+        Update: {
+          city?: string
+          created_at?: string
+          id?: string
+          name?: string
+          normalized_name?: string
+          state?: string
         }
         Relationships: []
       }
@@ -1425,10 +1810,8 @@ export type Database = {
       }
     }
     Functions: {
-      delete_own_account: {
-        Args: { p_anon_id: string }
-        Returns: undefined
-      }
+      admin_metrics: { Args: never; Returns: Json }
+      admin_onboarding_funnel: { Args: never; Returns: Json }
       advance_squad_tournament: {
         Args: { p_squad_id: string }
         Returns: {
@@ -1448,6 +1831,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      archive_past_festivals: { Args: never; Returns: number }
       best_contact_match: {
         Args: never
         Returns: {
@@ -1456,10 +1840,6 @@ export type Database = {
           contact_user_id: string
           nombre: string
         }[]
-      }
-      count_segment_audience: {
-        Args: { p_ciudad: string; p_genero: string }
-        Returns: number
       }
       contacts_feed: {
         Args: never
@@ -1474,6 +1854,10 @@ export type Database = {
       }
       cosine_similarity: {
         Args: { v1: number[]; v2: number[] }
+        Returns: number
+      }
+      count_segment_audience: {
+        Args: { p_ciudad?: string; p_festival_id: string; p_genero?: string }
         Returns: number
       }
       create_squad: {
@@ -1496,6 +1880,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      delete_own_account: { Args: { p_anon_id: string }; Returns: undefined }
       energia_ciudad_avg: {
         Args: { p_ciudad: string }
         Returns: {

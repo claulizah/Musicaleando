@@ -9,6 +9,7 @@ import { cleanEventNameSafe } from '@/lib/cleanEventName';
 import { normalizeHorario } from '@/lib/normalizeHorario';
 import { logAdminAction } from '@/lib/adminActionsLog';
 import { findDuplicateMatch, type DuplicateMatch } from '@/lib/candidateDuplicates';
+import { notifyFollowersOfNewEvent } from '@/lib/pushNotifications';
 
 export type ApproveOverrides = {
   nombre: string;
@@ -113,6 +114,28 @@ export async function approveCandidate(
       console.error('No se pudo insertar line-up al aprobar candidato — revirtiendo la aprobación:', lineupError);
       await supabase.from('festivals').delete().eq('id', festival.id);
       return { error: `No se pudo guardar el line-up (se revirtió la aprobación): ${lineupError.message}` };
+    }
+
+    // Avisar a quien sigue a alguno de estos artistas — best-effort, nunca
+    // debe tumbar una aprobación que ya se completó (mismo estándar que
+    // logAdminAction). Corre tanto desde el flujo individual como desde
+    // approveCandidatesBulk (que llama a esta misma función por candidato),
+    // sin código extra en el bulk.
+    const followableArtistIds = [...new Set([...artistIds.values()].filter((id): id is string => Boolean(id)))];
+    if (followableArtistIds.length > 0) {
+      try {
+        const notifyResult = await notifyFollowersOfNewEvent(supabase, {
+          festivalId: festival.id,
+          festivalNombre: nombre,
+          fechaInicio: fecha_inicio,
+          artistIds: followableArtistIds,
+        });
+        if (notifyResult.errors.length > 0) {
+          console.error('notifyFollowersOfNewEvent tuvo errores (no bloqueante):', notifyResult.errors);
+        }
+      } catch (err) {
+        console.error('No se pudo notificar a seguidores de artistas (no bloqueante):', err);
+      }
     }
   }
 
