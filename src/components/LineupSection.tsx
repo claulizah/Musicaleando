@@ -34,12 +34,18 @@ export function LineupSection({
   fechaFin,
   initiallyOpen,
   onArtistPress,
+  followedIds,
+  onToggleFollow,
 }: {
   lineup: LineupRow[];
   fechaInicio: string | null;
   fechaFin: string | null;
   initiallyOpen: boolean;
   onArtistPress: (artist: LineupRow) => void;
+  // Seguir sin salir del catálogo: la campana junto a cada artista (solo los
+  // que tienen ficha/artist_id) usa la misma lógica que la ficha del artista.
+  followedIds: Set<string>;
+  onToggleFollow: (artist: LineupRow) => void;
 }) {
   const [open, setOpen] = useState(initiallyOpen);
   const [view, setView] = useState<LineupView>('nivel');
@@ -77,6 +83,16 @@ export function LineupSection({
           <Text style={styles.meta} numberOfLines={1}>
             {meta}
           </Text>
+        )}
+        {artist.artist_id && (
+          <Pressable
+            hitSlop={10}
+            style={[styles.bell, meta.length === 0 && styles.bellPushRight]}
+            onPress={() => onToggleFollow(artist)}
+            accessibilityLabel={followedIds.has(artist.artist_id) ? 'Dejar de seguir artista' : 'Seguir artista'}
+          >
+            <Text style={styles.bellText}>{followedIds.has(artist.artist_id) ? '🔔' : '🔕'}</Text>
+          </Pressable>
         )}
       </Pressable>
     );
@@ -220,6 +236,15 @@ const styles = StyleSheet.create({
   nameBig: {
     ...type.h2,
     color: colors.textPrimary,
+  },
+  bell: {
+    marginLeft: spacing.sm,
+  },
+  bellPushRight: {
+    marginLeft: 'auto',
+  },
+  bellText: {
+    fontSize: 16,
   },
   meta: {
     ...type.caption,

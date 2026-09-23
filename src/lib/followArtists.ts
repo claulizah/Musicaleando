@@ -10,7 +10,12 @@ export async function fetchFollowedArtistIds(userId: string): Promise<Set<string
 }
 
 export async function followArtist(userId: string, artistId: string): Promise<boolean> {
-  const { error } = await supabase.from('followed_artists').insert({ user_id: userId, artist_id: artistId });
+  // Idempotente: si ya existía la fila (estado local desactualizado, o se
+  // siguió desde otra pantalla), no es un error — sigue siendo un solo
+  // registro por (user_id, artist_id).
+  const { error } = await supabase
+    .from('followed_artists')
+    .upsert({ user_id: userId, artist_id: artistId }, { onConflict: 'user_id,artist_id', ignoreDuplicates: true });
   if (error) {
     console.error('No se pudo seguir al artista:', error);
     return false;

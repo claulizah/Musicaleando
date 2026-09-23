@@ -21,6 +21,7 @@ import { useSquadStore } from '../../store/useSquadStore';
 import { useEventFilters } from '../../hooks/useEventFilters';
 import { EventFilterBar } from '../../components/EventFilterBar';
 import { LineupSection } from '../../components/LineupSection';
+import { useFollowStore } from '../../store/useFollowStore';
 import { descuentoBadge, descuentoVigenciaLabel, descuentoVigente, mexicoToday, preventaVigente } from '../../lib/descuentos';
 import { buildTicketUrl } from '../../lib/ticketLinks';
 import { trackTicketClick } from '../../lib/trackTicketClick';
@@ -96,6 +97,10 @@ export function FestivalHubScreen({ navigation, route }: Props) {
   useEffect(() => {
     useAppConfigStore.getState().load();
   }, []);
+
+  useEffect(() => {
+    if (userId) useFollowStore.getState().load(userId);
+  }, [userId]);
 
   // "Mapa social": squadmates' arquetipo, resolved from squads already
   // loaded via squad_members_with_profile — no new query for this screen.
@@ -222,6 +227,23 @@ export function FestivalHubScreen({ navigation, route }: Props) {
   );
 }
 
+// Solo se monta con la tarjeta expandida, así las ~700 tarjetas colapsadas no
+// se suscriben al estado de seguidos ni se re-renderizan al tocar una campana.
+function FollowableLineup({
+  userId,
+  ...props
+}: Omit<React.ComponentProps<typeof LineupSection>, 'followedIds' | 'onToggleFollow'> & { userId: string | null }) {
+  const followedIds = useFollowStore((s) => s.followedIds);
+  const toggleFollow = useFollowStore((s) => s.toggle);
+  return (
+    <LineupSection
+      {...props}
+      followedIds={followedIds}
+      onToggleFollow={(artist) => artist.artist_id && userId && toggleFollow(userId, artist.artist_id)}
+    />
+  );
+}
+
 function FestivalCard({
   entry,
   navigation,
@@ -344,13 +366,15 @@ function FestivalCard({
 
   return (
     <View style={[styles.card, highlighted && styles.cardHighlighted]}>
-      <View style={styles.cardHeaderRow}>
-        <Text style={styles.nombre}>{festival.nombre}</Text>
-        <Text style={styles.tipoBadge}>{TIPO_BADGE[festival.tipo] ?? '🎪 Festival'}</Text>
-      </View>
-      <Text style={styles.meta} numberOfLines={1}>
-        {festival.ciudad} · {formatRange(festival.fecha_inicio, festival.fecha_fin)}
-      </Text>
+      <Pressable onPress={() => setExpanded((v) => !v)} style={styles.headerTap}>
+        <View style={styles.cardHeaderRow}>
+          <Text style={styles.nombre}>{festival.nombre}</Text>
+          <Text style={styles.tipoBadge}>{TIPO_BADGE[festival.tipo] ?? '🎪 Festival'}</Text>
+        </View>
+        <Text style={styles.meta} numberOfLines={1}>
+          {festival.ciudad} · {formatRange(festival.fecha_inicio, festival.fecha_fin)}
+        </Text>
+      </Pressable>
       {venue && (
         <Pressable onPress={() => navigation.navigate('VenueDetail', { venueId: venue.id, venueName: venue.name })}>
           <Text style={styles.venueLink} numberOfLines={1}>
@@ -464,7 +488,8 @@ function FestivalCard({
         </View>
       )}
 
-      <LineupSection
+      <FollowableLineup
+        userId={userId}
         lineup={lineup}
         fechaInicio={festival.fecha_inicio}
         fechaFin={festival.fecha_fin}
@@ -818,6 +843,9 @@ const styles = StyleSheet.create({
   cardHighlighted: {
     borderColor: colors.accentPrimary,
     borderWidth: 2,
+  },
+  headerTap: {
+    gap: 4,
   },
   cardHeaderRow: {
     flexDirection: 'row',

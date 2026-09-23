@@ -1,12 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Screen } from '../../components/Screen';
 import { RootStackParamList } from '../../navigation/types';
 import { useFestivalStore } from '../../store/useFestivalStore';
 import { useSessionStore } from '../../store/useSessionStore';
-import { fetchFollowedArtistIds, followArtist, unfollowArtist } from '../../lib/followArtists';
-import { hasPushPermission, requestPushPermissionAndRegister } from '../../lib/pushNotifications';
+import { useFollowStore } from '../../store/useFollowStore';
 import { colors, radii, spacing, type } from '../../theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'ArtistDetail'>;
@@ -33,47 +32,17 @@ export function ArtistDetailScreen({ route, navigation }: Props) {
   const festivals = useFestivalStore((s) => s.festivals);
   const status = useFestivalStore((s) => s.status);
   const userId = useSessionStore((s) => s.userId);
-  const [following, setFollowing] = useState(false);
-  const [followLoading, setFollowLoading] = useState(false);
+  const following = useFollowStore((s) => s.followedIds.has(artistId));
+  const followLoading = useFollowStore((s) => s.busy.has(artistId));
+  const loadFollows = useFollowStore((s) => s.load);
+  const toggleFollow = useFollowStore((s) => s.toggle);
 
   useEffect(() => {
-    if (!userId) return;
-    fetchFollowedArtistIds(userId).then((ids) => setFollowing(ids.has(artistId)));
-  }, [userId, artistId]);
+    if (userId) loadFollows(userId);
+  }, [userId, loadFollows]);
 
-  const handleToggleFollow = async () => {
-    if (!userId || followLoading) return;
-    setFollowLoading(true);
-    try {
-      if (following) {
-        const ok = await unfollowArtist(userId, artistId);
-        if (ok) setFollowing(false);
-        return;
-      }
-
-      // El permiso de notificaciones se pide justo aquí — el primer momento
-      // en que el usuario expresa intención real de recibir avisos — nunca
-      // al abrir la app. Si lo niega, igual lo dejamos seguir al artista:
-      // "seguir" y "recibir push" son cosas separadas, y no tener push no
-      // debe bloquear la parte de seguimiento en sí.
-      const alreadyGranted = await hasPushPermission();
-      if (!alreadyGranted) {
-        const granted = await requestPushPermissionAndRegister(userId);
-        if (!granted) {
-          Alert.alert(
-            'Notificaciones desactivadas',
-            'Puedes seguir al artista igual, pero no te avisaremos de nuevos eventos hasta que actives las notificaciones desde los ajustes de tu teléfono.',
-          );
-        }
-      } else {
-        await requestPushPermissionAndRegister(userId);
-      }
-
-      const ok = await followArtist(userId, artistId);
-      if (ok) setFollowing(true);
-    } finally {
-      setFollowLoading(false);
-    }
+  const handleToggleFollow = () => {
+    if (userId) toggleFollow(userId, artistId);
   };
 
   const appearances = festivals
