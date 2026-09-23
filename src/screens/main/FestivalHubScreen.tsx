@@ -365,10 +365,16 @@ function FestivalCard({
   };
 
   return (
-    <View style={[styles.card, highlighted && styles.cardHighlighted]}>
+    <View style={[styles.card, !expanded && styles.cardCerrada, highlighted && styles.cardHighlighted]}>
       <Pressable onPress={() => setExpanded((v) => !v)} style={styles.headerTap}>
         <View style={styles.cardHeaderRow}>
-          <Text style={styles.nombre}>{festival.nombre}</Text>
+          <Text
+            style={[styles.nombre, !expanded && styles.nombreCerrada]}
+            numberOfLines={expanded ? undefined : 1}
+            ellipsizeMode="tail"
+          >
+            {festival.nombre}
+          </Text>
           <Text style={styles.tipoBadge}>{TIPO_BADGE[festival.tipo] ?? '🎪 Festival'}</Text>
         </View>
         <Text style={styles.meta} numberOfLines={1}>
@@ -405,13 +411,13 @@ function FestivalCard({
                 </View>
               )}
             </View>
-            {descuento && (
+            {expanded && descuento && (
               <Text style={styles.promoDetail}>
                 {festival.descuento_detalle}
                 {vigencia ? ` · ${vigencia}` : ''}
               </Text>
             )}
-            {preventa && festival.preventa_detalle ? <Text style={styles.promoDetail}>{festival.preventa_detalle}</Text> : null}
+            {expanded && preventa && festival.preventa_detalle ? <Text style={styles.promoDetail}>{festival.preventa_detalle}</Text> : null}
           </View>
         );
       })()}
@@ -852,6 +858,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
+  },
+  // Tarjeta cerrada: altura predecible — título de 1 línea con "…", mismo
+  // tamaño en todas, menos padding. Abierta, el nombre completo se ve.
+  cardCerrada: {
+    padding: spacing.sm,
+    gap: 2,
+  },
+  nombreCerrada: {
+    ...type.body,
+    fontFamily: type.h2.fontFamily,
   },
   nombre: {
     ...type.bodyLg,
