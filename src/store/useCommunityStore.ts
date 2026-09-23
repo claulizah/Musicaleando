@@ -2,7 +2,19 @@ import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
 import { ContentReportMotivo, Tables } from '../types/database';
 
-export type CommunityShareStats = Tables<'community_share_stats'>;
+// Las vistas de Postgres salen del generador de tipos con TODAS las columnas
+// nullable, aunque community_share_stats (join de community_shares con su
+// conteo de votos) nunca devuelve nulos en estas — se declara a mano con la
+// forma real en vez de propagar `| null` por toda la pantalla.
+export type CommunityShareStats = {
+  share_id: string;
+  user_id: string;
+  caption: string | null;
+  ciudad: string | null;
+  created_at: string;
+  song_ids: string[];
+  vote_count: number;
+};
 export type CommunityShareWithSongs = CommunityShareStats & {
   songs: Tables<'songs'>[];
   iVoted: boolean;
@@ -55,7 +67,7 @@ export const useCommunityStore = create<CommunityState>((set, get) => ({
       return;
     }
 
-    const rows = statsRows ?? [];
+    const rows = (statsRows ?? []) as CommunityShareStats[];
     const allSongIds = Array.from(new Set(rows.flatMap((r) => r.song_ids)));
     const shareIds = rows.map((r) => r.share_id);
 
