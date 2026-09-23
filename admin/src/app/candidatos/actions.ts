@@ -52,7 +52,7 @@ export async function approveCandidate(
 
   const { data: candidate, error: candidateError } = await supabase
     .from('event_candidates')
-    .select('lineup, estado, source, venue')
+    .select('lineup, estado, source, venue, image_url')
     .eq('id', candidateId)
     .maybeSingle();
   if (candidateError) return { error: candidateError.message };
@@ -72,7 +72,7 @@ export async function approveCandidate(
 
   const { data: festival, error: insertError } = await supabase
     .from('festivals')
-    .insert({ nombre, tipo: tipo ?? 'concierto', ciudad, fecha_inicio, fecha_fin, link_boletos: link_boletos || null, venue_id })
+    .insert({ nombre, tipo: tipo ?? 'concierto', ciudad, fecha_inicio, fecha_fin, link_boletos: link_boletos || null, venue_id, image_url: candidate.image_url })
     .select('id')
     .single();
   if (insertError) return { error: insertError.message };

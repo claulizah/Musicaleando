@@ -45,7 +45,18 @@ type TmEvent = {
   classifications?: TmClassification[];
   priceRanges?: TmPriceRange[];
   _embedded?: { venues?: TmVenue[]; attractions?: TmAttraction[] };
+  images?: { url?: string; ratio?: string; width?: number }[];
 };
+
+// Miniatura 16:9 más cercana a ~640px de ancho (no la de 2048px); si no hay
+// 16:9, la más cercana de cualquier ratio. Igual criterio que el backfill SQL.
+function pickImage(ev: TmEvent): string | null {
+  const imgs = (ev.images ?? []).filter((i) => i.url);
+  const dist = (i: { width?: number }) => Math.abs((i.width ?? 0) - 640);
+  const pool = imgs.filter((i) => i.ratio === "16_9");
+  const best = (pool.length ? pool : imgs).sort((a, b) => dist(a) - dist(b))[0];
+  return best?.url ?? null;
+}
 
 type TmResponse = {
   _embedded?: { events?: TmEvent[] };
@@ -155,6 +166,7 @@ function normalizeEvent(ev: TmEvent) {
     price_max: price?.max ?? null,
     price_currency: price?.currency ?? null,
     link_boletos,
+    image_url: pickImage(ev),
     raw_payload: ev as unknown as Record<string, unknown>,
     completo: Boolean(nombre && ciudad && fecha_inicio && link_boletos),
     tm_cancelled: statusCode === "cancelled",
@@ -263,6 +275,7 @@ Deno.serve(async (req: Request) => {
           price_max: normalized.price_max,
           price_currency: normalized.price_currency,
           link_boletos: normalized.link_boletos,
+          image_url: normalized.image_url,
           raw_payload: normalized.raw_payload,
           completo: normalized.completo,
           estado,

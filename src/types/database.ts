@@ -908,6 +908,7 @@ export type Database = {
           preventa_inicio: string | null
           tipo: string
           tipo_descuento: string | null
+          image_url: string | null
           venue_id: string | null
         }
         Insert: {
@@ -927,6 +928,7 @@ export type Database = {
           preventa_inicio?: string | null
           tipo?: string
           tipo_descuento?: string | null
+          image_url?: string | null
           venue_id?: string | null
         }
         Update: {
@@ -946,6 +948,7 @@ export type Database = {
           preventa_inicio?: string | null
           tipo?: string
           tipo_descuento?: string | null
+          image_url?: string | null
           venue_id?: string | null
         }
         Relationships: [
@@ -957,6 +960,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      festival_schedule_picks: {
+        Row: {
+          created_at: string
+          festival_id: string
+          lineup_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          festival_id: string
+          lineup_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          festival_id?: string
+          lineup_id?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       followed_artists: {
         Row: {

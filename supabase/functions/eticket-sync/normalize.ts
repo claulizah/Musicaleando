@@ -9,6 +9,7 @@ export type LdEvent = {
   "@type"?: string;
   name?: string;
   url?: string;
+  image?: string;
   startDate?: string;
   endDate?: string;
   eventStatus?: string;
@@ -147,6 +148,7 @@ export function normalizeEvent(ev: LdEvent) {
     price_max: prices.length ? Math.max(...prices) : null,
     price_currency: ev.offers?.[0]?.priceCurrency ?? null,
     link_boletos: ev.url ?? null,
+    image_url: typeof ev.image === "string" && ev.image.startsWith("http") ? ev.image : null,
     raw_payload: ev as unknown as Record<string, unknown>,
     completo: Boolean(nombre && ciudad && fecha_inicio && ev.url),
     cancelado_o_pospuesto: status === "EventCancelled" || status === "EventPostponed",

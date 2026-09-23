@@ -159,6 +159,7 @@ Deno.serve(async (req: Request) => {
           price_max: normalized.price_max,
           price_currency: normalized.price_currency,
           link_boletos: normalized.link_boletos,
+          image_url: normalized.image_url,
           raw_payload: normalized.raw_payload,
           completo: normalized.completo,
           estado,
