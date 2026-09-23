@@ -35,6 +35,9 @@ export type EventFilterBarProps = {
   onDateFilterChange: (f: DateFilter) => void;
   tipoFilter: TipoFilter;
   onTipoFilterChange: (f: TipoFilter) => void;
+  // El catálogo usa pestañas reales Conciertos/Festivales; el selector de
+  // festival de squads sigue usando el chip.
+  hideTipoFilter?: boolean;
   soloMisGeneros: boolean;
   onToggleSoloMisGeneros: () => void;
   generoLoading: boolean;
@@ -76,6 +79,7 @@ export function EventFilterBar({
   onDateFilterChange,
   tipoFilter,
   onTipoFilterChange,
+  hideTipoFilter,
   soloMisGeneros,
   onToggleSoloMisGeneros,
   generoLoading,
@@ -101,7 +105,7 @@ export function EventFilterBar({
       />
 
       <FadingChipRow>
-        {TIPO_OPTIONS.map((opt) => (
+        {!hideTipoFilter && TIPO_OPTIONS.map((opt) => (
           <Chip key={opt.id} label={opt.label} selected={tipoFilter === opt.id} onPress={() => onTipoFilterChange(opt.id)} />
         ))}
         {(promoCounts.descuento > 0 || soloDescuento) && (

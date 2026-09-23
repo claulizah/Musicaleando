@@ -22,6 +22,9 @@ import { useEventFilters } from '../../hooks/useEventFilters';
 import { EventFilterBar } from '../../components/EventFilterBar';
 import { LineupSection } from '../../components/LineupSection';
 import { useFollowStore } from '../../store/useFollowStore';
+import { useSchedulePicksStore } from '../../store/useSchedulePicksStore';
+import { selectParaTi } from '../../lib/paraTi';
+import { fetchUserEstado } from '../../lib/userEstado';
 import { descuentoBadge, descuentoVigenciaLabel, descuentoVigente, mexicoToday, preventaVigente } from '../../lib/descuentos';
 import { buildTicketUrl } from '../../lib/ticketLinks';
 import { trackTicketClick } from '../../lib/trackTicketClick';
@@ -83,6 +86,18 @@ export function FestivalHubScreen({ navigation, route }: Props) {
   const fetchMySquads = useSquadStore((s) => s.fetchMySquads);
   const venues = useFestivalStore((s) => s.venues);
   const filters = useEventFilters(festivals, generos, venues);
+  const followedIds = useFollowStore((s) => s.followedIds);
+  // Pestañas reales Conciertos / Festivales (no un chip que filtra la misma
+  // lista): cada una es su propio contexto, con sus secciones por fecha.
+  const [tab, setTab] = useState<'concierto' | 'festival'>('concierto');
+  const [estadoUsuario, setEstadoUsuario] = useState<string | null>(null);
+
+  // "Ver evento" desde otra pantalla: abre la pestaña del tipo de ese evento.
+  useEffect(() => {
+    if (!highlightFestivalId) return;
+    const tipo = festivals.find((e) => e.festival.id === highlightFestivalId)?.festival.tipo;
+    if (tipo === 'festival' || tipo === 'concierto') setTab(tipo);
+  }, [highlightFestivalId, festivals]);
 
   useEffect(() => {
     if (userId) fetchFestivals(userId);
@@ -99,7 +114,10 @@ export function FestivalHubScreen({ navigation, route }: Props) {
   }, []);
 
   useEffect(() => {
-    if (userId) useFollowStore.getState().load(userId);
+    if (!userId) return;
+    useFollowStore.getState().load(userId);
+    useSchedulePicksStore.getState().load(userId);
+    fetchUserEstado(userId).then(setEstadoUsuario);
   }, [userId]);
 
   // "Mapa social": squadmates' arquetipo, resolved from squads already
@@ -108,7 +126,47 @@ export function FestivalHubScreen({ navigation, route }: Props) {
     squads.flatMap((s) => s.members).map((m) => [m.user_id, m.arquetipo]),
   );
 
-  const filteredFestivals = filters.filtered;
+  const filteredFestivals = filters.filtered.filter((e) => e.festival.tipo === tab);
+  const countByTipo = (tipo: 'concierto' | 'festival') => filters.filtered.filter((e) => e.festival.tipo === tipo).length;
+
+  const venueById = new Map(venues.map((v) => [v.id, v]));
+  const paraTi = selectParaTi(festivals, {
+    tipo: tab,
+    followedIds,
+    estado: estadoUsuario,
+    venueState: (id) => (id ? (venueById.get(id)?.state ?? null) : null),
+    hoy: mexicoToday(new Date()),
+  });
+
+  const renderCardFor = (entry: FestivalWithIntent) => (
+    <FestivalCard
+      key={entry.festival.id}
+      entry={entry}
+      navigation={navigation}
+      highlighted={entry.festival.id === highlightFestivalId}
+      onSetStatus={(s) => userId && setFestivalStatus(userId, entry.festival.id, s)}
+      onSetReaction={(r) => userId && setReaction(userId, entry.festival.id, r)}
+      onSubmitFeedback={(tags, comentario) =>
+        userId ? submitFeedback(userId, entry.festival.id, tags, comentario) : Promise.resolve()
+      }
+      userId={userId}
+      onPostComment={(texto) =>
+        userId ? postComment(userId, entry.festival.id, texto) : Promise.resolve()
+      }
+      onDeleteComment={(commentId) => deleteComment(entry.festival.id, commentId)}
+      onReportComment={(commentId, motivo) =>
+        userId ? reportComment(userId, commentId, motivo) : Promise.resolve()
+      }
+      onToggleInterest={(announcementId) =>
+        userId ? toggleInterest(userId, entry.festival.id, announcementId) : Promise.resolve()
+      }
+      onSubmitSurvey={(calificacion, volveria) =>
+        userId ? submitSurvey(userId, entry.festival.id, calificacion, volveria) : Promise.resolve()
+      }
+      generos={generos}
+      squadmateArchetypeById={squadmateArchetypeById}
+    />
+  );
 
   return (
     <Screen>
@@ -121,6 +179,16 @@ export function FestivalHubScreen({ navigation, route }: Props) {
           <View style={styles.headerSpacer} />
         </View>
         <WhatsNewCard screen="Festivals" />
+
+        <View style={styles.tabs}>
+          {(['concierto', 'festival'] as const).map((t) => (
+            <Pressable key={t} style={[styles.tab, tab === t && styles.tabActive]} onPress={() => setTab(t)}>
+              <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
+                {t === 'concierto' ? '🎤 Conciertos' : '🎪 Festivales'} ({countByTipo(t)})
+              </Text>
+            </Pressable>
+          ))}
+        </View>
 
         <EventFilterBar
           query={filters.query}
@@ -136,6 +204,7 @@ export function FestivalHubScreen({ navigation, route }: Props) {
           tipoFilter={filters.tipoFilter}
           onTipoFilterChange={filters.setTipoFilter}
           soloMisGeneros={filters.soloMisGeneros}
+          hideTipoFilter
           onToggleSoloMisGeneros={filters.toggleSoloMisGeneros}
           generoLoading={filters.generoLoading}
           showGeneroFilter={generos.length > 0}
@@ -167,37 +236,16 @@ export function FestivalHubScreen({ navigation, route }: Props) {
           </Text>
         )}
 
-        {(() => {
-          const renderCard = (entry: FestivalWithIntent) => (
-            <FestivalCard
-              key={entry.festival.id}
-              entry={entry}
-              navigation={navigation}
-              highlighted={entry.festival.id === highlightFestivalId}
-              onSetStatus={(s) => userId && setFestivalStatus(userId, entry.festival.id, s)}
-              onSetReaction={(r) => userId && setReaction(userId, entry.festival.id, r)}
-              onSubmitFeedback={(tags, comentario) =>
-                userId ? submitFeedback(userId, entry.festival.id, tags, comentario) : Promise.resolve()
-              }
-              userId={userId}
-              onPostComment={(texto) =>
-                userId ? postComment(userId, entry.festival.id, texto) : Promise.resolve()
-              }
-              onDeleteComment={(commentId) => deleteComment(entry.festival.id, commentId)}
-              onReportComment={(commentId, motivo) =>
-                userId ? reportComment(userId, commentId, motivo) : Promise.resolve()
-              }
-              onToggleInterest={(announcementId) =>
-                userId ? toggleInterest(userId, entry.festival.id, announcementId) : Promise.resolve()
-              }
-              onSubmitSurvey={(calificacion, volveria) =>
-                userId ? submitSurvey(userId, entry.festival.id, calificacion, volveria) : Promise.resolve()
-              }
-              generos={generos}
-              squadmateArchetypeById={squadmateArchetypeById}
-            />
-          );
+        {paraTi.kind && !filters.query.trim() && filters.dateFilter === 'todos' && (
+          <View style={styles.sectionWrap}>
+            <Text style={styles.sectionHeader}>
+              {paraTi.kind === 'seguidos' ? '🔔 De tus artistas seguidos' : `📍 Cerca de ti (${estadoUsuario})`}
+            </Text>
+            {paraTi.entries.map((e) => renderCardFor(e))}
+          </View>
+        )}
 
+        {(() => {
           // Secciones por fecha (Esta semana / Este mes / Próximamente) para
           // que el catálogo completo no se sienta como una sola tira
           // interminable — solo cuando no hay ya un filtro de fecha
@@ -205,7 +253,7 @@ export function FestivalHubScreen({ navigation, route }: Props) {
           // ej. filtrar "Próximos 7 días" y luego ver un solo encabezado
           // "Esta semana" no aporta nada).
           if (filters.dateFilter !== 'todos') {
-            return filteredFestivals.map(renderCard);
+            return filteredFestivals.map(renderCardFor);
           }
 
           const buckets = new Map<string, FestivalWithIntent[]>();
@@ -218,7 +266,7 @@ export function FestivalHubScreen({ navigation, route }: Props) {
           return DATE_BUCKET_ORDER.filter((b) => buckets.has(b)).map((bucket) => (
             <View key={bucket} style={styles.sectionWrap}>
               <Text style={styles.sectionHeader}>{DATE_BUCKET_LABEL[bucket]}</Text>
-              {buckets.get(bucket)!.map(renderCard)}
+              {buckets.get(bucket)!.map(renderCardFor)}
             </View>
           ));
         })()}
@@ -231,15 +279,25 @@ export function FestivalHubScreen({ navigation, route }: Props) {
 // se suscriben al estado de seguidos ni se re-renderizan al tocar una campana.
 function FollowableLineup({
   userId,
+  festivalId,
+  esFestival,
   ...props
-}: Omit<React.ComponentProps<typeof LineupSection>, 'followedIds' | 'onToggleFollow'> & { userId: string | null }) {
+}: Omit<React.ComponentProps<typeof LineupSection>, 'followedIds' | 'onToggleFollow' | 'picks'> & {
+  userId: string | null;
+  festivalId: string;
+  esFestival: boolean;
+}) {
   const followedIds = useFollowStore((s) => s.followedIds);
   const toggleFollow = useFollowStore((s) => s.toggle);
+  const pickedIds = useSchedulePicksStore((s) => s.pickedIds);
+  const togglePick = useSchedulePicksStore((s) => s.toggle);
   return (
     <LineupSection
       {...props}
       followedIds={followedIds}
       onToggleFollow={(artist) => artist.artist_id && userId && toggleFollow(userId, artist.artist_id)}
+      // "Mi horario" solo en festivales (un concierto de un acto no lo necesita).
+      picks={esFestival ? { pickedIds, onToggle: (artist) => userId && togglePick(userId, festivalId, artist.id) } : undefined}
     />
   );
 }
@@ -367,6 +425,16 @@ function FestivalCard({
   return (
     <View style={[styles.card, !expanded && styles.cardCerrada, highlighted && styles.cardHighlighted]}>
       <Pressable onPress={() => setExpanded((v) => !v)} style={styles.headerTap}>
+        <View style={styles.headerRow}>
+          {!expanded &&
+            (festival.image_url ? (
+              <Image source={{ uri: festival.image_url }} style={styles.thumb} resizeMode="cover" />
+            ) : (
+              <View style={[styles.thumb, styles.thumbFallback]}>
+                <Text style={styles.thumbFallbackText}>{festival.tipo === 'festival' ? '🎪' : '🎤'}</Text>
+              </View>
+            ))}
+          <View style={styles.headerText}>
         <View style={styles.cardHeaderRow}>
           <Text
             style={[styles.nombre, !expanded && styles.nombreCerrada]}
@@ -380,6 +448,8 @@ function FestivalCard({
         <Text style={styles.meta} numberOfLines={1}>
           {festival.ciudad} · {formatRange(festival.fecha_inicio, festival.fecha_fin)}
         </Text>
+          </View>
+        </View>
       </Pressable>
       {venue && (
         <Pressable onPress={() => navigation.navigate('VenueDetail', { venueId: venue.id, venueName: venue.name })}>
@@ -435,6 +505,9 @@ function FestivalCard({
 
       {expanded && (
         <>
+      {festival.image_url && (
+        <Image source={{ uri: festival.image_url }} style={styles.heroImage} resizeMode="cover" />
+      )}
       {squadGoingCount > 0 && (
         <Text style={styles.squadHint}>
           👥 {squadGoingCount} {squadGoingCount === 1 ? 'de tu squad va' : 'de tu squad van'}
@@ -496,6 +569,8 @@ function FestivalCard({
 
       <FollowableLineup
         userId={userId}
+        festivalId={festival.id}
+        esFestival={festival.tipo === 'festival'}
         lineup={lineup}
         fechaInicio={festival.fecha_inicio}
         fechaFin={festival.fecha_fin}
@@ -849,6 +924,59 @@ const styles = StyleSheet.create({
   cardHighlighted: {
     borderColor: colors.accentPrimary,
     borderWidth: 2,
+  },
+  tabs: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    backgroundColor: colors.bgElevated,
+    borderRadius: radii.pill,
+    padding: 4,
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    borderRadius: radii.pill,
+  },
+  tabActive: {
+    backgroundColor: colors.accentPrimaryMuted,
+  },
+  tabText: {
+    ...type.label,
+    color: colors.textSecondary,
+  },
+  tabTextActive: {
+    color: colors.accentPrimary,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  headerText: {
+    flex: 1,
+    gap: 2,
+  },
+  thumb: {
+    width: 48,
+    height: 48,
+    borderRadius: radii.md,
+    backgroundColor: colors.bg,
+  },
+  thumbFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  thumbFallbackText: {
+    fontSize: 22,
+  },
+  heroImage: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    borderRadius: radii.md,
+    backgroundColor: colors.bg,
   },
   headerTap: {
     gap: 4,

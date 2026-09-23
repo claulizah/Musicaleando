@@ -10,10 +10,11 @@ import {
   sortByHorario,
   type Nivel,
 } from '../lib/lineupSchedule';
+import { findConflicts } from '../lib/scheduleConflicts';
 import { colors, radii, spacing, type } from '../theme';
 
 type LineupRow = Tables<'festival_lineup'>;
-type LineupView = 'nivel' | 'horario';
+type LineupView = 'nivel' | 'horario' | 'mi';
 
 const NIVEL_TITLE: Record<Nivel, string> = {
   estelar: '⭐ Estelares',
@@ -36,6 +37,7 @@ export function LineupSection({
   onArtistPress,
   followedIds,
   onToggleFollow,
+  picks,
 }: {
   lineup: LineupRow[];
   fechaInicio: string | null;
@@ -46,6 +48,9 @@ export function LineupSection({
   // que tienen ficha/artist_id) usa la misma lógica que la ficha del artista.
   followedIds: Set<string>;
   onToggleFollow: (artist: LineupRow) => void;
+  // "Mi horario" (solo festivales): ⭐ = "quiero verlo" en ESTE festival,
+  // distinto de la campana (seguir al artista para futuros eventos).
+  picks?: { pickedIds: Set<string>; onToggle: (artist: LineupRow) => void };
 }) {
   const [open, setOpen] = useState(initiallyOpen);
   const [view, setView] = useState<LineupView>('nivel');
@@ -54,7 +59,11 @@ export function LineupSection({
   if (lineup.length === 0) return null;
 
   const schedule = hasSchedule(lineup);
-  const activeView: LineupView = schedule ? view : 'nivel';
+  const pickedCount = picks ? lineup.filter((l) => picks.pickedIds.has(l.id)).length : 0;
+  const activeView: LineupView = view === 'mi' && picks ? 'mi' : schedule ? view : 'nivel';
+  const pickedRows = picks ? lineup.filter((l) => picks.pickedIds.has(l.id)) : [];
+  const conflicts = findConflicts(pickedRows.map((l) => ({ id: l.id, horario: l.horario, horario_fin: l.horario_fin })));
+  const nameById = new Map(lineup.map((l) => [l.id, l.artista]));
   const byDay = groupLineupByDay(lineup, fechaInicio, fechaFin);
 
   const toggleDay = (key: string) =>
@@ -83,6 +92,16 @@ export function LineupSection({
           <Text style={styles.meta} numberOfLines={1}>
             {meta}
           </Text>
+        )}
+        {picks && (
+          <Pressable
+            hitSlop={10}
+            style={[styles.bell, meta.length === 0 && !artist.artist_id && styles.bellPushRight]}
+            onPress={() => picks.onToggle(artist)}
+            accessibilityLabel={picks.pickedIds.has(artist.id) ? 'Quitar de Mi horario' : 'Agregar a Mi horario'}
+          >
+            <Text style={styles.bellText}>{picks.pickedIds.has(artist.id) ? '⭐' : '☆'}</Text>
+          </Pressable>
         )}
         {artist.artist_id && (
           <Pressable
@@ -126,7 +145,32 @@ export function LineupSection({
     );
   };
 
-  const renderItems = (items: LineupRow[]) => (activeView === 'horario' ? renderBySchedule(items) : renderByNivel(items));
+  // Vista "Mi horario": solo lo marcado, por hora, con aviso (nunca resolución
+  // automática) cuando dos sets se traslapan.
+  const renderMine = (items: LineupRow[]) => {
+    const mine = sortByHorario(items.filter((l) => picks?.pickedIds.has(l.id)));
+    if (mine.length === 0) return null;
+    return (
+      <View>
+        {mine.map((a) => {
+          const clash = conflicts.get(a.id);
+          return (
+            <View key={a.id} style={clash ? styles.clashRow : undefined}>
+              {renderArtist(a, { showTime: true })}
+              {clash && (
+                <Text style={styles.clashText}>
+                  ⚠️ Se traslapa con {clash.map((id) => nameById.get(id) ?? '—').join(', ')}
+                </Text>
+              )}
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
+  const renderItems = (items: LineupRow[]) =>
+    activeView === 'mi' ? renderMine(items) : activeView === 'horario' ? renderBySchedule(items) : renderByNivel(items);
 
   return (
     <View>
@@ -137,25 +181,33 @@ export function LineupSection({
       </Pressable>
       {open && (
         <View style={styles.body}>
-          {schedule && (
+          {(schedule || picks) && (
             <View style={styles.viewChips}>
-              {(['nivel', 'horario'] as const).map((v) => (
+              {((schedule ? ['nivel', 'horario'] : ['nivel']) as LineupView[]).concat(picks ? ['mi'] : []).map((v) => (
                 <Pressable
                   key={v}
                   style={[styles.chip, activeView === v && styles.chipSelected]}
                   onPress={() => setView(v)}
                 >
                   <Text style={[styles.chipLabel, activeView === v && styles.chipLabelSelected]}>
-                    {v === 'nivel' ? 'Por nivel' : 'Por horario'}
+                    {v === 'nivel' ? 'Por nivel' : v === 'horario' ? 'Por horario' : `⭐ Mi horario (${pickedCount})`}
                   </Text>
                 </Pressable>
               ))}
             </View>
           )}
+          {activeView === 'mi' && pickedCount === 0 && (
+            <Text style={styles.meta}>Marca con ☆ a los artistas que quieres ver y aquí armamos tu horario.</Text>
+          )}
+          {activeView === 'mi' && conflicts.size > 0 && (
+            <Text style={styles.clashText}>⚠️ {conflicts.size} sets se traslapan — tú decides a cuál ir.</Text>
+          )}
           {byDay
             ? byDay.map((group, i) => {
                 const dayKey = String(i);
                 const isOpen = openDays.has(dayKey);
+                // En "Mi horario" no se listan días sin nada marcado.
+                if (activeView === 'mi' && !group.items.some((l) => picks?.pickedIds.has(l.id))) return null;
                 return (
                   <View key={group.day ?? 'sin-dia'}>
                     <Pressable onPress={() => toggleDay(dayKey)}>
@@ -236,6 +288,16 @@ const styles = StyleSheet.create({
   nameBig: {
     ...type.h2,
     color: colors.textPrimary,
+  },
+  clashRow: {
+    backgroundColor: colors.accentSecondaryMuted,
+    borderRadius: radii.md,
+  },
+  clashText: {
+    ...type.caption,
+    color: colors.accentSecondary,
+    paddingLeft: spacing.sm,
+    paddingBottom: spacing.xs,
   },
   bell: {
     marginLeft: spacing.sm,
