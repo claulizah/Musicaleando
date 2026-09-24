@@ -68,14 +68,14 @@ export function GradientTile({
             end={{ x: 0, y: 1 }}
             style={styles.scrim}
           />
-          <Text style={styles.label} numberOfLines={2}>
+          <Text style={styles.label} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.85}>
             {label}
           </Text>
         </ImageBackground>
       ) : (
         <LinearGradient colors={gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={tileStyle}>
           <Text style={size === 'large' ? styles.emojiLarge : styles.emojiMedium}>{emoji}</Text>
-          <Text style={styles.label} numberOfLines={2}>
+          <Text style={styles.label} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.85}>
             {label}
           </Text>
         </LinearGradient>
@@ -96,8 +96,12 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
     overflow: 'hidden',
   },
+  // Con padding lateral de 24 (spacing.lg) el texto útil de una ficha de 2 columnas mide
+  // ~95 dp en un teléfono de 360 dp: "Electrónica" (98 dp en Sora 17) y "Reggaetón" (96 dp)
+  // no caben y se partían a media palabra. Con 8 dp por lado quedan ~127 dp.
   tileMedium: {
     minHeight: 128,
+    paddingHorizontal: spacing.sm,
   },
   tileSelected: {
     borderColor: colors.textPrimary,
