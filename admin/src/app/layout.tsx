@@ -31,7 +31,10 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       lang="es"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col bg-gray-50 text-gray-900">
+      {/* Extensiones del navegador (ej. Testim) inyectan atributos en <body> antes de que
+          React hidrate, y en desarrollo eso dispara el overlay rojo de "hydration mismatch"
+          aunque la página funciona. Solo silencia esa diferencia a nivel de <body>. */}
+      <body suppressHydrationWarning className="min-h-full flex flex-col bg-gray-50 text-gray-900">
         {user && (
           <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-3">
             <Link href="/admin" className="font-semibold">
