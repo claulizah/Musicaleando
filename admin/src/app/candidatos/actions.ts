@@ -10,6 +10,7 @@ import { normalizeHorario } from '@/lib/normalizeHorario';
 import { logAdminAction } from '@/lib/adminActionsLog';
 import { findDuplicateMatch, type DuplicateMatch } from '@/lib/candidateDuplicates';
 import { notifyFollowersOfNewEvent } from '@/lib/pushNotifications';
+import { stripCitySuffix } from '@/lib/artistNameCleanup';
 
 export type ApproveOverrides = {
   nombre: string;
@@ -84,7 +85,16 @@ export async function approveCandidate(
   // ES el artista, así que se sintetiza la única fila de line-up para que el
   // artista quede vinculado igual que en cualquier otro evento.
   if ((tipo ?? 'concierto') === 'concierto' && lineup.length === 0) {
-    lineup = [{ artista: nombre, escenario: null, horario: null }];
+    // El nombre del evento suele traer el lugar pegado ("Anabanta en Aguascalientes", típico
+    // de Arema): se le quita solo si coincide con la ciudad, el estado o el foro del evento;
+    // sin datos del lugar, o si nada coincide, queda tal cual (nunca se adivina).
+    let estado: string | null = null;
+    if (venue_id) {
+      const { data: venueRow } = await supabase.from('venues').select('state').eq('id', venue_id).maybeSingle();
+      estado = venueRow?.state ?? null;
+    }
+    const artista = stripCitySuffix(nombre, { ciudad, estado, venue: candidate.venue });
+    lineup = [{ artista, escenario: null, horario: null }];
   }
   if (lineup.length > 0) {
     const artistIds = await resolveArtistIds(
