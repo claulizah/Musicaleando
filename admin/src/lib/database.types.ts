@@ -245,10 +245,14 @@ export type Database = {
           name: string;
           normalized_name: string;
           created_at: string;
+          genres: string[] | null;
+          genre_other: string | null;
         };
-        Insert: Omit<Database['public']['Tables']['artists']['Row'], 'id' | 'created_at'> & {
+        Insert: Omit<Database['public']['Tables']['artists']['Row'], 'id' | 'created_at' | 'genres' | 'genre_other'> & {
           id?: string;
           created_at?: string;
+          genres?: string[] | null;
+          genre_other?: string | null;
         };
         Update: Partial<Database['public']['Tables']['artists']['Row']>;
         Relationships: [];

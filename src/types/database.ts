@@ -211,18 +211,24 @@ export type Database = {
       artists: {
         Row: {
           created_at: string
+          genre_other: string | null
+          genres: string[] | null
           id: string
           name: string
           normalized_name: string
         }
         Insert: {
           created_at?: string
+          genre_other?: string | null
+          genres?: string[] | null
           id?: string
           name: string
           normalized_name: string
         }
         Update: {
           created_at?: string
+          genre_other?: string | null
+          genres?: string[] | null
           id?: string
           name?: string
           normalized_name?: string

@@ -139,6 +139,9 @@ export default async function DashboardPage() {
             <Link href="/admin/calendario" className="rounded-md bg-gray-100 px-3 py-1.5 text-gray-700">
               📅 Calendario
             </Link>
+            <Link href="/admin/artistas" className="rounded-md bg-gray-100 px-3 py-1.5 text-gray-700">
+              🎤 Artistas y género
+            </Link>
           </div>
         </div>
       </div>
