@@ -12,7 +12,7 @@ export default function PrivacidadPage() {
     <main className="mx-auto max-w-2xl px-4 py-16 text-sm leading-relaxed text-gray-700">
       <h1 className="text-2xl font-semibold text-gray-900">Aviso de Privacidad — Musicaleando</h1>
       <p className="mt-1 text-gray-500">
-        Última actualización: 21 de septiembre de 2026
+        Última actualización: 23 de septiembre de 2026
       </p>
 
       <div className="mt-8 flex flex-col gap-6">
@@ -71,6 +71,23 @@ export default function PrivacidadPage() {
               sesión (sin correo, sin IP). Sirve para entender qué eventos interesan y para
               medir ventas referidas.
             </li>
+            <li>
+              <b>Identificador de notificaciones push:</b> si activas las notificaciones,
+              guardamos el identificador que Apple o Google (a través de Expo) asigna a tu
+              dispositivo, junto con la plataforma (iOS o Android). Está ligado solo a tu
+              identificador anónimo de sesión y sirve únicamente para avisarte de eventos nuevos
+              de artistas que sigues.
+            </li>
+            <li>
+              <b>Artistas que sigues:</b> la lista de artistas que tú decides seguir, ligada
+              solo a tu identificador anónimo. Sirve para mostrarte primero sus eventos y para
+              enviarte esos avisos.
+            </li>
+            <li>
+              <b>Mi horario:</b> los artistas de un festival que marcas con ☆ como &quot;quiero
+              verlos&quot;, ligados a tu identificador anónimo. Sirve para armar tu horario y
+              avisarte si dos se traslapan.
+            </li>
           </ul>
           <p className="mt-2">
             No recabamos datos sensibles en el sentido de la LFPDPPP (salud, origen étnico,
@@ -94,6 +111,14 @@ export default function PrivacidadPage() {
             <li>
               Generar reportes agregados y anónimos para patrocinadores (ver sección 4 — esto
               no implica compartir tus datos individuales).
+            </li>
+            <li>
+              Enviarte notificaciones sobre eventos nuevos de los artistas que sigues, solo si
+              activaste las notificaciones.
+            </li>
+            <li>
+              Personalizar el catálogo (sección &quot;De tus artistas seguidos&quot;) y guardar
+              tu horario de festival.
             </li>
             <li>Cumplir obligaciones legales cuando aplique.</li>
           </ul>
@@ -145,6 +170,10 @@ export default function PrivacidadPage() {
               Patrocinadores, únicamente en forma de conteos agregados y anónimos, conforme a
               la sección 4.
             </li>
+            <li>
+              Servicios de entrega de notificaciones (Expo, Apple y Google), que reciben el
+              identificador de tu dispositivo únicamente para entregarte la notificación.
+            </li>
             <li>No vendemos tus datos personales a terceros.</li>
           </ul>
         </section>
@@ -173,6 +202,14 @@ export default function PrivacidadPage() {
               musicaleando.com/eliminar-cuenta
             </a>
             .
+          </p>
+          <p className="mt-2">
+            Tú controlas los datos de notificaciones, artistas seguidos y horario. Puedes dejar
+            de seguir a cualquier artista, o quitar las marcas de tu horario, cuando quieras
+            desde &quot;Artistas seguidos&quot; en tu Perfil. Para dejar de recibir avisos,
+            desactiva las notificaciones de Musicaleando en los ajustes de tu teléfono. Al
+            eliminar tu cuenta se borran de forma permanente tus artistas seguidos, tu horario
+            y el identificador de notificaciones.
           </p>
         </section>
 
