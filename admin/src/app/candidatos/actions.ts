@@ -11,6 +11,7 @@ import { logAdminAction } from '@/lib/adminActionsLog';
 import { findDuplicateMatch, type DuplicateMatch } from '@/lib/candidateDuplicates';
 import { notifyFollowersOfNewEvent } from '@/lib/pushNotifications';
 import { stripCitySuffix } from '@/lib/artistNameCleanup';
+import { presalesToFields } from '@/lib/tmPresales';
 
 export type ApproveOverrides = {
   nombre: string;
@@ -53,7 +54,7 @@ export async function approveCandidate(
 
   const { data: candidate, error: candidateError } = await supabase
     .from('event_candidates')
-    .select('lineup, estado, source, venue, image_url')
+    .select('lineup, estado, source, venue, image_url, raw_payload')
     .eq('id', candidateId)
     .maybeSingle();
   if (candidateError) return { error: candidateError.message };
@@ -71,9 +72,13 @@ export async function approveCandidate(
   // aprueba (el FK es opcional).
   const venue_id = await resolveVenueId(supabase, candidate.venue, ciudad);
 
+  // Preventas de Ticketmaster (raw_payload.sales.presales) -> preventa_* del festival.
+  // Solo Ticketmaster; el descuento (tipo_descuento/descuento_*) sigue siendo manual.
+  const preventa = candidate.source === 'ticketmaster' ? presalesToFields(candidate.raw_payload) : null;
+
   const { data: festival, error: insertError } = await supabase
     .from('festivals')
-    .insert({ nombre, tipo: tipo ?? 'concierto', ciudad, fecha_inicio, fecha_fin, link_boletos: link_boletos || null, venue_id, image_url: candidate.image_url })
+    .insert({ nombre, tipo: tipo ?? 'concierto', ciudad, fecha_inicio, fecha_fin, link_boletos: link_boletos || null, venue_id, image_url: candidate.image_url, ...(preventa ?? {}) })
     .select('id')
     .single();
   if (insertError) return { error: insertError.message };
