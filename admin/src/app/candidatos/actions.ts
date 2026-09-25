@@ -12,6 +12,7 @@ import { findDuplicateMatch, type DuplicateMatch } from '@/lib/candidateDuplicat
 import { notifyFollowersOfNewEvent } from '@/lib/pushNotifications';
 import { stripCitySuffix } from '@/lib/artistNameCleanup';
 import { presalesToFields } from '@/lib/tmPresales';
+import { findVariantFestival } from '@/lib/variantFestival';
 
 export type ApproveOverrides = {
   nombre: string;
@@ -76,13 +77,6 @@ export async function approveCandidate(
   // Solo Ticketmaster; el descuento (tipo_descuento/descuento_*) sigue siendo manual.
   const preventa = candidate.source === 'ticketmaster' ? presalesToFields(candidate.raw_payload) : null;
 
-  const { data: festival, error: insertError } = await supabase
-    .from('festivals')
-    .insert({ nombre, tipo: tipo ?? 'concierto', ciudad, fecha_inicio, fecha_fin, link_boletos: link_boletos || null, venue_id, image_url: candidate.image_url, ...(preventa ?? {}) })
-    .select('id')
-    .single();
-  if (insertError) return { error: insertError.message };
-
   let lineup = candidate.lineup ?? [];
   // Ticketmaster siempre manda el headliner como "attraction" en lineup, pero
   // un candidato extraído de imagen/link a veces no devuelve bloques
@@ -101,6 +95,36 @@ export async function approveCandidate(
     const artista = stripCitySuffix(nombre, { ciudad, estado, venue: candidate.venue });
     lineup = [{ artista, escenario: null, horario: null }];
   }
+
+  // Una sola vez por artista, fecha y recinto: si ya hay un festival activo con el mismo recinto, las
+  // mismas fechas y exactamente los mismos artistas, este candidato es otra variante de boleto
+  // (General/VIP/Meet & Greet…) del mismo evento — no se crea otro registro.
+  const variante = await findVariantFestival(supabase, {
+    venue_id,
+    fecha_inicio,
+    fecha_fin,
+    artistNames: lineup.map((item) => (typeof item === 'string' ? item : item.artista)),
+  });
+  if (variante) {
+    await supabase
+      .from('event_candidates')
+      .update({ estado: 'descartado', possible_duplicate_of: variante.id })
+      .eq('id', candidateId);
+    await logAdminAction(supabase, admin.userId, 'rechazar', 'candidato', candidateId, {
+      isBulk,
+      detail: { motivo: 'variante de boleto de un evento ya publicado', festival_id: variante.id },
+    });
+    revalidatePath('/candidatos');
+    return { error: `Variante de "${variante.nombre}" (mismo recinto, fechas y artistas): no se creó otro evento y se marcó como duplicado.` };
+  }
+
+  const { data: festival, error: insertError } = await supabase
+    .from('festivals')
+    .insert({ nombre, tipo: tipo ?? 'concierto', ciudad, fecha_inicio, fecha_fin, link_boletos: link_boletos || null, venue_id, image_url: candidate.image_url, ...(preventa ?? {}) })
+    .select('id')
+    .single();
+  if (insertError) return { error: insertError.message };
+
   if (lineup.length > 0) {
     const artistIds = await resolveArtistIds(
       supabase,
