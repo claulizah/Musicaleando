@@ -44,3 +44,26 @@ export async function fetchAllByIds<T>(
   }
   return { data: results, error: null };
 }
+
+// PostgREST corta cualquier respuesta a 1000 filas (max-rows) sin avisar:
+// con 1,132 festivales activos, un .select('*') solo devolvía los primeros
+// 1000 por fecha y los más lejanos desaparecían del catálogo. Se pide por
+// páginas con .range() hasta recibir una página incompleta. El query debe
+// tener un .order() estable para que las páginas no se traslapen.
+const PAGE_SIZE = 1000;
+
+export async function fetchAllPages<T>(
+  fetchPage: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: T[] | null; error: PostgrestError | null }>,
+): Promise<{ data: T[]; error: PostgrestError | null }> {
+  const results: T[] = [];
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await fetchPage(from, from + PAGE_SIZE - 1);
+    if (error) return { data: results, error };
+    const rows = data ?? [];
+    results.push(...rows);
+    if (rows.length < PAGE_SIZE) return { data: results, error: null };
+  }
+}

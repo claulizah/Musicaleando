@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
-import { fetchAllByIds } from '../lib/fetchInChunks';
+import { fetchAllByIds, fetchAllPages } from '../lib/fetchInChunks';
 import {
   ContentReportMotivo,
   FestivalReactionType,
@@ -100,7 +100,15 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
     // principal). Ver useEventFilters/ArtistDetailScreen para cómo se ocultan
     // de las listas de exploración.
     const [{ data: activeRows, error: festErr }, { data: myVoyRows }] = await Promise.all([
-      supabase.from('festivals').select('*').eq('estado_evento', 'activo').order('fecha_inicio'),
+      fetchAllPages((from, to) =>
+        supabase
+          .from('festivals')
+          .select('*')
+          .eq('estado_evento', 'activo')
+          .order('fecha_inicio')
+          .order('id')
+          .range(from, to),
+      ),
       supabase.from('festival_intent').select('festival_id').eq('user_id', userId).eq('status', 'voy'),
     ]);
 
@@ -179,7 +187,7 @@ export const useFestivalStore = create<FestivalState>((set, get) => ({
       // otros usuarios aquí.
       supabase.from('users').select('ciudad').eq('id', userId).maybeSingle(),
       supabase.from('music_profile').select('generos').eq('user_id', userId).maybeSingle(),
-      supabase.from('venues').select('*'),
+      fetchAllPages((from, to) => supabase.from('venues').select('*').order('id').range(from, to)),
     ]);
 
     for (const err of [intentErr, lineupErr, reactionErr, feedbackErr, commentErr, announcementErr, mapPinErr, surveyErr]) {
