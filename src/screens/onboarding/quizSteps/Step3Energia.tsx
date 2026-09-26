@@ -22,7 +22,13 @@ export function Step3Energia({ onAdvance }: { onAdvance: () => void }) {
           }}
         />
       </View>
-      <PrimaryButton label="Continuar" onPress={onAdvance} />
+      <PrimaryButton
+        label="Continuar"
+        onPress={() => {
+          setEnergia(localValue);
+          onAdvance();
+        }}
+      />
     </View>
   );
 }
